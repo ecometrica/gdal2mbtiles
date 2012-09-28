@@ -6,14 +6,15 @@ class GdalError(RuntimeError):
     pass
 
 
-class GdalWarpError(CalledProcessError, GdalError):
+class CalledGdalError(CalledProcessError, GdalError):
+    """Error when calling a GDAL command-line utility."""
     def __init__(self, returncode, cmd, output=None, error=None):
-        super(GdalWarpError, self).__init__(returncode=returncode, cmd=cmd,
+        super(CalledGdalError, self).__init__(returncode=returncode, cmd=cmd,
                                             output=output)
         self.error = error
 
     def __str__(self):
-        return super(GdalWarpError, self).__str__() + ': %s' % self.error
+        return super(CalledGdalError, self).__str__() + ': %s' % self.error
 
 
 class UnknownResamplingMethodError(ValueError):

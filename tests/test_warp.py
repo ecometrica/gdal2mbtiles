@@ -7,7 +7,7 @@ from xml.etree import ElementTree
 from osgeo.gdalconst import GRA_Cubic
 
 from gdal2mbtiles.constants import GDALINFO
-from gdal2mbtiles.exceptions import (GdalError, GdalWarpError,
+from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.types import rgba
 from gdal2mbtiles.warp import (colourize, expand_colour_bands, warp,
@@ -85,7 +85,7 @@ class TestExpandColourBands(unittest.TestCase):
 
     def test_no_colour_table(self):
         # srtm.tif has no colour table
-        self.assertRaises(GdalWarpError,
+        self.assertRaises(CalledGdalError,
                           expand_colour_bands, inputfile=self.inputfile)
 
     def test_invalid(self):
@@ -156,7 +156,7 @@ class TestVrtToGeotiff(unittest.TestCase):
 
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
-            self.assertRaises(GdalWarpError,
+            self.assertRaises(CalledGdalError,
                               vrt_to_geotiff, vrt='', outputfile=tmpfile.name)
 
     def test_invalid_output(self):

@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 
 from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP
-from .exceptions import (GdalError, GdalWarpError,
+from .exceptions import (GdalError, CalledGdalError,
                          UnknownResamplingMethodError, VrtError)
 from .types import GdalFormat, rgba
 
@@ -46,8 +46,8 @@ def check_output_gdalwarp(*popenargs, **kwargs):
         cmd = kwargs.get("args")
         if cmd is None:
             cmd = popenargs[0]
-        raise GdalWarpError(p.returncode, cmd, output=stdoutdata,
-                            error=stderrdata.rstrip('\n'))
+        raise CalledGdalError(p.returncode, cmd, output=stdoutdata,
+                              error=stderrdata.rstrip('\n'))
     return stdoutdata
 
 
@@ -159,7 +159,7 @@ def expand_colour_bands(inputfile):
     ]
     try:
         return check_output_gdalwarp([str(e) for e in command])
-    except GdalWarpError as e:
+    except CalledGdalError as e:
         if e.error == "ERROR 4: `/dev/stdout' not recognised as a supported file format.":
             # HACK: WTF?!?
             return e.output
