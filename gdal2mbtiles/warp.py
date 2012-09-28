@@ -1,12 +1,15 @@
 from __future__ import absolute_import
 
-from collections import namedtuple
+import errno
 from math import ceil
+import os
 import re
-from subprocess import CalledProcessError, check_output
+from subprocess import CalledProcessError, Popen, PIPE
+from tempfile import NamedTemporaryFile
 
 from .constants import GDALWARP
-from .exceptions import GdalError, UnknownResamplingMethodError
+from .exceptions import GdalError, GdalWarpError, UnknownResamplingMethodError
+from .types import GdalFormat
 
 
 def warp_file(srcfile, dstfile, cmd=GDALWARP):
@@ -31,6 +34,18 @@ RESAMPLING_METHODS = {
 
 HALF_CIRCUMFERENCE = 20037508.34  # in metres
 TILE_SIDE = 256                   # in pixels
+
+
+def check_output_gdalwarp(*popenargs, **kwargs):
+    p = Popen(stderr=PIPE, stdout=PIPE, *popenargs, **kwargs)
+    stdoutdata, stderrdata = p.communicate()
+    if p.returncode:
+        cmd = kwargs.get("args")
+        if cmd is None:
+            cmd = popenargs[0]
+        raise GdalWarpError(p.returncode, cmd, output=stdoutdata,
+                            error=stderrdata.rstrip('\n'))
+    return stdoutdata
 
 
 def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
@@ -84,13 +99,57 @@ def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
 
     # Call gdalwarp
     warp_cmd.extend([inputfile, '/dev/stdout'])
-    return check_output([str(e) for e in warp_cmd])
+    return check_output_gdalwarp([str(e) for e in warp_cmd])
 
 
-GdalFormat = namedtuple(typename='GdalFormat',
-                        field_names=['name', 'attributes', 'description',
-                                     'can_read', 'can_write', 'can_update',
-                                     'has_virtual_io'])
+def vrt_to_geotiff(vrt, outputfile, cmd=GDALWARP, working_memory=512,
+                   compress='NONE'):
+    """Generate a GeoTIFF from a vrt string"""
+    tmpfile = NamedTemporaryFile(
+        suffix='.tif', prefix='gdal2mbtiles',
+        dir=os.path.dirname(outputfile), delete=False
+    )
+
+    try:
+        with NamedTemporaryFile(suffix='.vrt',
+                                prefix='gdal2mbtiles') as inputfile:
+            inputfile.write(vrt)
+            inputfile.flush()
+
+            warp_cmd = [
+                cmd,
+                '-q',                   # Quiet - FIXME: Use logging
+                '-of', 'GTiff',         # Output to GeoTIFF
+                '-multi',               # Use multiple processes
+                '-overwrite',           # Overwrite output if it already exists
+                '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
+            ]
+
+            # Set the working memory so that gdalwarp doesn't stall of disk I/O
+            warp_cmd.extend([
+                '-wm', working_memory,
+                '--config', 'GDAL_CACHE_MAX', working_memory
+            ])
+
+            # Use compression
+            compress = str(compress).upper()
+            if compress and compress != 'NONE':
+                warp_cmd.extend(['-co', 'COMPRESS=%s' % compress])
+                if compress in ('LZW', 'DEFLATE'):
+                    warp_cmd.extend(['-co', 'PREDICTOR=2'])
+
+            # Run gdalwarp and output to tmpfile.name
+            warp_cmd.extend([inputfile.name, tmpfile.name])
+            check_output_gdalwarp([str(e) for e in warp_cmd])
+
+            # If it succeeds, then we move it to overwrite the actual output
+            os.rename(tmpfile.name, outputfile)
+    finally:
+        try:
+            os.remove(tmpfile.name)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
 
 
 def supported_formats(cmd=GDALWARP):

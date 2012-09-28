@@ -1,11 +1,15 @@
 import os
+import subprocess
+from tempfile import NamedTemporaryFile
 import unittest
 from xml.etree import ElementTree
 
 from osgeo.gdalconst import GRA_Cubic
 
-from gdal2mbtiles.exceptions import GdalError, UnknownResamplingMethodError
-from gdal2mbtiles.warp import generate_vrt
+from gdal2mbtiles.constants import GDALINFO
+from gdal2mbtiles.exceptions import (GdalError, GdalWarpError,
+                                     UnknownResamplingMethodError)
+from gdal2mbtiles.warp import generate_vrt, vrt_to_geotiff
 
 
 __dir__ = os.path.dirname(__file__)
@@ -40,3 +44,30 @@ class TestGenerateVRT(unittest.TestCase):
     def test_missing(self):
         self.assertRaises(IOError,
                           generate_vrt, os.path.join(__dir__, 'missing.tif'))
+
+
+class TestVrtToGeotiff(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__,
+                                      'bluemarble.tif')
+
+    def test_simple(self):
+        vrt = generate_vrt(self.inputfile)
+        with NamedTemporaryFile(suffix='.tif') as tmpfile:
+            outputfile = tmpfile.name
+            vrt_to_geotiff(vrt=vrt, outputfile=outputfile, compress='LZW')
+            self.assertEqual(
+                subprocess.call([GDALINFO, outputfile],
+                                stdout=open('/dev/null', 'w+')),
+                0
+            )
+
+    def test_invalid_input(self):
+        with NamedTemporaryFile(suffix='.tif') as tmpfile:
+            self.assertRaises(GdalWarpError,
+                              vrt_to_geotiff, vrt='', outputfile=tmpfile.name)
+
+    def test_invalid_output(self):
+        vrt = generate_vrt(self.inputfile)
+        self.assertRaises(OSError,
+                          vrt_to_geotiff, vrt=vrt, outputfile='/dev/invalid')
