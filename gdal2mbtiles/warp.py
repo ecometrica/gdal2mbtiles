@@ -6,10 +6,13 @@ import os
 import re
 from subprocess import CalledProcessError, Popen, PIPE
 from tempfile import NamedTemporaryFile
+from xml.etree import ElementTree
+from xml.etree.ElementTree import Element, SubElement
 
-from .constants import GDALWARP
-from .exceptions import GdalError, GdalWarpError, UnknownResamplingMethodError
-from .types import GdalFormat
+from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP
+from .exceptions import (GdalError, GdalWarpError,
+                         UnknownResamplingMethodError, VrtError)
+from .types import GdalFormat, rgba
 
 
 def warp_file(srcfile, dstfile, cmd=GDALWARP):
@@ -48,16 +51,126 @@ def check_output_gdalwarp(*popenargs, **kwargs):
     return stdoutdata
 
 
-def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
+def gdal_open(inputfile):
     """
-    Generate VRT for inputfile.
+    Opens a GDAL-readable file.
+
+    Raises a GdalError if inputfile is invalid.
     """
     # Open the input file and read some metadata
     open(inputfile, 'r').close()  # HACK: GDAL doesn't give a useful exception
     try:
-        f = gdal.Open(inputfile, GA_ReadOnly)
+        return gdal.Open(inputfile, GA_ReadOnly)
     except RuntimeError as e:
         raise GdalError(e.message)
+
+
+def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
+               compress=None):
+    with NamedTemporaryFile(suffix='.vrt', prefix='gdalcoloured') as coloured:
+        coloured.write(colourize(inputfile=inputfile,
+                                 colours=colours,
+                                 band=band))
+        coloured.flush()
+
+        with NamedTemporaryFile(suffix='.vrt', prefix='gdalwarped') as warped:
+            warped.write(generate_vrt(inputfile=coloured.name,
+                                      resampling=resampling))
+            warped.flush()
+
+            vrt = expand_colour_bands(inputfile=warped.name)
+
+            vrt_to_geotiff(vrt=vrt, outputfile=outputfile,
+                           compress=compress)
+
+
+def colourize(inputfile, colours, band=None):
+    """
+    Takes an GDAL-readable inputfile and generates the VRT to colourize it.
+
+    You can also specify a ComplexSource Look Up Table (LUT) that allows you to
+    interpolate colours between source values.
+        colours = [(0, rgba(0, 0, 0, 255),
+                   (10, rgba(255, 255, 255, 255)))]
+    This means that at value 5, the colour represented would be
+    rgba(128, 128, 128, 255).
+    """
+    if band is None:
+        band = 1
+
+    gdal_open(inputfile)
+    command = [
+        GDALBUILDVRT,
+        '-q',                   # Quiet
+        '/dev/stdout',
+        inputfile
+    ]
+    vrt = check_output_gdalwarp([str(e) for e in command])
+
+    # Assert that it is actually a VRT file
+    root = ElementTree.fromstring(vrt)
+    if root.tag != 'VRTDataset':
+        raise VrtError('Not a VRTDataset: %s' %
+                       vrt[:80])
+
+    rasterband = None
+    # Remove VRTRasterBands that do not map to the requested band
+    for rb in root.findall(".//VRTRasterBand"):
+        if rb.get('band') == str(band):
+            rasterband = rb
+        else:
+            root.remove(rb)
+    if rasterband is None:
+        raise VrtError('Cannot locate VRTRasterBand %d' % band)
+
+    # Set up the colour palette
+    rasterband.set('band', '1')   # Destination band should always be 1
+    rasterband.find('ColorInterp').text = 'Palette'
+    colortable = SubElement(rasterband, 'ColorTable')
+    colortable.extend(
+        Element('Entry', c1=str(c.r), c2=str(c.g), c3=str(c.b), c4=str(c.a))
+        for _, c in colours
+    )
+
+    # Define the colour lookup table
+    source = rasterband.find('SimpleSource')
+    source.tag = 'ComplexSource'
+    lut = SubElement(source, 'LUT')
+    lut.text = ',\n'.join('%s:%d' % (value[0], i)
+                                     for i, value in enumerate(colours))
+
+    return ElementTree.tostring(root)
+
+
+def expand_colour_bands(inputfile):
+    """
+    Takes a paletted inputfile (probably a VRT) and generates a RGBA VRT.
+    """
+    f = gdal_open(inputfile)
+
+    command = [
+        GDALTRANSLATE,
+        '-q',                   # Quiet
+        '-of', 'VRT',           # Output to VRT
+        '-expand', 'rgba',      # RGBA bands
+        '-ot', 'Byte',          # 8-bit bands (so that GIMP can open)
+        inputfile,
+        '/dev/stdout'
+    ]
+    try:
+        return check_output_gdalwarp([str(e) for e in command])
+    except GdalWarpError as e:
+        if e.error == "ERROR 4: `/dev/stdout' not recognised as a supported file format.":
+            # HACK: WTF?!?
+            return e.output
+        raise
+
+
+def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
+    """
+    Takes an GDAL-readable inputfile and generates the VRT to warp it.
+    """
+    f = gdal_open(inputfile)
 
     # Number of pixels on each side, upsampled to fit perfectly in a zoom
     # level.
@@ -103,7 +216,7 @@ def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
 
 
 def vrt_to_geotiff(vrt, outputfile, cmd=GDALWARP, working_memory=512,
-                   compress='NONE'):
+                   compress=None):
     """Generate a GeoTIFF from a vrt string"""
     tmpfile = NamedTemporaryFile(
         suffix='.tif', prefix='gdal2mbtiles',

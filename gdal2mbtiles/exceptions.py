@@ -18,3 +18,7 @@ class GdalWarpError(CalledProcessError, GdalError):
 
 class UnknownResamplingMethodError(ValueError):
     pass
+
+
+class VrtError(ValueError):
+    pass
