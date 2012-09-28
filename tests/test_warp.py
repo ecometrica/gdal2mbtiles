@@ -10,7 +10,7 @@ from gdal2mbtiles.constants import GDALINFO
 from gdal2mbtiles.exceptions import (GdalError, GdalWarpError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.types import rgba
-from gdal2mbtiles.warp import (colourize, expand_colour_bands, generate_vrt,
+from gdal2mbtiles.warp import (colourize, expand_colour_bands, warp,
                                preprocess, vrt_to_geotiff)
 
 
@@ -100,14 +100,14 @@ class TestGenerateVRT(unittest.TestCase):
                                       'bluemarble.tif')
 
     def test_simple(self):
-        root = ElementTree.fromstring(generate_vrt(self.inputfile))
+        root = ElementTree.fromstring(warp(self.inputfile))
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == self.inputfile
                             for t in root.findall('.//SourceDataset')))
 
     def test_resampling(self):
         # Cubic
-        root = ElementTree.fromstring(generate_vrt(self.inputfile,
+        root = ElementTree.fromstring(warp(self.inputfile,
                                                    resampling=GRA_Cubic))
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == 'Cubic'
@@ -115,14 +115,14 @@ class TestGenerateVRT(unittest.TestCase):
 
         # Invalid
         self.assertRaises(UnknownResamplingMethodError,
-                          generate_vrt, self.inputfile, resampling=-1)
+                          warp, self.inputfile, resampling=-1)
 
     def test_invalid(self):
-        self.assertRaises(GdalError, generate_vrt, '/dev/null')
+        self.assertRaises(GdalError, warp, '/dev/null')
 
     def test_missing(self):
         self.assertRaises(IOError,
-                          generate_vrt, os.path.join(__dir__, 'missing.tif'))
+                          warp, os.path.join(__dir__, 'missing.tif'))
 
 
 class TestPreprocess(unittest.TestCase):
@@ -144,7 +144,7 @@ class TestVrtToGeotiff(unittest.TestCase):
                                       'bluemarble.tif')
 
     def test_simple(self):
-        vrt = generate_vrt(self.inputfile)
+        vrt = warp(self.inputfile)
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
             vrt_to_geotiff(vrt=vrt, outputfile=outputfile, compress='LZW')
@@ -160,6 +160,6 @@ class TestVrtToGeotiff(unittest.TestCase):
                               vrt_to_geotiff, vrt='', outputfile=tmpfile.name)
 
     def test_invalid_output(self):
-        vrt = generate_vrt(self.inputfile)
+        vrt = warp(self.inputfile)
         self.assertRaises(OSError,
                           vrt_to_geotiff, vrt=vrt, outputfile='/dev/invalid')

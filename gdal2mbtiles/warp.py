@@ -74,8 +74,8 @@ def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
         coloured.flush()
 
         with NamedTemporaryFile(suffix='.vrt', prefix='gdalwarped') as warped:
-            warped.write(generate_vrt(inputfile=coloured.name,
-                                      resampling=resampling))
+            warped.write(warp(inputfile=coloured.name,
+                              resampling=resampling))
             warped.flush()
 
             vrt = expand_colour_bands(inputfile=warped.name)
@@ -166,7 +166,7 @@ def expand_colour_bands(inputfile):
         raise
 
 
-def generate_vrt(inputfile, cmd=GDALWARP, resampling=None):
+def warp(inputfile, cmd=GDALWARP, resampling=None):
     """
     Takes an GDAL-readable inputfile and generates the VRT to warp it.
     """
