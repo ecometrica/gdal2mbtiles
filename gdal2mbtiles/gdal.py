@@ -250,7 +250,7 @@ def render_vrt(inputfile, outputfile, cmd=GDALWARP, working_memory=512,
         # Set the working memory so that gdalwarp doesn't stall of disk I/O
         warp_cmd.extend([
             '-wm', working_memory,
-            '--config', 'GDAL_CACHE_MAX', working_memory
+            '--config', 'GDAL_CACHEMAX', working_memory
         ])
 
         # Use compression
