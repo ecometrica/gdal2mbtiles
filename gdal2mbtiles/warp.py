@@ -78,9 +78,11 @@ def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
                               resampling=resampling))
             warped.flush()
 
-            vrt = expand_colour_bands(inputfile=warped.name)
+            with NamedTemporaryFile(suffix='.vrt', prefix='gdalrgba') as rgba:
+                rgba.write(expand_colour_bands(inputfile=warped.name))
+                rgba.flush()
 
-            vrt_to_geotiff(vrt=vrt, outputfile=outputfile,
+                render_vrt(inputfile=rgba.name, outputfile=outputfile,
                            compress=compress)
 
 
@@ -215,48 +217,43 @@ def warp(inputfile, cmd=GDALWARP, resampling=None):
     return check_output_gdalwarp([str(e) for e in warp_cmd])
 
 
-def vrt_to_geotiff(vrt, outputfile, cmd=GDALWARP, working_memory=512,
-                   compress=None):
+def render_vrt(inputfile, outputfile, cmd=GDALWARP, working_memory=512,
+               compress=None):
     """Generate a GeoTIFF from a vrt string"""
     tmpfile = NamedTemporaryFile(
-        suffix='.tif', prefix='gdal2mbtiles',
+        suffix='.tif', prefix='gdalrender',
         dir=os.path.dirname(outputfile), delete=False
     )
 
     try:
-        with NamedTemporaryFile(suffix='.vrt',
-                                prefix='gdal2mbtiles') as inputfile:
-            inputfile.write(vrt)
-            inputfile.flush()
+        warp_cmd = [
+            cmd,
+            '-q',                   # Quiet - FIXME: Use logging
+            '-of', 'GTiff',         # Output to GeoTIFF
+            '-multi',               # Use multiple processes
+            '-overwrite',           # Overwrite output if it already exists
+            '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
+        ]
 
-            warp_cmd = [
-                cmd,
-                '-q',                   # Quiet - FIXME: Use logging
-                '-of', 'GTiff',         # Output to GeoTIFF
-                '-multi',               # Use multiple processes
-                '-overwrite',           # Overwrite output if it already exists
-                '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
-            ]
+        # Set the working memory so that gdalwarp doesn't stall of disk I/O
+        warp_cmd.extend([
+            '-wm', working_memory,
+            '--config', 'GDAL_CACHE_MAX', working_memory
+        ])
 
-            # Set the working memory so that gdalwarp doesn't stall of disk I/O
-            warp_cmd.extend([
-                '-wm', working_memory,
-                '--config', 'GDAL_CACHE_MAX', working_memory
-            ])
+        # Use compression
+        compress = str(compress).upper()
+        if compress and compress != 'NONE':
+            warp_cmd.extend(['-co', 'COMPRESS=%s' % compress])
+            if compress in ('LZW', 'DEFLATE'):
+                warp_cmd.extend(['-co', 'PREDICTOR=2'])
 
-            # Use compression
-            compress = str(compress).upper()
-            if compress and compress != 'NONE':
-                warp_cmd.extend(['-co', 'COMPRESS=%s' % compress])
-                if compress in ('LZW', 'DEFLATE'):
-                    warp_cmd.extend(['-co', 'PREDICTOR=2'])
+        # Run gdalwarp and output to tmpfile.name
+        warp_cmd.extend([inputfile, tmpfile.name])
+        check_output_gdalwarp([str(e) for e in warp_cmd])
 
-            # Run gdalwarp and output to tmpfile.name
-            warp_cmd.extend([inputfile.name, tmpfile.name])
-            check_output_gdalwarp([str(e) for e in warp_cmd])
-
-            # If it succeeds, then we move it to overwrite the actual output
-            os.rename(tmpfile.name, outputfile)
+        # If it succeeds, then we move it to overwrite the actual output
+        os.rename(tmpfile.name, outputfile)
     finally:
         try:
             os.remove(tmpfile.name)

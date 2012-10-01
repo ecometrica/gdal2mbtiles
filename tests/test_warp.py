@@ -11,7 +11,7 @@ from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.types import rgba
 from gdal2mbtiles.warp import (colourize, expand_colour_bands, warp,
-                               preprocess, vrt_to_geotiff)
+                               preprocess, render_vrt)
 
 
 __dir__ = os.path.dirname(__file__)
@@ -138,16 +138,19 @@ class TestPreprocess(unittest.TestCase):
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
-class TestVrtToGeotiff(unittest.TestCase):
+class TestRenderVrt(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
 
     def test_simple(self):
-        vrt = warp(self.inputfile)
-        with NamedTemporaryFile(suffix='.tif') as tmpfile:
+        with NamedTemporaryFile(suffix='.vrt') as inputfile, \
+             NamedTemporaryFile(suffix='.tif') as tmpfile:
+            inputfile.write(warp(self.inputfile))
+            inputfile.flush()
             outputfile = tmpfile.name
-            vrt_to_geotiff(vrt=vrt, outputfile=outputfile, compress='LZW')
+            render_vrt(inputfile=inputfile.name, outputfile=outputfile,
+                       compress='LZW')
             self.assertEqual(
                 subprocess.call([GDALINFO, outputfile],
                                 stdout=open('/dev/null', 'w+')),
@@ -157,9 +160,13 @@ class TestVrtToGeotiff(unittest.TestCase):
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
             self.assertRaises(CalledGdalError,
-                              vrt_to_geotiff, vrt='', outputfile=tmpfile.name)
+                              render_vrt, inputfile='/dev/null',
+                              outputfile=tmpfile.name)
 
     def test_invalid_output(self):
-        vrt = warp(self.inputfile)
-        self.assertRaises(OSError,
-                          vrt_to_geotiff, vrt=vrt, outputfile='/dev/invalid')
+        with NamedTemporaryFile(suffix='.vrt') as inputfile:
+            inputfile.write(warp(self.inputfile))
+            inputfile.flush()
+            self.assertRaises(OSError,
+                              render_vrt, inputfile=inputfile,
+                              outputfile='/dev/invalid')
