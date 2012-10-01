@@ -138,6 +138,7 @@ class TestPreprocess(unittest.TestCase):
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
+
 class TestRenderVrt(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,

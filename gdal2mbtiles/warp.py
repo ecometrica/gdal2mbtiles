@@ -66,24 +66,36 @@ def gdal_open(inputfile):
 
 
 def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
-               compress=None):
-    with NamedTemporaryFile(suffix='.vrt', prefix='gdalcoloured') as coloured:
-        coloured.write(colourize(inputfile=inputfile,
-                                 colours=colours,
-                                 band=band))
-        coloured.flush()
+               compress=None, **kwargs):
+    functions = [
+        (lambda f: colourize(inputfile=f, colours=colours, band=band)),
+        (lambda f: warp(inputfile=f, resampling=resampling)),
+        (lambda f: expand_colour_bands(inputfile=f)),
+    ]
+    return pipeline(inputfile=inputfile, outputfile=outputfile,
+                    functions=functions, compress=compress, **kwargs)
 
-        with NamedTemporaryFile(suffix='.vrt', prefix='gdalwarped') as warped:
-            warped.write(warp(inputfile=coloured.name,
-                              resampling=resampling))
-            warped.flush()
 
-            with NamedTemporaryFile(suffix='.vrt', prefix='gdalrgba') as rgba:
-                rgba.write(expand_colour_bands(inputfile=warped.name))
-                rgba.flush()
+def pipeline(inputfile, outputfile, functions, **kwargs):
+    """
+    Applies functions to a GDAL-readable inputfile, rendering to outputfile.
 
-                render_vrt(inputfile=rgba.name, outputfile=outputfile,
-                           compress=compress)
+    Functions must be an iterable of single-parameter functions that take a
+    filename as input.
+    """
+    tmpfiles = []
+    try:
+        previous = inputfile
+        for i, f in enumerate(functions):
+            current = NamedTemporaryFile(suffix='.vrt', prefix=('gdal%d' % i))
+            tmpfiles.append(current)
+            current.write(f(previous))
+            current.flush()
+            previous = current.name
+        return render_vrt(inputfile=previous, outputfile=outputfile, **kwargs)
+    finally:
+        for f in tmpfiles:
+            f.close()
 
 
 def colourize(inputfile, colours, band=None):
