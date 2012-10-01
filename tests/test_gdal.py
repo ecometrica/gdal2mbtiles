@@ -9,9 +9,9 @@ from osgeo.gdalconst import GRA_Cubic
 from gdal2mbtiles.constants import GDALINFO
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.types import rgba
-from gdal2mbtiles.warp import (colourize, expand_colour_bands, warp,
+from gdal2mbtiles.gdal import (colourize, expand_colour_bands, warp,
                                preprocess, render_vrt)
+from gdal2mbtiles.types import rgba
 
 
 __dir__ = os.path.dirname(__file__)
