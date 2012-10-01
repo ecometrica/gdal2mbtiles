@@ -4,7 +4,7 @@ import errno
 from math import ceil
 import os
 import re
-from subprocess import CalledProcessError, Popen, PIPE
+from subprocess import CalledProcessError, check_output, Popen, PIPE
 from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
@@ -12,7 +12,7 @@ from xml.etree.ElementTree import Element, SubElement
 from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP
 from .exceptions import (GdalError, CalledGdalError,
                          UnknownResamplingMethodError, VrtError)
-from .types import GdalFormat, rgba
+from .types import GdalFormat
 
 
 def warp_file(srcfile, dstfile, cmd=GDALWARP):
@@ -146,7 +146,7 @@ def expand_colour_bands(inputfile):
     """
     Takes a paletted inputfile (probably a VRT) and generates a RGBA VRT.
     """
-    f = gdal_open(inputfile)
+    gdal_open(inputfile)
 
     command = [
         GDALTRANSLATE,
