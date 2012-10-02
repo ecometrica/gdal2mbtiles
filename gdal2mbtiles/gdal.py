@@ -45,20 +45,6 @@ def check_output_gdalwarp(*popenargs, **kwargs):
     return stdoutdata
 
 
-def gdal_open(inputfile):
-    """
-    Opens a GDAL-readable file.
-
-    Raises a GdalError if inputfile is invalid.
-    """
-    # Open the input file and read some metadata
-    open(inputfile, 'r').close()  # HACK: GDAL doesn't give a useful exception
-    try:
-        return gdal.Open(inputfile, GA_ReadOnly)
-    except RuntimeError as e:
-        raise GdalError(e.message)
-
-
 def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
                compress=None, **kwargs):
     functions = [
@@ -106,7 +92,7 @@ def colourize(inputfile, colours, band=None):
     if band is None:
         band = 1
 
-    gdal_open(inputfile)
+    Dataset(inputfile)
     command = [
         GDALBUILDVRT,
         '-q',                   # Quiet
@@ -154,7 +140,7 @@ def expand_colour_bands(inputfile):
     """
     Takes a paletted inputfile (probably a VRT) and generates a RGBA VRT.
     """
-    gdal_open(inputfile)
+    Dataset(inputfile)
 
     command = [
         GDALTRANSLATE,
@@ -178,11 +164,12 @@ def warp(inputfile, cmd=GDALWARP, resampling=None):
     """
     Takes an GDAL-readable inputfile and generates the VRT to warp it.
     """
-    f = gdal_open(inputfile)
+    dataset = Dataset(inputfile)
 
     # Number of pixels on each side, upsampled to fit perfectly in a zoom
     # level.
-    output_side = (ceil(max(f.RasterXSize, f.RasterYSize) / float(TILE_SIDE)) *
+    output_side = (ceil(max(dataset.RasterXSize, dataset.RasterYSize) /
+                        float(TILE_SIDE)) *
                    TILE_SIDE)
 
     warp_cmd = [
@@ -323,3 +310,21 @@ def resampling_methods(cmd=GDALWARP):
 
     return resampling_methods._cache
 resampling_methods._cache = None
+
+
+# Utility classes that wrap GDAL because its SWIG bindings are not Pythonic.
+
+class Dataset(gdal.Dataset):
+    def __init__(self, inputfile, mode=GA_ReadOnly):
+        """
+        Opens a GDAL-readable file.
+
+        Raises a GdalError if inputfile is invalid.
+        """
+        # Open the input file and read some metadata
+        open(inputfile, 'r').close()  # HACK: GDAL doesn't give a useful exception
+        try:
+            # Since this is a SWIG object, clone the ``this`` pointer
+            self.this = gdal.Open(inputfile, mode).this
+        except RuntimeError as e:
+            raise GdalError(e.message)

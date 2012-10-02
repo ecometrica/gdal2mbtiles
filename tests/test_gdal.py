@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -9,7 +11,7 @@ from osgeo.gdalconst import GRA_Cubic
 from gdal2mbtiles.constants import GDALINFO
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (colourize, expand_colour_bands, warp,
+from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
                                preprocess, render_vrt)
 from gdal2mbtiles.types import rgba
 
@@ -171,3 +173,29 @@ class TestRenderVrt(unittest.TestCase):
             self.assertRaises(OSError,
                               render_vrt, inputfile=inputfile,
                               outputfile='/dev/invalid')
+
+
+class TestDataset(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__,
+                                      'bluemarble.tif')
+
+    def test_open(self):
+        from osgeo.gdalconst import GA_Update
+
+        # Valid
+        self.assertTrue(Dataset(inputfile=self.inputfile))
+        self.assertTrue(Dataset(inputfile=self.inputfile, mode=GA_Update))
+
+        # Invalid
+        self.assertRaises(GdalError, Dataset, inputfile='/dev/null')
+
+        # Missing
+        self.assertRaises(IOError, Dataset, inputfile='/dev/missing')
+
+    def test_raster_size(self):
+        dataset = Dataset(inputfile=self.inputfile)
+
+        # bluemarble.tif is a 1024×1024 image
+        self.assertEqual(dataset.RasterXSize, 1024)
+        self.assertEqual(dataset.RasterYSize, 1024)
