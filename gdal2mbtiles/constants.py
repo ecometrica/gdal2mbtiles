@@ -1,3 +1,6 @@
+# EPSG constants
+EPSG_WEB_MERCATOR = 3785
+
 # Output constants
 TILE_SIDE = 256                 # in pixels
 

@@ -24,3 +24,6 @@ def hcolour(s):
     if s.startswith('#'):
         return rgba(*webcolors.hex_to_rgb(s))
     return rgba(*webcolors.name_to_rgb(s))
+
+
+XY = namedtuple('XY', ['x', 'y'])

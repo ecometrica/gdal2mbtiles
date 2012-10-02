@@ -6,13 +6,14 @@ from tempfile import NamedTemporaryFile
 import unittest
 from xml.etree import ElementTree
 
+from osgeo import osr
 from osgeo.gdalconst import GRA_Cubic
 
 from gdal2mbtiles.constants import GDALINFO
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
-                               preprocess, render_vrt)
+                               preprocess, render_vrt, SpatialReference)
 from gdal2mbtiles.types import rgba
 
 
@@ -96,7 +97,7 @@ class TestExpandColourBands(unittest.TestCase):
                           inputfile='/dev/null')
 
 
-class TestGenerateVRT(unittest.TestCase):
+class TestWarp(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
@@ -118,6 +119,16 @@ class TestGenerateVRT(unittest.TestCase):
         # Invalid
         self.assertRaises(UnknownResamplingMethodError,
                           warp, self.inputfile, resampling=-1)
+
+    def test_spatial_ref(self):
+        root = ElementTree.fromstring(warp(self.inputfile))
+        self.assertTrue('"EPSG","3785"' in root.find('.//TargetSRS').text)
+
+        root = ElementTree.fromstring(
+            warp(self.inputfile,
+                 spatial_ref=SpatialReference.FromEPSG(4326))
+        )
+        self.assertTrue('WGS 84' in root.find('.//TargetSRS').text)
 
     def test_invalid(self):
         self.assertRaises(GdalError, warp, '/dev/null')
@@ -199,3 +210,20 @@ class TestDataset(unittest.TestCase):
         # bluemarble.tif is a 1024×1024 image
         self.assertEqual(dataset.RasterXSize, 1024)
         self.assertEqual(dataset.RasterYSize, 1024)
+
+
+class TestSpatialReference(unittest.TestCase):
+    def setUp(self):
+        self.wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
+
+    def test_simple(self):
+        self.assertEqual(SpatialReference.FromEPSG(4326), self.wgs84)
+
+        # Web Mercator is not the same as WGS 84.
+        self.assertNotEqual(SpatialReference.FromEPSG(3785), self.wgs84)
+
+    def test_get_epsg_code(self):
+        self.assertEqual(self.wgs84.GetEPSGCode(), 4326)
+
+    def test_get_epsg_string(self):
+        self.assertEqual(self.wgs84.GetEPSGString(), 'EPSG:4326')

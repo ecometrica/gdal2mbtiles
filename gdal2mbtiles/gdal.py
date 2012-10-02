@@ -9,13 +9,17 @@ from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 
-from osgeo import gdal
+from osgeo import gdal, osr
 from osgeo.gdalconst import (GA_ReadOnly, GRA_Bilinear, GRA_Cubic,
                              GRA_CubicSpline, GRA_Lanczos,
                              GRA_NearestNeighbour)
-gdal.UseExceptions()            # Make GDAL throw exceptions on error
 
-from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP, TILE_SIDE
+gdal.UseExceptions()            # Make GDAL throw exceptions on error
+osr.UseExceptions()             # And OSR as well.
+
+
+from .constants import (EPSG_WEB_MERCATOR, GDALBUILDVRT, GDALTRANSLATE,
+                        GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError,
                          UnknownResamplingMethodError, VrtError)
 from .types import GdalFormat
@@ -45,11 +49,12 @@ def check_output_gdal(*popenargs, **kwargs):
     return stdoutdata
 
 
-def preprocess(inputfile, outputfile, colours, band=None, resampling=None,
-               compress=None, **kwargs):
+def preprocess(inputfile, outputfile, colours, band=None, spatial_ref=None,
+               resampling=None, compress=None, **kwargs):
     functions = [
         (lambda f: colourize(inputfile=f, colours=colours, band=band)),
-        (lambda f: warp(inputfile=f, resampling=resampling)),
+        (lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
+                        resampling=resampling)),
         (lambda f: expand_colour_bands(inputfile=f)),
     ]
     return pipeline(inputfile=inputfile, outputfile=outputfile,
@@ -160,7 +165,7 @@ def expand_colour_bands(inputfile):
         raise
 
 
-def warp(inputfile, cmd=GDALWARP, resampling=None):
+def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None):
     """
     Takes an GDAL-readable inputfile and generates the VRT to warp it.
     """
@@ -182,7 +187,9 @@ def warp(inputfile, cmd=GDALWARP, resampling=None):
     #
     # Note that EPSG:3857 replaces this EPSG:3785 but GDAL doesn't know about
     # it yet.
-    warp_cmd.extend(['-t_srs', 'EPSG:3785'])
+    if spatial_ref is None:
+        spatial_ref = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+    warp_cmd.extend(['-t_srs', spatial_ref.GetEPSGString()])
 
     # Resampling method
     if resampling is not None:
@@ -328,3 +335,30 @@ class Dataset(gdal.Dataset):
             self.this = gdal.Open(inputfile, mode).this
         except RuntimeError as e:
             raise GdalError(e.message)
+
+
+class SpatialReference(osr.SpatialReference):
+    @classmethod
+    def FromEPSG(cls, code):
+        s = cls()
+        s.ImportFromEPSG(code)
+        return s
+
+    def __eq__(self, other):
+        return bool(self.IsSame(other))
+
+    def GetEPSGCode(self):
+        epsg_string = self.GetEPSGString()
+        if epsg_string:
+            return int(epsg_string.split(':')[1])
+
+    def GetEPSGString(self):
+        if self.IsLocal() == 1:
+            return
+
+        if self.IsGeographic() == 1:
+            cstype = 'GEOGCS'
+        else:
+            cstype = 'PROJCS'
+        return '{0}:{1}'.format(self.GetAuthorityName(cstype),
+                                self.GetAuthorityCode(cstype))
