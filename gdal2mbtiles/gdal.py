@@ -9,22 +9,17 @@ from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 
-from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP
-from .exceptions import (GdalError, CalledGdalError,
-                         UnknownResamplingMethodError, VrtError)
-from .types import GdalFormat
-
-
-def warp_file(srcfile, dstfile, cmd=GDALWARP):
-    """Take srcfile as input, write to dstfile, warped to Web Mercator."""
-    pass
-
-
 from osgeo import gdal
 from osgeo.gdalconst import (GA_ReadOnly, GRA_Bilinear, GRA_Cubic,
                              GRA_CubicSpline, GRA_Lanczos,
                              GRA_NearestNeighbour)
 gdal.UseExceptions()            # Make GDAL throw exceptions on error
+
+from .constants import GDALBUILDVRT, GDALTRANSLATE, GDALWARP, TILE_SIDE
+from .exceptions import (GdalError, CalledGdalError,
+                         UnknownResamplingMethodError, VrtError)
+from .types import GdalFormat
+
 
 RESAMPLING_METHODS = {
     GRA_NearestNeighbour: 'near',
@@ -36,7 +31,6 @@ RESAMPLING_METHODS = {
 
 
 HALF_CIRCUMFERENCE = 20037508.34  # in metres
-TILE_SIDE = 256                   # in pixels
 
 
 def check_output_gdalwarp(*popenargs, **kwargs):

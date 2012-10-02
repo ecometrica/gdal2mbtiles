@@ -11,6 +11,8 @@ GdalFormat = namedtuple(typename='GdalFormat',
 
 _rgba = namedtuple(typename='_rgba',
                    field_names=['r', 'g', 'b', 'a'])
+
+
 class rgba(_rgba):
     """Represents an RGBA colour."""
     def __new__(cls, r, g, b, a=255):
