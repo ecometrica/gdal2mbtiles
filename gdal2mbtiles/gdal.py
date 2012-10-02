@@ -33,7 +33,7 @@ RESAMPLING_METHODS = {
 HALF_CIRCUMFERENCE = 20037508.34  # in metres
 
 
-def check_output_gdalwarp(*popenargs, **kwargs):
+def check_output_gdal(*popenargs, **kwargs):
     p = Popen(stderr=PIPE, stdout=PIPE, *popenargs, **kwargs)
     stdoutdata, stderrdata = p.communicate()
     if p.returncode:
@@ -99,7 +99,7 @@ def colourize(inputfile, colours, band=None):
         '/dev/stdout',
         inputfile
     ]
-    vrt = check_output_gdalwarp([str(e) for e in command])
+    vrt = check_output_gdal([str(e) for e in command])
 
     # Assert that it is actually a VRT file
     root = ElementTree.fromstring(vrt)
@@ -152,7 +152,7 @@ def expand_colour_bands(inputfile):
         '/dev/stdout'
     ]
     try:
-        return check_output_gdalwarp([str(e) for e in command])
+        return check_output_gdal([str(e) for e in command])
     except CalledGdalError as e:
         if e.error == "ERROR 4: `/dev/stdout' not recognised as a supported file format.":
             # HACK: WTF?!?
@@ -207,7 +207,7 @@ def warp(inputfile, cmd=GDALWARP, resampling=None):
 
     # Call gdalwarp
     warp_cmd.extend([inputfile, '/dev/stdout'])
-    return check_output_gdalwarp([str(e) for e in warp_cmd])
+    return check_output_gdal([str(e) for e in warp_cmd])
 
 
 def render_vrt(inputfile, outputfile, cmd=GDALWARP, working_memory=512,
@@ -243,7 +243,7 @@ def render_vrt(inputfile, outputfile, cmd=GDALWARP, working_memory=512,
 
         # Run gdalwarp and output to tmpfile.name
         warp_cmd.extend([inputfile, tmpfile.name])
-        check_output_gdalwarp([str(e) for e in warp_cmd])
+        check_output_gdal([str(e) for e in warp_cmd])
 
         # If it succeeds, then we move it to overwrite the actual output
         os.rename(tmpfile.name, outputfile)
