@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from math import log
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -9,12 +10,13 @@ from xml.etree import ElementTree
 from osgeo import osr
 from osgeo.gdalconst import GRA_Cubic
 
-from gdal2mbtiles.constants import GDALINFO
+from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
-                               preprocess, render_vrt, SpatialReference)
-from gdal2mbtiles.types import rgba
+from gdal2mbtiles.gdal import (CoordinateTransformation, Dataset, colourize,
+                               expand_colour_bands, warp, preprocess,
+                               render_vrt, SpatialReference)
+from gdal2mbtiles.types import rgba, XY
 
 
 __dir__ = os.path.dirname(__file__)
@@ -111,7 +113,7 @@ class TestWarp(unittest.TestCase):
     def test_resampling(self):
         # Cubic
         root = ElementTree.fromstring(warp(self.inputfile,
-                                                   resampling=GRA_Cubic))
+                                           resampling=GRA_Cubic))
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == 'Cubic'
                             for t in root.findall('.//ResampleAlg')))
@@ -129,6 +131,10 @@ class TestWarp(unittest.TestCase):
                  spatial_ref=SpatialReference.FromEPSG(4326))
         )
         self.assertTrue('WGS 84' in root.find('.//TargetSRS').text)
+
+    def skiptest_maximum_resolution_partial(self):
+        self.fail('This test needs to work on partial datasets, where changing '
+                  'the resolution will change the extents')
 
     def test_invalid(self):
         self.assertRaises(GdalError, warp, '/dev/null')
@@ -211,12 +217,173 @@ class TestDataset(unittest.TestCase):
         self.assertEqual(dataset.RasterXSize, 1024)
         self.assertEqual(dataset.RasterYSize, 1024)
 
+    def test_get_spatial_reference(self):
+        self.assertEqual(
+            Dataset(inputfile=self.inputfile).GetSpatialReference(),
+            SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        )
+
+    def test_get_coordinate_transformation(self):
+        dataset = Dataset(inputfile=self.inputfile)
+        wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
+        transform = dataset.GetCoordinateTransformation(dst_ref=wgs84)
+        self.assertEqual(transform.src_ref,
+                         dataset.GetSpatialReference())
+        self.assertEqual(transform.dst_ref,
+                         wgs84)
+
+    def test_get_native_resolution(self):
+        dataset = Dataset(inputfile=self.inputfile)
+
+        # bluemarble.tif is a 1024×1024 image of the whole world
+        self.assertEqual(dataset.GetNativeResolution(),
+                         2)
+
+        # Maximum
+        self.assertEqual(dataset.GetNativeResolution(maximum=1),
+                         1)
+        self.assertEqual(dataset.GetNativeResolution(maximum=10),
+                         2)
+
+        # Transform into US survey feet
+        sr = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        sr.ImportFromWkt(sr.ExportToWkt().replace(
+            'UNIT["metre",1,AUTHORITY["EPSG","9001"]]',
+            'UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]]'
+        ))
+        transform = dataset.GetCoordinateTransformation(dst_ref=sr)
+        self.assertEqual(dataset.GetNativeResolution(transform=transform),
+                         2 + int(round(log(3.28, 2))))  # 3.28 ft/m
+
+    def test_pixel_coordinates(self):
+        dataset = Dataset(inputfile=self.inputfile)
+        spatial_ref = dataset.GetSpatialReference()
+
+        # Upper-left corner
+        coords = dataset.PixelCoordinates(0, 0)
+        self.assertAlmostEqual(coords.x,
+                               -spatial_ref.GetMajorCircumference() / 2,
+                               places=2)
+        self.assertAlmostEqual(coords.y,
+                               spatial_ref.GetMinorCircumference() / 2,
+                               places=2)
+
+        # Bottom-right corner
+        coords = dataset.PixelCoordinates(dataset.RasterXSize,
+                                          dataset.RasterYSize)
+        self.assertAlmostEqual(coords.x,
+                               spatial_ref.GetMajorCircumference() / 2,
+                               places=2)
+        self.assertAlmostEqual(coords.y,
+                               -spatial_ref.GetMinorCircumference() / 2,
+                               places=2)
+
+        # Out of bounds
+        self.assertRaises(ValueError,
+                          dataset.PixelCoordinates, -1, 0)
+        self.assertRaises(ValueError,
+                          dataset.PixelCoordinates,
+                          dataset.RasterXSize, dataset.RasterYSize + 1)
+
+    def skiptest_pixel_coordinates_partial(self):
+        self.fail('Test not written yet')
+
+    def test_get_extents(self):
+        dataset = Dataset(inputfile=self.inputfile)
+        mercator = dataset.GetSpatialReference()
+        major_half_circumference = mercator.GetMajorCircumference() / 2
+        minor_half_circumference = mercator.GetMinorCircumference() / 2
+
+        ll, ur = dataset.GetExtents()
+        self.assertAlmostEqual(ll.x, -major_half_circumference, places=0)
+        self.assertAlmostEqual(ll.y, -minor_half_circumference, places=0)
+        self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
+        self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
+
+    def test_get_extents_wgs84(self):
+        dataset = Dataset(inputfile=self.inputfile)
+        transform = dataset.GetCoordinateTransformation(
+            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+        )
+        ll, ur = dataset.GetExtents(transform=transform)
+        self.assertAlmostEqual(ll.x, -180.0, places=0)
+        self.assertAlmostEqual(ll.y, -85.0, places=0)
+        self.assertAlmostEqual(ur.x, 180.0, places=0)
+        self.assertAlmostEqual(ur.y, 85.0, places=0)
+
+    def test_get_extents_mercator(self):
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_half_circumference = mercator.GetMajorCircumference() / 2
+        minor_half_circumference = mercator.GetMinorCircumference() / 2
+
+        dataset = Dataset(inputfile=self.inputfile)
+        transform = dataset.GetCoordinateTransformation(dst_ref=mercator)
+        ll, ur = dataset.GetExtents(transform=transform)
+        self.assertAlmostEqual(ll.x, -major_half_circumference, places=0)
+        self.assertAlmostEqual(ll.y, -minor_half_circumference, places=0)
+        self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
+        self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
+
+    def skiptest_get_extents_partial(self):
+        self.fail('Test not written yet')
+
+    def test_get_tiled_extents(self):
+        dataset = Dataset(inputfile=self.inputfile)
+
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_half_circumference = mercator.GetMajorCircumference() / 2
+        minor_half_circumference = mercator.GetMinorCircumference() / 2
+
+        # Native resolution, source projection which is Mercator, already
+        # aligned.
+        ll, ur = dataset.GetTiledExtents()
+        self.assertAlmostEqual(ll.x, -major_half_circumference, places=0)
+        self.assertAlmostEqual(ll.y, -minor_half_circumference, places=0)
+        self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
+        self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
+
+        # Resolution 0, source projection which is Mercator, already
+        # aligned. This is the same as above, because the dataset covers the
+        # whole world.
+        ll, ur = dataset.GetTiledExtents(resolution=0)
+        self.assertAlmostEqual(ll.x, -major_half_circumference, places=0)
+        self.assertAlmostEqual(ll.y, -minor_half_circumference, places=0)
+        self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
+        self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
+
+        # Native resolution, WGS 84 projection, already aligned
+        ll, ur = dataset.GetTiledExtents(
+            transform=dataset.GetCoordinateTransformation(
+                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+            )
+        )
+        self.assertAlmostEqual(ll.x, -180.0, places=0)
+        self.assertAlmostEqual(ll.y, -90.0, places=0)
+        self.assertAlmostEqual(ur.x, 180.0, places=0)
+        self.assertAlmostEqual(ur.y, 90.0, places=0)
+
+        # Native resolution, WGS 84 projection, already aligned. This is the
+        # same as above, because the dataset covers the whole world.
+        ll, ur = dataset.GetTiledExtents(
+            transform=dataset.GetCoordinateTransformation(
+                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+            ),
+            resolution=0
+        )
+        self.assertAlmostEqual(ll.x, -180.0, places=0)
+        self.assertAlmostEqual(ll.y, -90.0, places=0)
+        self.assertAlmostEqual(ur.x, 180.0, places=0)
+        self.assertAlmostEqual(ur.y, 90.0, places=0)
+
+    def skiptest_get_tiled_extents_partial(self):
+        self.fail('Test not written yet')
+
 
 class TestSpatialReference(unittest.TestCase):
     def setUp(self):
         self.wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
 
-    def test_simple(self):
+    def test_from_epsg(self):
         self.assertEqual(SpatialReference.FromEPSG(4326), self.wgs84)
 
         # Web Mercator is not the same as WGS 84.
@@ -227,3 +394,123 @@ class TestSpatialReference(unittest.TestCase):
 
     def test_get_epsg_string(self):
         self.assertEqual(self.wgs84.GetEPSGString(), 'EPSG:4326')
+
+    def test_get_major_circumerference(self):
+        # Degrees
+        self.assertAlmostEqual(self.wgs84.GetMajorCircumference(),
+                               360.0)
+
+        # Meters
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        self.assertAlmostEqual(mercator.GetMajorCircumference(),
+                               40075016.6856,
+                               places=4)
+
+    def test_get_minor_circumerference(self):
+        # Degrees
+        self.assertAlmostEqual(self.wgs84.GetMinorCircumference(),
+                               360.0)
+
+        # Meters
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        self.assertAlmostEqual(mercator.GetMinorCircumference(),
+                               40075016.6856,
+                               places=4)
+
+    def test_pixel_dimensions_wgs84(self):
+        # Resolution 0 covers a longitudinal hemisphere.
+        pixel_size = self.wgs84.GetPixelDimensions(resolution=0)
+        self.assertAlmostEqual(pixel_size.x,
+                               360.0 / TILE_SIDE / 2)
+        self.assertAlmostEqual(pixel_size.y,
+                               360.0 / TILE_SIDE / 2)
+
+        # Resolution 1 should be half of the above
+        pixel_size = self.wgs84.GetPixelDimensions(resolution=1)
+        self.assertAlmostEqual(pixel_size.x,
+                               360.0 / TILE_SIDE / 4)
+        self.assertAlmostEqual(pixel_size.y,
+                               360.0 / TILE_SIDE / 4)
+
+    def test_pixel_dimensions_mercator(self):
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        # Resolution 0 covers the whole world
+        pixel_size = mercator.GetPixelDimensions(resolution=0)
+        self.assertAlmostEqual(pixel_size.x,
+                               major_circumference / TILE_SIDE)
+        self.assertAlmostEqual(pixel_size.y,
+                               minor_circumference / TILE_SIDE)
+
+        # Resolution 1 should be half of the above
+        pixel_size = mercator.GetPixelDimensions(resolution=1)
+        self.assertAlmostEqual(pixel_size.x,
+                               major_circumference / TILE_SIDE / 2)
+        self.assertAlmostEqual(pixel_size.y,
+                               minor_circumference / TILE_SIDE / 2)
+
+    def test_get_tile_dimensions_wgs84(self):
+        # Resolution 0 covers a longitudinal hemisphere.
+        tile_size = self.wgs84.GetTileDimensions(resolution=0)
+        self.assertAlmostEqual(tile_size.x,
+                               360.0 / 2)
+        self.assertAlmostEqual(tile_size.y,
+                               360.0 / 2)
+
+        # Resolution 1 should be half of the above
+        tile_size = self.wgs84.GetTileDimensions(resolution=1)
+        self.assertAlmostEqual(tile_size.x,
+                               360.0 / 4)
+        self.assertAlmostEqual(tile_size.y,
+                               360.0 / 4)
+
+    def test_get_tile_dimensions_mercator(self):
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        # Resolution 0 covers the whole world
+        tile_size = mercator.GetTileDimensions(resolution=0)
+        self.assertAlmostEqual(tile_size.x,
+                               major_circumference)
+        self.assertAlmostEqual(tile_size.y,
+                               minor_circumference)
+
+        # Resolution 1 should be half of the above
+        tile_size = mercator.GetTileDimensions(resolution=1)
+        self.assertAlmostEqual(tile_size.x,
+                               major_circumference / 2)
+        self.assertAlmostEqual(tile_size.y,
+                               minor_circumference / 2)
+
+    def test_tiles_count_wgs84(self):
+        world = (XY(-180, -90), XY(180, 90))
+
+        # Resolution 0 is 2×1 for the whole world
+        self.assertEqual(self.wgs84.GetTilesCount(extents=world,
+                                                  resolution=0),
+                         XY(2, 1))
+
+        # Resolution 1 is 4×2 for the whole world
+        self.assertEqual(self.wgs84.GetTilesCount(extents=world,
+                                                  resolution=1),
+                         XY(4, 2))
+
+    def test_tiles_count_mercator(self):
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_half_circumference = mercator.GetMajorCircumference() / 2
+        minor_half_circumference = mercator.GetMinorCircumference() / 2
+        world = (XY(-major_half_circumference, -minor_half_circumference),
+                 XY(major_half_circumference, minor_half_circumference))
+
+        # Resolution 0 is 1×1 for the whole world
+        self.assertEqual(mercator.GetTilesCount(extents=world,
+                                                resolution=0),
+                         XY(1, 1))
+
+        # Resolution 1 is 2×2 for the whole world
+        self.assertEqual(mercator.GetTilesCount(extents=world,
+                                                resolution=1),
+                         XY(2, 2))
