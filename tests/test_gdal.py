@@ -83,6 +83,24 @@ class TestColourize(unittest.TestCase):
                           inputfile=self.inputfile,
                           colours=None)
 
+    def test_nodata(self):
+        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+        in_band = 1
+
+        with NamedTemporaryFile(suffix='.tif') as outputfile:
+            outputfile.write(colourize(inputfile=inputfile,
+                                       colours=[(0, rgba(0, 0, 0, 255)),
+                                                (1, rgba(255, 255, 255, 255))],
+                                       band=in_band))
+            outputfile.flush()
+            self.assertTrue(os.path.exists(outputfile.name))
+
+            # No Data value must be the same as the input file's
+            in_data = Dataset(inputfile)
+            out_data = Dataset(outputfile.name)
+            self.assertEqual(in_data.GetRasterBand(in_band).GetNoDataValue(),
+                             out_data.GetRasterBand(1).GetNoDataValue())
+
 
 class TestExpandColourBands(unittest.TestCase):
     def setUp(self):
@@ -181,19 +199,60 @@ class TestWarp(unittest.TestCase):
         self.assertRaises(IOError,
                           warp, os.path.join(__dir__, 'missing.tif'))
 
+    def test_nodata(self):
+        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+
+        with NamedTemporaryFile(suffix='.tif') as outputfile:
+            outputfile.write(warp(inputfile=inputfile))
+            outputfile.flush()
+            self.assertTrue(os.path.exists(outputfile.name))
+
+            # No Data value must be the same as the input file's
+            in_data = Dataset(inputfile)
+            out_data = Dataset(outputfile.name)
+            for band in range(1, out_data.RasterCount + 1):
+                self.assertEqual(in_data.GetRasterBand(band).GetNoDataValue(),
+                                 out_data.GetRasterBand(band).GetNoDataValue())
+
 
 class TestPreprocess(unittest.TestCase):
-    def setUp(self):
-        self.inputfile = os.path.join(__dir__,
-                                      'srtm.tif')
-
     def test_simple(self):
+        inputfile = os.path.join(__dir__, 'srtm.tif')
+
         with NamedTemporaryFile(suffix='.tif') as outputfile:
-            preprocess(inputfile=self.inputfile, outputfile=outputfile.name,
+            preprocess(inputfile=inputfile, outputfile=outputfile.name,
                        colours=[(0, rgba(0, 0, 0, 255)),
                                 (1, rgba(255, 255, 255, 255))])
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
+
+            in_data = Dataset(inputfile)
+            out_data = Dataset(outputfile.name)
+
+            # Output size should match input size
+            self.assertEqual(out_data.RasterXSize, in_data.RasterXSize)
+            self.assertEqual(out_data.RasterYSize, in_data.RasterYSize)
+
+            # No Data value never existed
+            for band in range(1, out_data.RasterCount + 1):
+                self.assertEqual(out_data.GetRasterBand(band).GetNoDataValue(),
+                                 None)
+
+    def test_nodata(self):
+        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+
+        with NamedTemporaryFile(suffix='.tif') as outputfile:
+            preprocess(inputfile=inputfile, outputfile=outputfile.name,
+                       colours=[(0, rgba(0, 0, 0, 255)),
+                                (1, rgba(255, 255, 255, 255))])
+            self.assertTrue(os.path.exists(outputfile.name))
+            self.assertTrue(os.stat(outputfile.name).st_size > 0)
+
+            # No Data value must be None in an RGBA file
+            out_data = Dataset(outputfile.name)
+            for band in range(1, out_data.RasterCount + 1):
+                self.assertEqual(out_data.GetRasterBand(band).GetNoDataValue(),
+                                 None)
 
 
 class TestRenderVrt(TestCase):

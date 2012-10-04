@@ -130,11 +130,16 @@ def colourize(inputfile, colours, band=None):
     )
 
     # Define the colour lookup table
-    source = rasterband.find('SimpleSource')
-    source.tag = 'ComplexSource'
-    lut = SubElement(source, 'LUT')
+    source = rasterband.find('ComplexSource')
+    if source is None:
+        source = rasterband.find('SimpleSource')
+        source.tag = 'ComplexSource'
+
+    lut = source.find('LUT')
+    if lut is None:
+        lut = SubElement(source, 'LUT')
     lut.text = ',\n'.join('%s:%d' % (value[0], i)
-                                     for i, value in enumerate(colours))
+                          for i, value in enumerate(colours))
 
     return ElementTree.tostring(root)
 
@@ -219,6 +224,13 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
         int(num_tiles.x) * TILE_SIDE,
         int(num_tiles.y) * TILE_SIDE
     ])
+
+    # Propagate No Data Value
+    nodata_values = [dataset.GetRasterBand(i).GetNoDataValue()
+                     for i in range(1, dataset.RasterCount + 1)]
+    if any(nodata_values):
+        nodata_values = [str(v).lower() for v in nodata_values]
+        warp_cmd.extend(['-dstnodata', ' '.join(nodata_values)])
 
     # Call gdalwarp
     warp_cmd.extend([inputfile, '/dev/stdout'])
