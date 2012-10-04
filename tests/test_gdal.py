@@ -525,8 +525,8 @@ class TestDataset(unittest.TestCase):
         ll, ur = dataset.GetTiledExtents()
         self.assertAlmostEqual(ll.x, -major_circumference / 4, places=0)
         self.assertAlmostEqual(ll.y, -minor_circumference / 4, places=0)
-        self.assertAlmostEqual(ur.x, 0, places=0)
-        self.assertAlmostEqual(ur.y, 0, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
 
         # Resolution 1, source projection which is Mercator, already
         # aligned. This should be the south-western quadrant, because the tile
@@ -534,8 +534,8 @@ class TestDataset(unittest.TestCase):
         ll, ur = dataset.GetTiledExtents(resolution=1)
         self.assertAlmostEqual(ll.x, -major_circumference / 2, places=0)
         self.assertAlmostEqual(ll.y, -minor_circumference / 2, places=0)
-        self.assertAlmostEqual(ur.x, 0, places=0)
-        self.assertAlmostEqual(ur.y, 0, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
 
         # Native resolution, WGS 84 projection, already aligned
         ll, ur = dataset.GetTiledExtents(
@@ -561,8 +561,62 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(ur.x, 0.0, places=0)
         self.assertAlmostEqual(ur.y, 90.0, places=0)
 
-    def skiptest_get_tiled_extents_partial_spanning(self):
-        self.fail('Test not written yet')
+    def test_get_tiled_extents_partial_spanning(self):
+        dataset = Dataset(inputfile=self.spanningfile)
+
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        # Native resolution, source projection which is Mercator, spanning
+        # tiles.  This should be the south-western quadrant.
+        ll, ur = dataset.GetTiledExtents()
+        self.assertAlmostEqual(ll.x, -major_circumference / 2, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 2, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
+
+        # Resolution 1, source projection which is Mercator, spanning tiles.
+        # This should be the south-western quadrant.
+        ll, ur = dataset.GetTiledExtents(resolution=1)
+        self.assertAlmostEqual(ll.x, -major_circumference / 2, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 2, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
+
+        # Resolution 5, source projection which is Mercator, spanning tiles.
+        # This should be the south-western quadrant with a border of 32 pixels,
+        # because the border of the dataset is 50 pixels.
+        pixel_size = mercator.GetPixelDimensions(
+            resolution=dataset.GetNativeResolution()
+        )
+        border = 32 * pixel_size.x
+        ll, ur = dataset.GetTiledExtents(resolution=5)
+        self.assertAlmostEqual(ll.x,
+                               -major_circumference / 2 + border,
+                               places=0)
+        self.assertAlmostEqual(ll.y,
+                               -minor_circumference / 2 + border,
+                               places=0)
+        self.assertAlmostEqual(ur.x,
+                               0.0 - border,
+                               places=0)
+        self.assertAlmostEqual(ur.y,
+                               0.0 - border,
+                               places=0)
+
+        # Resolution 0, WGS 84 projection, spanning tiles. This should be
+        # the western hemisphere.
+        ll, ur = dataset.GetTiledExtents(
+            transform=dataset.GetCoordinateTransformation(
+                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+            ),
+            resolution=0
+        )
+        self.assertAlmostEqual(ll.x, -180.0, places=0)
+        self.assertAlmostEqual(ll.y, -90.0, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 90.0, places=0)
 
 
 class TestSpatialReference(unittest.TestCase):
