@@ -113,8 +113,13 @@ class TestExpandColourBands(unittest.TestCase):
 
 class TestWarp(unittest.TestCase):
     def setUp(self):
+        # Whole world: (180°W, 85°S), (180°E, 85°N)
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
+
+        # Aligned partial: (90°W, 42.5°S), (0°E, 0°N)
+        self.alignedfile = os.path.join(__dir__,
+                                        'bluemarble-aligned-ll.tif')
 
     def test_simple(self):
         root = ElementTree.fromstring(warp(self.inputfile))
@@ -144,9 +149,30 @@ class TestWarp(unittest.TestCase):
         )
         self.assertTrue('WGS 84' in root.find('.//TargetSRS').text)
 
-    def skiptest_maximum_resolution_partial(self):
-        self.fail('This test needs to work on partial datasets, where changing '
-                  'the resolution will change the extents')
+    def test_partial(self):
+        root = ElementTree.fromstring(warp(self.alignedfile))
+        # Since this is already aligned, SrcGeoTransform and DstGeoTransform
+        # should be the same.
+        src_geotransform = [float(f) for f
+                            in root.find('.//SrcGeoTransform').text.split(',')]
+        dst_geotransform = [float(f) for f
+                            in root.find('.//DstGeoTransform').text.split(',')]
+        for src, dst in zip(src_geotransform, dst_geotransform):
+            self.assertAlmostEqual(src, dst, places=2)
+
+    def test_maximum_resolution_partial(self):
+        # Limit to resolution 1, which will give us the south-west quadrant
+        root = ElementTree.fromstring(warp(self.alignedfile,
+                                           maximum_resolution=1))
+
+        src_geotransform = [float(f) for f
+                            in root.find('.//SrcGeoTransform').text.split(',')]
+        dst_geotransform = [float(f) for f
+                            in root.find('.//DstGeoTransform').text.split(',')]
+        for src, dst in zip(src_geotransform, dst_geotransform):
+            # Native resolution is 2 and the file is aligned to the top-right
+            # corner, so all transformations should be doubled.
+            self.assertAlmostEqual(src * 2, dst, places=2)
 
     def test_invalid(self):
         self.assertRaises(GdalError, warp, '/dev/null')
