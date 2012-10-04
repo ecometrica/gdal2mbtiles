@@ -13,13 +13,25 @@ from osgeo.gdalconst import GRA_Cubic
 from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (CoordinateTransformation, Dataset, colourize,
-                               expand_colour_bands, warp, preprocess,
-                               render_vrt, SpatialReference)
+from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
+                               preprocess, render_vrt, SpatialReference)
 from gdal2mbtiles.types import rgba, XY
 
 
 __dir__ = os.path.dirname(__file__)
+
+
+class TestCase(unittest.TestCase):
+    def assertExtentsEqual(self, first, second):
+        # Assume that the extents are in the same projection
+        first_ll, first_ur = first
+        second_ll, second_ur = second
+
+        # 1 cm precision
+        self.assertAlmostEqual(first_ll.x, second_ll.x, places=2)
+        self.assertAlmostEqual(first_ll.y, second_ll.y, places=2)
+        self.assertAlmostEqual(first_ur.x, second_ur.x, places=2)
+        self.assertAlmostEqual(first_ur.y, second_ur.y, places=2)
 
 
 class TestColourize(unittest.TestCase):
@@ -158,24 +170,55 @@ class TestPreprocess(unittest.TestCase):
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
 
-class TestRenderVrt(unittest.TestCase):
+class TestRenderVrt(TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
 
-    def test_simple(self):
-        with NamedTemporaryFile(suffix='.vrt') as inputfile, \
+    def test_world(self):
+        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
              NamedTemporaryFile(suffix='.tif') as tmpfile:
-            inputfile.write(warp(self.inputfile))
-            inputfile.flush()
+            warpfile.write(warp(self.inputfile))
+            warpfile.flush()
             outputfile = tmpfile.name
-            render_vrt(inputfile=inputfile.name, outputfile=outputfile,
+            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
                        compress='LZW')
             self.assertEqual(
                 subprocess.call([GDALINFO, outputfile],
                                 stdout=open('/dev/null', 'w+')),
                 0
             )
+
+            # Test that the metadata hasn't been munged by warp()
+            in_data = Dataset(self.inputfile)
+            out_data = Dataset(outputfile)
+            self.assertExtentsEqual(in_data.GetExtents(),
+                                    out_data.GetExtents())
+            self.assertEqual(in_data.RasterXSize, out_data.RasterXSize)
+            self.assertEqual(in_data.RasterYSize, out_data.RasterYSize)
+
+    def test_aligned_partial(self):
+        inputfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
+        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
+             NamedTemporaryFile(suffix='.tif') as tmpfile:
+            warpfile.write(warp(inputfile))
+            warpfile.flush()
+            outputfile = tmpfile.name
+            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
+                       compress='LZW')
+            self.assertEqual(
+                subprocess.call([GDALINFO, outputfile],
+                                stdout=open('/dev/null', 'w+')),
+                0
+            )
+
+            # Test that the metadata hasn't been munged by warp()
+            in_data = Dataset(inputfile)
+            out_data = Dataset(outputfile)
+            self.assertExtentsEqual(in_data.GetExtents(),
+                                    out_data.GetExtents())
+            self.assertEqual(in_data.RasterXSize, out_data.RasterXSize)
+            self.assertEqual(in_data.RasterYSize, out_data.RasterYSize)
 
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
@@ -194,8 +237,17 @@ class TestRenderVrt(unittest.TestCase):
 
 class TestDataset(unittest.TestCase):
     def setUp(self):
+        # Whole world: (180°W, 85°S), (180°E, 85°N)
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
+
+        # Aligned partial: (90°W, 42.5°S), (0°E, 0°N)
+        self.alignedfile = os.path.join(__dir__,
+                                        'bluemarble-aligned-ll.tif')
+
+        # Unaligned (spanning) partial: (162.4°W, 76.7°S), (17.6°W, 8.3°S)
+        self.spanningfile = os.path.join(__dir__,
+                                         'bluemarble-spanning-ll.tif')
 
     def test_open(self):
         from osgeo.gdalconst import GA_Update
@@ -285,8 +337,35 @@ class TestDataset(unittest.TestCase):
                           dataset.PixelCoordinates,
                           dataset.RasterXSize, dataset.RasterYSize + 1)
 
-    def skiptest_pixel_coordinates_partial(self):
-        self.fail('Test not written yet')
+    def test_pixel_coordinates_partial(self):
+        dataset = Dataset(inputfile=self.alignedfile)
+        spatial_ref = dataset.GetSpatialReference()
+
+        # Upper-left corner
+        coords = dataset.PixelCoordinates(0, 0)
+        self.assertAlmostEqual(coords.x,
+                               -spatial_ref.GetMajorCircumference() / 4,
+                               places=2)
+        self.assertAlmostEqual(coords.y,
+                               0.0,
+                               places=2)
+
+        # Bottom-right corner
+        coords = dataset.PixelCoordinates(dataset.RasterXSize,
+                                          dataset.RasterYSize)
+        self.assertAlmostEqual(coords.x,
+                               0.0,
+                               places=2)
+        self.assertAlmostEqual(coords.y,
+                               -spatial_ref.GetMinorCircumference() / 4,
+                               places=2)
+
+        # Out of bounds
+        self.assertRaises(ValueError,
+                          dataset.PixelCoordinates, -1, 0)
+        self.assertRaises(ValueError,
+                          dataset.PixelCoordinates,
+                          dataset.RasterXSize, dataset.RasterYSize + 1)
 
     def test_get_extents(self):
         dataset = Dataset(inputfile=self.inputfile)
@@ -324,8 +403,67 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
         self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
 
-    def skiptest_get_extents_partial(self):
-        self.fail('Test not written yet')
+    def test_get_extents_partial_aligned(self):
+        dataset = Dataset(inputfile=self.alignedfile)
+        mercator = dataset.GetSpatialReference()
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        ll, ur = dataset.GetExtents()
+        self.assertAlmostEqual(ll.x, -major_circumference / 4, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 4, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
+
+    def test_get_extents_partial_spanning(self):
+        dataset = Dataset(inputfile=self.spanningfile)
+        mercator = dataset.GetSpatialReference()
+        major_half_circumference = mercator.GetMajorCircumference() / 2
+        minor_half_circumference = mercator.GetMinorCircumference() / 2
+
+        # Spanning file is 50 pixels in from alignment
+        pixel_size = mercator.GetPixelDimensions(
+            resolution=dataset.GetNativeResolution()
+        )
+        border = 50 * pixel_size.x
+
+        ll, ur = dataset.GetExtents()
+        self.assertAlmostEqual(ll.x,
+                               -major_half_circumference + border,
+                               places=0)
+        self.assertAlmostEqual(ll.y,
+                               -minor_half_circumference + border,
+                               places=0)
+        self.assertAlmostEqual(ur.x,
+                               0.0 - border,
+                               places=0)
+        self.assertAlmostEqual(ur.y, 0.0 - border,
+                               places=0)
+
+    def test_get_extents_partial_wgs84(self):
+        dataset = Dataset(inputfile=self.alignedfile)
+        transform = dataset.GetCoordinateTransformation(
+            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+        )
+        ll, ur = dataset.GetExtents(transform=transform)
+        # 66.5°S is due to the fact that the original file is in Mercator and
+        # the southern latitudes take up more pixels in Mercator than in WGS 84.
+        self.assertAlmostEqual(ll.x, -90.0, places=0)
+        self.assertAlmostEqual(ll.y, -66.5, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
+
+    def test_get_extents_partial_mercator(self):
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        dataset = Dataset(inputfile=self.alignedfile)
+        ll, ur = dataset.GetExtents()
+        self.assertAlmostEqual(ll.x, -major_circumference / 4, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 4, places=0)
+        self.assertAlmostEqual(ur.x, 0, places=0)
+        self.assertAlmostEqual(ur.y, 0, places=0)
 
     def test_get_tiled_extents(self):
         dataset = Dataset(inputfile=self.inputfile)
@@ -362,7 +500,7 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(ur.x, 180.0, places=0)
         self.assertAlmostEqual(ur.y, 90.0, places=0)
 
-        # Native resolution, WGS 84 projection, already aligned. This is the
+        # Resolution 0, WGS 84 projection, already aligned. This is the
         # same as above, because the dataset covers the whole world.
         ll, ur = dataset.GetTiledExtents(
             transform=dataset.GetCoordinateTransformation(
@@ -375,7 +513,55 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(ur.x, 180.0, places=0)
         self.assertAlmostEqual(ur.y, 90.0, places=0)
 
-    def skiptest_get_tiled_extents_partial(self):
+    def test_get_tiled_extents_partial_aligned(self):
+        dataset = Dataset(inputfile=self.alignedfile)
+
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        major_circumference = mercator.GetMajorCircumference()
+        minor_circumference = mercator.GetMinorCircumference()
+
+        # Native resolution, source projection which is Mercator, already
+        # aligned.
+        ll, ur = dataset.GetTiledExtents()
+        self.assertAlmostEqual(ll.x, -major_circumference / 4, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 4, places=0)
+        self.assertAlmostEqual(ur.x, 0, places=0)
+        self.assertAlmostEqual(ur.y, 0, places=0)
+
+        # Resolution 1, source projection which is Mercator, already
+        # aligned. This should be the south-western quadrant, because the tile
+        # is the north-eastern section of that quadrant.
+        ll, ur = dataset.GetTiledExtents(resolution=1)
+        self.assertAlmostEqual(ll.x, -major_circumference / 2, places=0)
+        self.assertAlmostEqual(ll.y, -minor_circumference / 2, places=0)
+        self.assertAlmostEqual(ur.x, 0, places=0)
+        self.assertAlmostEqual(ur.y, 0, places=0)
+
+        # Native resolution, WGS 84 projection, already aligned
+        ll, ur = dataset.GetTiledExtents(
+            transform=dataset.GetCoordinateTransformation(
+                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+            )
+        )
+        self.assertAlmostEqual(ll.x, -90.0, places=0)
+        self.assertAlmostEqual(ll.y, -90.0, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 0.0, places=0)
+
+        # Resolution 0, WGS 84 projection, already aligned. This should be
+        # the western hemisphere.
+        ll, ur = dataset.GetTiledExtents(
+            transform=dataset.GetCoordinateTransformation(
+                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+            ),
+            resolution=0
+        )
+        self.assertAlmostEqual(ll.x, -180.0, places=0)
+        self.assertAlmostEqual(ll.y, -90.0, places=0)
+        self.assertAlmostEqual(ur.x, 0.0, places=0)
+        self.assertAlmostEqual(ur.y, 90.0, places=0)
+
+    def skiptest_get_tiled_extents_partial_spanning(self):
         self.fail('Test not written yet')
 
 
