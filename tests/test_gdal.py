@@ -473,7 +473,8 @@ class TestDataset(unittest.TestCase):
         )
         ll, ur = dataset.GetExtents(transform=transform)
         # 66.5°S is due to the fact that the original file is in Mercator and
-        # the southern latitudes take up more pixels in Mercator than in WGS 84.
+        # the southern latitudes take up more pixels in Mercator than in
+        # WGS84.
         self.assertAlmostEqual(ll.x, -90.0, places=0)
         self.assertAlmostEqual(ll.y, -66.5, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)

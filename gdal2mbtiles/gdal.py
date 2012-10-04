@@ -35,9 +35,6 @@ RESAMPLING_METHODS = {
 }
 
 
-HALF_CIRCUMFERENCE = 20037508.34  # in metres
-
-
 def check_output_gdal(*popenargs, **kwargs):
     p = Popen(stderr=PIPE, stdout=PIPE, *popenargs, **kwargs)
     stdoutdata, stderrdata = p.communicate()
@@ -160,7 +157,8 @@ def expand_colour_bands(inputfile):
     try:
         return check_output_gdal([str(e) for e in command])
     except CalledGdalError as e:
-        if e.error == "ERROR 4: `/dev/stdout' not recognised as a supported file format.":
+        if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
+                       "file format."):
             # HACK: WTF?!?
             return e.output
         raise
@@ -350,7 +348,7 @@ class Dataset(gdal.Dataset):
         Raises a GdalError if inputfile is invalid.
         """
         # Open the input file and read some metadata
-        open(inputfile, 'r').close()  # HACK: GDAL doesn't give a useful exception
+        open(inputfile, 'r').close()  # HACK: GDAL gives a useless exception
         try:
             # Since this is a SWIG object, clone the ``this`` pointer
             self.this = gdal.Open(inputfile, mode).this
@@ -378,7 +376,8 @@ class Dataset(gdal.Dataset):
             dst_ref = self.GetSpatialReference()
         else:
             # Transform these dimensions into the destination projection
-            dst_pixel_size = abs(transform.TransformPoint(src_pixel_size, 0)[0])
+            dst_pixel_size = transform.TransformPoint(src_pixel_size, 0)[0]
+            dst_pixel_size = abs(dst_pixel_size)
             dst_ref = transform.dst_ref
 
         # We allow some floating point error between src_pixel_size and
@@ -412,8 +411,10 @@ class Dataset(gdal.Dataset):
                              (y, self.RasterYSize))
 
         geotransform = self.GetGeoTransform()
-        coords = XY(geotransform[0] + geotransform[1] * x + geotransform[2] * y,
-                    geotransform[3] + geotransform[4] * x + geotransform[5] * y)
+        coords = XY(
+            geotransform[0] + geotransform[1] * x + geotransform[2] * y,
+            geotransform[3] + geotransform[4] * x + geotransform[5] * y
+        )
 
         if transform is None:
             return coords
@@ -433,10 +434,14 @@ class Dataset(gdal.Dataset):
         x_size, y_size = self.RasterXSize, self.RasterYSize
 
         # Compute four corners in destination projection
-        upper_left = self.PixelCoordinates(0, 0, transform=transform)
-        upper_right = self.PixelCoordinates(x_size, 0, transform=transform)
-        lower_left = self.PixelCoordinates(0, y_size, transform=transform)
-        lower_right = self.PixelCoordinates(x_size, y_size, transform=transform)
+        upper_left = self.PixelCoordinates(0, 0,
+                                           transform=transform)
+        upper_right = self.PixelCoordinates(x_size, 0,
+                                            transform=transform)
+        lower_left = self.PixelCoordinates(0, y_size,
+                                           transform=transform)
+        lower_right = self.PixelCoordinates(x_size, y_size,
+                                            transform=transform)
         x_values, y_values = zip(upper_left, upper_right,
                                  lower_left, lower_right)
 
