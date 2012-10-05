@@ -305,6 +305,43 @@ class TestRenderVrt(TestCase):
             self.assertEqual(in_data.RasterXSize, out_data.RasterXSize)
             self.assertEqual(in_data.RasterYSize, out_data.RasterYSize)
 
+    def test_spanning_partial(self):
+        inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
+             NamedTemporaryFile(suffix='.tif') as tmpfile:
+            warpfile.write(warp(inputfile))
+            warpfile.flush()
+            outputfile = tmpfile.name
+            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
+                       compress='LZW')
+            self.assertEqual(
+                subprocess.call([GDALINFO, outputfile],
+                                stdout=open('/dev/null', 'w+')),
+                0
+            )
+
+            # Test that the metadata hasn't been munged by warp()
+            out_data = Dataset(outputfile)
+
+            # gdalwarp outputs rgba(0, 0, 0, 0) as transparent, so the
+            # upper-left corner should have this colour.
+            self.assertEqual(out_data.ReadAsArray(0, 0, 1, 1).tolist(),
+                             [[[0]], [[0]], [[0]], [[0]]])
+
+            # Extents should be south-western quadrant
+            mercator = out_data.GetSpatialReference()
+            major_half_circumference = mercator.GetMajorCircumference() / 2
+            minor_half_circumference = mercator.GetMinorCircumference() / 2
+            self.assertExtentsEqual(
+                out_data.GetExtents(),
+                (XY(-major_half_circumference, -minor_half_circumference),
+                 XY(0.0, 0.0))
+            )
+
+            # Should be a 512×512 quadrant of the full 1024×1024 image
+            self.assertEqual(out_data.RasterXSize, 512)
+            self.assertEqual(out_data.RasterYSize, 512)
+
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
             self.assertRaises(CalledGdalError,
