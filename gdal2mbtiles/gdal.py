@@ -63,21 +63,23 @@ def preprocess(inputfile, outputfile, colours, band=None, spatial_ref=None,
 
 def pipeline(inputfile, outputfile, functions, **kwargs):
     """
-    Applies functions to a GDAL-readable inputfile, rendering to outputfile.
+    Applies VRT-functions to a GDAL-readable inputfile, rendering to outputfile.
 
     Functions must be an iterable of single-parameter functions that take a
     filename as input.
     """
+    if not functions:
+        raise ValueError('Must have at least one function')
+
     tmpfiles = []
     try:
         previous = inputfile
         for i, f in enumerate(functions):
-            current = NamedTemporaryFile(suffix='.vrt', prefix=('gdal%d' % i))
+            vrt = f(previous)
+            current = vrt.get_tempfile(suffix='.vrt', prefix=('gdal%d' % i))
             tmpfiles.append(current)
-            current.write(f(previous))
-            current.flush()
             previous = current.name
-        return render_vrt(inputfile=previous, outputfile=outputfile, **kwargs)
+        return vrt.render(outputfile=outputfile, **kwargs)
     finally:
         for f in tmpfiles:
             f.close()
@@ -108,10 +110,10 @@ def colourize(inputfile, colours, band=None):
         '/dev/stdout',
         inputfile
     ]
-    vrt = check_output_gdal([str(e) for e in command])
+    vrt = VRT(check_output_gdal([str(e) for e in command]))
 
     # Assert that it is actually a VRT file
-    root = ElementTree.fromstring(vrt)
+    root = vrt.get_root()
     if root.tag != 'VRTDataset':
         raise VrtError('Not a VRTDataset: %s' %
                        vrt[:80])
@@ -150,7 +152,8 @@ def colourize(inputfile, colours, band=None):
     lut.text = ',\n'.join('%s:%d' % (band_value, i)
                           for i, band_value in enumerate(colours.keys()))
 
-    return ElementTree.tostring(root)
+    vrt.update_content(root=root)
+    return vrt
 
 
 def expand_colour_bands(inputfile):
@@ -169,12 +172,12 @@ def expand_colour_bands(inputfile):
         '/dev/stdout'
     ]
     try:
-        return check_output_gdal([str(e) for e in command])
+        return VRT(check_output_gdal([str(e) for e in command]))
     except CalledGdalError as e:
         if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
                        "file format."):
             # HACK: WTF?!?
-            return e.output
+            return VRT(e.output)
         raise
 
 
@@ -243,52 +246,7 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
 
     # Call gdalwarp
     warp_cmd.extend([inputfile, '/dev/stdout'])
-    return check_output_gdal([str(e) for e in warp_cmd])
-
-
-def render_vrt(inputfile, outputfile, cmd=GDALWARP, working_memory=512,
-               compress=None):
-    """Generate a GeoTIFF from a vrt string"""
-    tmpfile = NamedTemporaryFile(
-        suffix='.tif', prefix='gdalrender',
-        dir=os.path.dirname(outputfile), delete=False
-    )
-
-    try:
-        warp_cmd = [
-            cmd,
-            '-q',                   # Quiet - FIXME: Use logging
-            '-of', 'GTiff',         # Output to GeoTIFF
-            '-multi',               # Use multiple processes
-            '-overwrite',           # Overwrite output if it already exists
-            '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
-        ]
-
-        # Set the working memory so that gdalwarp doesn't stall of disk I/O
-        warp_cmd.extend([
-            '-wm', working_memory,
-            '--config', 'GDAL_CACHEMAX', working_memory
-        ])
-
-        # Use compression
-        compress = str(compress).upper()
-        if compress and compress != 'NONE':
-            warp_cmd.extend(['-co', 'COMPRESS=%s' % compress])
-            if compress in ('LZW', 'DEFLATE'):
-                warp_cmd.extend(['-co', 'PREDICTOR=2'])
-
-        # Run gdalwarp and output to tmpfile.name
-        warp_cmd.extend([inputfile, tmpfile.name])
-        check_output_gdal([str(e) for e in warp_cmd])
-
-        # If it succeeds, then we move it to overwrite the actual output
-        os.rename(tmpfile.name, outputfile)
-    finally:
-        try:
-            os.remove(tmpfile.name)
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
+    return VRT(check_output_gdal([str(e) for e in warp_cmd]))
 
 
 def supported_formats(cmd=GDALWARP):
@@ -585,3 +543,72 @@ class SpatialReference(osr.SpatialReference):
 
         return XY(int(round(width / tile_width)),
                   int(round(height / tile_height)))
+
+
+class VRT(object):
+    def __init__(self, content):
+        self.content = content
+
+    def __str__(self):
+        return self.content
+
+    def get_root(self):
+        return ElementTree.fromstring(self.content)
+
+    def update_content(self, root):
+        self.content = ElementTree.tostring(root)
+
+    def get_tempfile(self, **kwargs):
+        kwargs.setdefault('suffix', '.vrt')
+        tempfile = NamedTemporaryFile(**kwargs)
+        tempfile.write(self.content)
+        tempfile.flush()
+        tempfile.seek(0)
+        return tempfile
+
+    def render(self, outputfile, cmd=GDALWARP, working_memory=512,
+               compress=None, tempdir=None):
+        """Generate a GeoTIFF from a vrt string"""
+        tmpfile = NamedTemporaryFile(
+            suffix='.tif', prefix='gdalrender',
+            dir=os.path.dirname(outputfile), delete=False
+        )
+
+        try:
+            with self.get_tempfile(dir=tempdir) as inputfile:
+                warp_cmd = [
+                    cmd,
+                    '-q',                   # Quiet - FIXME: Use logging
+                    '-of', 'GTiff',         # Output to GeoTIFF
+                    '-multi',               # Use multiple processes
+                    '-overwrite',           # Overwrite outputfile
+                    '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
+                ]
+
+                # Set the working memory so that gdalwarp doesn't stall of disk
+                # I/O
+                warp_cmd.extend([
+                    '-wm', working_memory,
+                    '--config', 'GDAL_CACHEMAX', working_memory
+                ])
+
+                # Use compression
+                compress = str(compress).upper()
+                if compress and compress != 'NONE':
+                    warp_cmd.extend(['-co', 'COMPRESS=%s' % compress])
+                    if compress in ('LZW', 'DEFLATE'):
+                        warp_cmd.extend(['-co', 'PREDICTOR=2'])
+
+                # Run gdalwarp and output to tmpfile.name
+                warp_cmd.extend([inputfile.name, tmpfile.name])
+                check_output_gdal([str(e) for e in warp_cmd])
+
+                # If it succeeds, then we move it to overwrite the actual
+                # output
+                os.rename(tmpfile.name, outputfile)
+        finally:
+            try:
+                os.remove(tmpfile.name)
+            except OSError as e:
+                if e.errno != errno.ENOENT:
+                    raise

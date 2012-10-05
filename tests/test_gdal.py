@@ -14,7 +14,7 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
-                               preprocess, render_vrt, SpatialReference)
+                               preprocess, SpatialReference, VRT)
 from gdal2mbtiles.types import rgba, XY
 
 
@@ -43,7 +43,7 @@ class TestColourize(unittest.TestCase):
         vrt = colourize(inputfile=self.inputfile,
                         colours={0: rgba(0, 0, 0, 255),
                                  1: rgba(255, 255, 255, 255)})
-        root = ElementTree.fromstring(vrt)
+        root = vrt.get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         color_table = root.find('VRTRasterBand').find('ColorTable')
         self.assertEqual(
@@ -87,14 +87,11 @@ class TestColourize(unittest.TestCase):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
         in_band = 1
 
-        with NamedTemporaryFile(suffix='.tif') as outputfile:
-            outputfile.write(colourize(inputfile=inputfile,
-                                       colours={0: rgba(0, 0, 0, 255),
-                                                1: rgba(255, 255, 255, 255)},
-                                       band=in_band))
-            outputfile.flush()
-            self.assertTrue(os.path.exists(outputfile.name))
-
+        vrt = colourize(inputfile=inputfile,
+                        colours={0: rgba(0, 0, 0, 255),
+                                 1: rgba(255, 255, 255, 255)},
+                        band=in_band)
+        with vrt.get_tempfile(suffix='.vrt') as outputfile:
             # No Data value must be the same as the input file's
             in_data = Dataset(inputfile)
             out_data = Dataset(outputfile.name)
@@ -108,13 +105,12 @@ class TestExpandColourBands(unittest.TestCase):
                                       'srtm.tif')
 
     def test_simple(self):
-        with NamedTemporaryFile(suffix='.vrt') as paletted:
-            paletted.write(colourize(inputfile=self.inputfile,
-                                     colours={0: rgba(0, 0, 0, 255),
-                                              1: rgba(255, 255, 255, 255)}))
-            paletted.flush()
+        vrt = colourize(inputfile=self.inputfile,
+                        colours={0: rgba(0, 0, 0, 255),
+                                 1: rgba(255, 255, 255, 255)})
+        with vrt.get_tempfile(suffix='.vrt') as paletted:
             vrt = expand_colour_bands(inputfile=paletted.name)
-            root = ElementTree.fromstring(vrt)
+            root = vrt.get_root()
             # There are four colours, RGBA.
             self.assertEqual(len(root.findall('.//VRTRasterBand')), 4)
 
@@ -140,15 +136,14 @@ class TestWarp(unittest.TestCase):
                                         'bluemarble-aligned-ll.tif')
 
     def test_simple(self):
-        root = ElementTree.fromstring(warp(self.inputfile))
+        root = warp(self.inputfile).get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == self.inputfile
                             for t in root.findall('.//SourceDataset')))
 
     def test_resampling(self):
         # Cubic
-        root = ElementTree.fromstring(warp(self.inputfile,
-                                           resampling=GRA_Cubic))
+        root = warp(self.inputfile, resampling=GRA_Cubic).get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == 'Cubic'
                             for t in root.findall('.//ResampleAlg')))
@@ -158,17 +153,15 @@ class TestWarp(unittest.TestCase):
                           warp, self.inputfile, resampling=-1)
 
     def test_spatial_ref(self):
-        root = ElementTree.fromstring(warp(self.inputfile))
+        root = warp(self.inputfile).get_root()
         self.assertTrue('"EPSG","3785"' in root.find('.//TargetSRS').text)
 
-        root = ElementTree.fromstring(
-            warp(self.inputfile,
-                 spatial_ref=SpatialReference.FromEPSG(4326))
-        )
+        root = warp(self.inputfile,
+                    spatial_ref=SpatialReference.FromEPSG(4326)).get_root()
         self.assertTrue('WGS 84' in root.find('.//TargetSRS').text)
 
     def test_partial(self):
-        root = ElementTree.fromstring(warp(self.alignedfile))
+        root = warp(self.alignedfile).get_root()
         # Since this is already aligned, SrcGeoTransform and DstGeoTransform
         # should be the same.
         src_geotransform = [float(f) for f
@@ -180,8 +173,7 @@ class TestWarp(unittest.TestCase):
 
     def test_maximum_resolution_partial(self):
         # Limit to resolution 1, which will give us the south-west quadrant
-        root = ElementTree.fromstring(warp(self.alignedfile,
-                                           maximum_resolution=1))
+        root = warp(self.alignedfile, maximum_resolution=1).get_root()
 
         src_geotransform = [float(f) for f
                             in root.find('.//SrcGeoTransform').text.split(',')]
@@ -202,11 +194,8 @@ class TestWarp(unittest.TestCase):
     def test_nodata(self):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
 
-        with NamedTemporaryFile(suffix='.tif') as outputfile:
-            outputfile.write(warp(inputfile=inputfile))
-            outputfile.flush()
-            self.assertTrue(os.path.exists(outputfile.name))
-
+        vrt = warp(inputfile=inputfile)
+        with vrt.get_tempfile(suffix='.vrt') as outputfile:
             # No Data value must be the same as the input file's
             in_data = Dataset(inputfile)
             out_data = Dataset(outputfile.name)
@@ -255,19 +244,40 @@ class TestPreprocess(unittest.TestCase):
                                  None)
 
 
-class TestRenderVrt(TestCase):
+class TestVrt(TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
+        self.empty = '<VRTDataset> </VRTDataset>'
+
+    def test_str(self):
+        self.assertEqual(str(VRT(self.empty)),
+                         self.empty)
+
+    def test_get_root(self):
+        self.assertEqual(VRT(self.empty).get_root().tag,
+                         'VRTDataset')
+
+    def test_update_content(self):
+        vrt = VRT(self.empty)
+        root = vrt.get_root()
+        root.tag = 'Ecometrica'
+        vrt.update_content(root=root)
+        self.assertEqual(str(vrt),
+                         '<Ecometrica> </Ecometrica>')
+
+    def test_get_tempfile(self):
+        vrt = VRT(self.empty)
+        with vrt.get_tempfile() as tempfile:
+            # Default suffix is .vrt
+            self.assertTrue(tempfile.name.endswith('.vrt'))
+            self.assertEqual(tempfile.read(), self.empty)
 
     def test_world(self):
-        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
-             NamedTemporaryFile(suffix='.tif') as tmpfile:
-            warpfile.write(warp(self.inputfile))
-            warpfile.flush()
+        vrt = warp(self.inputfile)
+        with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
-            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
-                       compress='LZW')
+            vrt.render(outputfile=outputfile, compress='LZW')
             self.assertEqual(
                 subprocess.call([GDALINFO, outputfile],
                                 stdout=open('/dev/null', 'w+')),
@@ -284,13 +294,10 @@ class TestRenderVrt(TestCase):
 
     def test_aligned_partial(self):
         inputfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
-        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
-             NamedTemporaryFile(suffix='.tif') as tmpfile:
-            warpfile.write(warp(inputfile))
-            warpfile.flush()
+        vrt = warp(inputfile)
+        with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
-            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
-                       compress='LZW')
+            vrt.render(outputfile=outputfile, compress='LZW')
             self.assertEqual(
                 subprocess.call([GDALINFO, outputfile],
                                 stdout=open('/dev/null', 'w+')),
@@ -307,13 +314,10 @@ class TestRenderVrt(TestCase):
 
     def test_spanning_partial(self):
         inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
-        with NamedTemporaryFile(suffix='.vrt') as warpfile, \
-             NamedTemporaryFile(suffix='.tif') as tmpfile:
-            warpfile.write(warp(inputfile))
-            warpfile.flush()
+        vrt = warp(inputfile)
+        with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
-            render_vrt(inputfile=warpfile.name, outputfile=outputfile,
-                       compress='LZW')
+            vrt.render(outputfile=outputfile, compress='LZW')
             self.assertEqual(
                 subprocess.call([GDALINFO, outputfile],
                                 stdout=open('/dev/null', 'w+')),
@@ -344,17 +348,16 @@ class TestRenderVrt(TestCase):
 
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
+            vrt = VRT('This is not XML')
             self.assertRaises(CalledGdalError,
-                              render_vrt, inputfile='/dev/null',
+                              vrt.render,
                               outputfile=tmpfile.name)
 
     def test_invalid_output(self):
-        with NamedTemporaryFile(suffix='.vrt') as inputfile:
-            inputfile.write(warp(self.inputfile))
-            inputfile.flush()
-            self.assertRaises(OSError,
-                              render_vrt, inputfile=inputfile,
-                              outputfile='/dev/invalid')
+        vrt = warp(self.inputfile)
+        self.assertRaises(OSError,
+                          vrt.render,
+                          outputfile='/dev/invalid')
 
 
 class TestDataset(unittest.TestCase):
