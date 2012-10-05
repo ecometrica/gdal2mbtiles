@@ -23,7 +23,7 @@ osr.UseExceptions()             # And OSR as well.
 
 from .constants import (EPSG_WEB_MERCATOR, GDALBUILDVRT, GDALTRANSLATE,
                         GDALWARP, TILE_SIDE)
-from .exceptions import (GdalError, CalledGdalError,
+from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError, VrtError)
 from .types import GdalFormat, XY
 
@@ -447,16 +447,8 @@ class Dataset(gdal.Dataset):
 
         # Correct for origin, because you can't do modular arithmetic on
         # half-tiles.
-        major_offset = spatial_ref.GetMajorCircumference() / 2
-        minor_offset = spatial_ref.GetMinorCircumference() / 2
-        if spatial_ref.IsProjected() == 0:
-            # The semi-minor-axis is only off by 1/4 of the world
-            minor_offset = spatial_ref.GetMinorCircumference() / 4
-
-        left = lower_left.x + major_offset
-        right = upper_right.x + major_offset
-        bottom = lower_left.y + minor_offset
-        top = upper_right.y + minor_offset
+        left, bottom = spatial_ref.OffsetPoint(*lower_left)
+        right, top = spatial_ref.OffsetPoint(*upper_right)
 
         # Compute the extents aligned to the above tiles.
         left -= left % tile_width
@@ -465,13 +457,45 @@ class Dataset(gdal.Dataset):
         top += -top % tile_height
 
         # Undo the correction.
-        left -= major_offset
-        bottom -= minor_offset
-        right -= major_offset
-        top -= minor_offset
+        lower_left = spatial_ref.OffsetPoint(left, bottom, reverse=True)
+        upper_right = spatial_ref.OffsetPoint(right, top, reverse=True)
 
         # FIXME: Ensure that the extents within the boundaries of the
         # destination projection.
+
+        return (lower_left, upper_right)
+
+    def GetTmsExtents(self):
+        """
+        Returns (lower-left, upper-right) TMS tile coordinates.
+
+        The upper-right coordinates are excluded from the range, while the
+        lower-left are included.
+        """
+        resolution = self.GetNativeResolution()
+
+        spatial_ref = self.GetSpatialReference()
+        tile_width, tile_height = spatial_ref.GetTileDimensions(
+            resolution=resolution
+        )
+
+        # Get the extents in the native projection.
+        lower_left, upper_right = self.GetTiledExtents()
+        extents = self.GetExtents()
+        if not lower_left.almost_equal(extents[0], places=2) or \
+           not upper_right.almost_equal(extents[1], places=2):
+            raise UnalignedInputError('Dataset is not aligned to TMS grid')
+
+        # Correct for origin, because you can't do modular arithmetic on
+        # half-tiles.
+        left, bottom = spatial_ref.OffsetPoint(*lower_left)
+        right, top = spatial_ref.OffsetPoint(*upper_right)
+
+        # Divide by number of tiles
+        left /= tile_width
+        right /= tile_width
+        top /= tile_height
+        bottom /= tile_height
 
         return (XY(left, bottom), XY(right, top))
 
@@ -515,6 +539,20 @@ class SpatialReference(osr.SpatialReference):
         if self.IsProjected() == 0:
             return 2 * pi / self.GetAngularUnits()
         return self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
+
+    def OffsetPoint(self, x, y, reverse=False):
+        major_offset = self.GetMajorCircumference() / 2
+        minor_offset = self.GetMinorCircumference() / 2
+        if self.IsProjected() == 0:
+            # The semi-minor-axis is only off by 1/4 of the world
+            minor_offset = self.GetMinorCircumference() / 4
+
+        if reverse:
+            major_offset = -major_offset
+            minor_offset = -minor_offset
+
+        return XY(x + major_offset,
+                  y + minor_offset)
 
     def GetPixelDimensions(self, resolution):
         # Assume square pixels.

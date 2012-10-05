@@ -17,6 +17,10 @@ class CalledGdalError(CalledProcessError, GdalError):
         return super(CalledGdalError, self).__str__() + ': %s' % self.error
 
 
+class UnalignedInputError(ValueError):
+    pass
+
+
 class UnknownResamplingMethodError(ValueError):
     pass
 

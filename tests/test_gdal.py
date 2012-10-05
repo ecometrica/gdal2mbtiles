@@ -12,6 +12,7 @@ from osgeo.gdalconst import GRA_Cubic
 
 from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
+                                     UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
                                preprocess, SpatialReference, VRT)
@@ -360,7 +361,7 @@ class TestVrt(TestCase):
                           outputfile='/dev/invalid')
 
 
-class TestDataset(unittest.TestCase):
+class TestDataset(TestCase):
     def setUp(self):
         # Whole world: (180°W, 85°S), (180°E, 85°N)
         self.inputfile = os.path.join(__dir__,
@@ -743,6 +744,23 @@ class TestDataset(unittest.TestCase):
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)
         self.assertAlmostEqual(ur.y, 90.0, places=0)
+
+    def test_get_tms_extents(self):
+        dataset = Dataset(self.inputfile)
+        # The whole world goes from 0 to 3 in both dimensions
+        self.assertExtentsEqual(dataset.GetTmsExtents(),
+                                (XY(0, 0), XY(4, 4)))
+
+    def test_get_tms_extents_aligned(self):
+        dataset = Dataset(self.alignedfile)
+        self.assertExtentsEqual(dataset.GetTmsExtents(),
+                                (XY(1, 1), XY(2, 2)))
+
+    def test_get_tms_extents_spanning(self):
+        # This should fail because the input file is not tile aligned.
+        dataset = Dataset(self.spanningfile)
+        self.assertRaises(UnalignedInputError,
+                          dataset.GetTmsExtents)
 
 
 class TestSpatialReference(unittest.TestCase):

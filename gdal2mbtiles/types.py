@@ -26,4 +26,23 @@ def hcolour(s):
     return rgba(*webcolors.name_to_rgb(s))
 
 
-XY = namedtuple('XY', ['x', 'y'])
+_XY = namedtuple('XY', ['x', 'y'])
+
+
+class XY(_XY):
+    def almost_equal(self, other, places=None, delta=None):
+        if self.x == other[0] and self.y == other[1]:
+            return True         # Shortcut
+
+        if delta is not None and places is not None:
+            raise TypeError("specify delta or places not both")
+
+        if delta is not None:
+            return (abs(self.x - other[0]) <= delta and
+                    abs(self.y - other[1]) <= delta)
+
+        if places is None:
+            places = 7
+
+        return (round(abs(other[0] - self.x), places) == 0 and
+                round(abs(other[1] - self.y), places) == 0)
