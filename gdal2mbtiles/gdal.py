@@ -25,7 +25,7 @@ from .constants import (EPSG_WEB_MERCATOR, GDALBUILDVRT, GDALTRANSLATE,
                         GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError, VrtError)
-from .types import GdalFormat, XY
+from .types import Extents, GdalFormat, XY
 
 
 RESAMPLING_METHODS = {
@@ -214,22 +214,21 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
     transform = CoordinateTransformation(src_spatial_ref, spatial_ref)
     resolution = dataset.GetNativeResolution(transform=transform,
                                              maximum=maximum_resolution)
-    target_extents = dataset.GetTiledExtents(transform=transform,
+    extents = dataset.GetTiledExtents(transform=transform,
                                              resolution=resolution)
-    lower_left, upper_right = target_extents
     warp_cmd.append('-te')
     warp_cmd.extend(map(
         # Ensure that we use as much precision as possible for floating point
         # numbers.
         '{!r}'.format,
         [
-            lower_left.x, lower_left.y,   # xmin ymin
-            upper_right.x, upper_right.y  # xmax ymax
+            extents.lower_left.x, extents.lower_left.y,   # xmin ymin
+            extents.upper_right.x, extents.upper_right.y  # xmax ymax
         ]
     ))
 
     # Generate an output file with an whole number of tiles, in pixels.
-    num_tiles = spatial_ref.GetTilesCount(extents=target_extents,
+    num_tiles = spatial_ref.GetTilesCount(extents=extents,
                                           resolution=resolution)
     warp_cmd.extend([
         '-ts',
@@ -425,9 +424,8 @@ class Dataset(gdal.Dataset):
                                  lower_left, lower_right)
 
         # Return lower-left and upper-right extents
-        left, right = min(x_values), max(x_values)
-        bottom, top = min(y_values), max(y_values)
-        return (XY(left, bottom), XY(right, top))
+        return Extents(lower_left=XY(min(x_values), min(y_values)),
+                       upper_right=XY(max(x_values), max(y_values)))
 
     def GetTiledExtents(self, transform=None, resolution=None):
         if resolution is None:
@@ -443,12 +441,12 @@ class Dataset(gdal.Dataset):
         )
 
         # Project the extents to the destination projection.
-        lower_left, upper_right = self.GetExtents(transform=transform)
+        extents = self.GetExtents(transform=transform)
 
         # Correct for origin, because you can't do modular arithmetic on
         # half-tiles.
-        left, bottom = spatial_ref.OffsetPoint(*lower_left)
-        right, top = spatial_ref.OffsetPoint(*upper_right)
+        left, bottom = spatial_ref.OffsetPoint(*extents.lower_left)
+        right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Compute the extents aligned to the above tiles.
         left -= left % tile_width
@@ -456,14 +454,14 @@ class Dataset(gdal.Dataset):
         bottom -= bottom % tile_height
         top += -top % tile_height
 
-        # Undo the correction.
-        lower_left = spatial_ref.OffsetPoint(left, bottom, reverse=True)
-        upper_right = spatial_ref.OffsetPoint(right, top, reverse=True)
-
         # FIXME: Ensure that the extents within the boundaries of the
         # destination projection.
 
-        return (lower_left, upper_right)
+        # Undo the correction.
+        return Extents(
+            lower_left=spatial_ref.OffsetPoint(left, bottom, reverse=True),
+            upper_right=spatial_ref.OffsetPoint(right, top, reverse=True)
+        )
 
     def GetTmsExtents(self):
         """
@@ -480,24 +478,18 @@ class Dataset(gdal.Dataset):
         )
 
         # Get the extents in the native projection.
-        lower_left, upper_right = self.GetTiledExtents()
-        extents = self.GetExtents()
-        if not lower_left.almost_equal(extents[0], places=2) or \
-           not upper_right.almost_equal(extents[1], places=2):
+        extents = self.GetTiledExtents()
+        if not extents.almost_equal(self.GetExtents(), places=2):
             raise UnalignedInputError('Dataset is not aligned to TMS grid')
 
         # Correct for origin, because you can't do modular arithmetic on
         # half-tiles.
-        left, bottom = spatial_ref.OffsetPoint(*lower_left)
-        right, top = spatial_ref.OffsetPoint(*upper_right)
+        left, bottom = spatial_ref.OffsetPoint(*extents.lower_left)
+        right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Divide by number of tiles
-        left /= tile_width
-        right /= tile_width
-        top /= tile_height
-        bottom /= tile_height
-
-        return (XY(left, bottom), XY(right, top))
+        return Extents(lower_left=XY(left / tile_width, bottom / tile_height),
+                       upper_right=XY(right / tile_width, top / tile_height))
 
 
 class SpatialReference(osr.SpatialReference):
@@ -572,10 +564,8 @@ class SpatialReference(osr.SpatialReference):
             return XY(width, height)
 
     def GetTilesCount(self, extents, resolution):
-        lower_left, upper_right = extents
-
-        width = upper_right.x - lower_left.x
-        height = upper_right.y - lower_left.y
+        width = extents.upper_right.x - extents.lower_left.x
+        height = extents.upper_right.y - extents.lower_left.y
 
         tile_width, tile_height = self.GetTileDimensions(resolution=resolution)
 

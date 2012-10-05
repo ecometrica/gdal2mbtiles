@@ -16,23 +16,23 @@ from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnknownResamplingMethodError, VrtError)
 from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
                                preprocess, SpatialReference, VRT)
-from gdal2mbtiles.types import rgba, XY
+from gdal2mbtiles.types import Extents, rgba, XY
 
 
 __dir__ = os.path.dirname(__file__)
 
 
 class TestCase(unittest.TestCase):
-    def assertExtentsEqual(self, first, second):
-        # Assume that the extents are in the same projection
-        first_ll, first_ur = first
-        second_ll, second_ur = second
-
-        # 1 cm precision
-        self.assertAlmostEqual(first_ll.x, second_ll.x, places=2)
-        self.assertAlmostEqual(first_ll.y, second_ll.y, places=2)
-        self.assertAlmostEqual(first_ur.x, second_ur.x, places=2)
-        self.assertAlmostEqual(first_ur.y, second_ur.y, places=2)
+    def assertExtentsEqual(self, first, second, places=2):
+        # Assume that the extents are in the same projection with 1cm precision
+        self.assertAlmostEqual(first.lower_left.x, second.lower_left.x,
+                               places=places)
+        self.assertAlmostEqual(first.lower_left.y, second.lower_left.y,
+                               places=places)
+        self.assertAlmostEqual(first.upper_right.x, second.upper_right.x,
+                               places=places)
+        self.assertAlmostEqual(first.upper_right.y, second.upper_right.y,
+                               places=places)
 
 
 class TestColourize(unittest.TestCase):
@@ -339,8 +339,9 @@ class TestVrt(TestCase):
             minor_half_circumference = mercator.GetMinorCircumference() / 2
             self.assertExtentsEqual(
                 out_data.GetExtents(),
-                (XY(-major_half_circumference, -minor_half_circumference),
-                 XY(0.0, 0.0))
+                Extents(lower_left=XY(-major_half_circumference,
+                                      -minor_half_circumference),
+                        upper_right=XY(0.0, 0.0))
             )
 
             # Should be a 512×512 quadrant of the full 1024×1024 image
@@ -749,12 +750,14 @@ class TestDataset(TestCase):
         dataset = Dataset(self.inputfile)
         # The whole world goes from 0 to 3 in both dimensions
         self.assertExtentsEqual(dataset.GetTmsExtents(),
-                                (XY(0, 0), XY(4, 4)))
+                                Extents(lower_left=XY(0, 0),
+                                        upper_right=XY(4, 4)))
 
     def test_get_tms_extents_aligned(self):
         dataset = Dataset(self.alignedfile)
         self.assertExtentsEqual(dataset.GetTmsExtents(),
-                                (XY(1, 1), XY(2, 2)))
+                                Extents(lower_left=XY(1, 1),
+                                        upper_right=XY(2, 2)))
 
     def test_get_tms_extents_spanning(self):
         # This should fail because the input file is not tile aligned.
@@ -870,7 +873,8 @@ class TestSpatialReference(unittest.TestCase):
                                minor_circumference / 2)
 
     def test_tiles_count_wgs84(self):
-        world = (XY(-180, -90), XY(180, 90))
+        world = Extents(lower_left=XY(-180, -90),
+                        upper_right=XY(180, 90))
 
         # Resolution 0 is 2×1 for the whole world
         self.assertEqual(self.wgs84.GetTilesCount(extents=world,
@@ -886,8 +890,10 @@ class TestSpatialReference(unittest.TestCase):
         mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
         major_half_circumference = mercator.GetMajorCircumference() / 2
         minor_half_circumference = mercator.GetMinorCircumference() / 2
-        world = (XY(-major_half_circumference, -minor_half_circumference),
-                 XY(major_half_circumference, minor_half_circumference))
+        world = Extents(
+            lower_left=XY(-major_half_circumference, -minor_half_circumference),
+            upper_right=XY(major_half_circumference, minor_half_circumference)
+        )
 
         # Resolution 0 is 1×1 for the whole world
         self.assertEqual(mercator.GetTilesCount(extents=world,

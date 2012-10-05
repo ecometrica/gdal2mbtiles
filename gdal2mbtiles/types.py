@@ -26,6 +26,17 @@ def hcolour(s):
     return rgba(*webcolors.name_to_rgb(s))
 
 
+_Extents = namedtuple('Extents', ['lower_left', 'upper_right'])
+
+
+class Extents(_Extents):
+    def almost_equal(self, other, places=None, delta=None):
+        return (self.lower_left.almost_equal(other.lower_left,
+                                             places=places, delta=delta) and
+                self.upper_right.almost_equal(other.upper_right,
+                                              places=places, delta=delta))
+
+
 _XY = namedtuple('XY', ['x', 'y'])
 
 
