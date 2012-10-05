@@ -1,8 +1,10 @@
 from __future__ import absolute_import
 
+from collections import OrderedDict
 import errno
 from math import pi
 from itertools import count
+from operator import itemgetter
 import os
 import re
 from subprocess import CalledProcessError, check_output, Popen, PIPE
@@ -87,11 +89,15 @@ def colourize(inputfile, colours, band=None):
 
     You can also specify a ComplexSource Look Up Table (LUT) that allows you to
     interpolate colours between source values.
-        colours = [(0, rgba(0, 0, 0, 255),
-                   (10, rgba(255, 255, 255, 255)))]
+        colours = {0: rgba(0, 0, 0, 255),
+                   10: rgba(255, 255, 255, 255)}
     This means that at value 5, the colour represented would be
     rgba(128, 128, 128, 255).
     """
+    if not hasattr(colours, 'items'):
+        raise TypeError(
+            'colours must be a dict, not a {}'.format(type(colours))
+        )
     if band is None:
         band = 1
 
@@ -120,13 +126,16 @@ def colourize(inputfile, colours, band=None):
     if rasterband is None:
         raise VrtError('Cannot locate VRTRasterBand %d' % band)
 
+    # Sort the colours by value
+    colours = OrderedDict(sorted(colours.items(), key=itemgetter(0)))
+
     # Set up the colour palette
     rasterband.set('band', '1')   # Destination band should always be 1
     rasterband.find('ColorInterp').text = 'Palette'
     colortable = SubElement(rasterband, 'ColorTable')
     colortable.extend(
         Element('Entry', c1=str(c.r), c2=str(c.g), c3=str(c.b), c4=str(c.a))
-        for _, c in colours
+        for c in colours.values()
     )
 
     # Define the colour lookup table
@@ -138,8 +147,8 @@ def colourize(inputfile, colours, band=None):
     lut = source.find('LUT')
     if lut is None:
         lut = SubElement(source, 'LUT')
-    lut.text = ',\n'.join('%s:%d' % (value[0], i)
-                          for i, value in enumerate(colours))
+    lut.text = ',\n'.join('%s:%d' % (band_value, i)
+                          for i, band_value in enumerate(colours.keys()))
 
     return ElementTree.tostring(root)
 

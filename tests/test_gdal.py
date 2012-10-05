@@ -41,8 +41,8 @@ class TestColourize(unittest.TestCase):
 
     def test_simple(self):
         vrt = colourize(inputfile=self.inputfile,
-                        colours=[(0, rgba(0, 0, 0, 255)),
-                                 (1, rgba(255, 255, 255, 255))])
+                        colours={0: rgba(0, 0, 0, 255),
+                                 1: rgba(255, 255, 255, 255)})
         root = ElementTree.fromstring(vrt)
         self.assertEqual(root.tag, 'VRTDataset')
         color_table = root.find('VRTRasterBand').find('ColorTable')
@@ -61,23 +61,23 @@ class TestColourize(unittest.TestCase):
         self.assertRaises(GdalError,
                           colourize,
                           inputfile='/dev/null',
-                          colours=[(0, rgba(0, 0, 0, 255)),
-                                   (1, rgba(255, 255, 255, 255))])
+                          colours={0: rgba(0, 0, 0, 255),
+                                   1: rgba(255, 255, 255, 255)})
 
     def test_missing_band(self):
         self.assertRaises(VrtError,
                           colourize,
                           inputfile=self.inputfile,
-                          colours=[(0, rgba(0, 0, 0, 255)),
-                                   (1, rgba(255, 255, 255, 255))],
+                          colours={0: rgba(0, 0, 0, 255),
+                                   1: rgba(255, 255, 255, 255)},
                           band=2)
 
     def test_invalid_colours(self):
         self.assertRaises(AttributeError,
                           colourize,
                           inputfile=self.inputfile,
-                          colours=[(0, 'red'),
-                                   (1, 'green')])
+                          colours={0: 'red',
+                                   1: 'green'})
         self.assertRaises(TypeError,
                           colourize,
                           inputfile=self.inputfile,
@@ -89,8 +89,8 @@ class TestColourize(unittest.TestCase):
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             outputfile.write(colourize(inputfile=inputfile,
-                                       colours=[(0, rgba(0, 0, 0, 255)),
-                                                (1, rgba(255, 255, 255, 255))],
+                                       colours={0: rgba(0, 0, 0, 255),
+                                                1: rgba(255, 255, 255, 255)},
                                        band=in_band))
             outputfile.flush()
             self.assertTrue(os.path.exists(outputfile.name))
@@ -110,8 +110,8 @@ class TestExpandColourBands(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryFile(suffix='.vrt') as paletted:
             paletted.write(colourize(inputfile=self.inputfile,
-                                     colours=[(0, rgba(0, 0, 0, 255)),
-                                              (1, rgba(255, 255, 255, 255))]))
+                                     colours={0: rgba(0, 0, 0, 255),
+                                              1: rgba(255, 255, 255, 255)}))
             paletted.flush()
             vrt = expand_colour_bands(inputfile=paletted.name)
             root = ElementTree.fromstring(vrt)
@@ -221,8 +221,8 @@ class TestPreprocess(unittest.TestCase):
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colours=[(0, rgba(0, 0, 0, 255)),
-                                (1, rgba(255, 255, 255, 255))])
+                       colours={0: rgba(0, 0, 0, 255),
+                                1: rgba(255, 255, 255, 255)})
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
@@ -243,8 +243,8 @@ class TestPreprocess(unittest.TestCase):
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colours=[(0, rgba(0, 0, 0, 255)),
-                                (1, rgba(255, 255, 255, 255))])
+                       colours={0: rgba(0, 0, 0, 255),
+                                1: rgba(255, 255, 255, 255)})
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
