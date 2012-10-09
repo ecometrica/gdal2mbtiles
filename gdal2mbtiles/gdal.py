@@ -488,8 +488,10 @@ class Dataset(gdal.Dataset):
         right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Divide by number of tiles
-        return Extents(lower_left=XY(left / tile_width, bottom / tile_height),
-                       upper_right=XY(right / tile_width, top / tile_height))
+        return Extents(lower_left=XY(int(left / tile_width),
+                                     int(bottom / tile_height)),
+                       upper_right=XY(int(right / tile_width),
+                                      int(top / tile_height)))
 
 
 class SpatialReference(osr.SpatialReference):
