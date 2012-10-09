@@ -1,8 +1,11 @@
 from __future__ import absolute_import
 
 import errno
+from functools import wraps
+from multiprocessing import cpu_count, Process, Queue
 import os
 import platform
+from Queue import Empty as QueueEmpty
 
 import vipsCC.VImage
 
@@ -30,13 +33,111 @@ hasher = get_hasher()
 
 
 class VImage(vipsCC.VImage.VImage):
+    # Maximum number of processes in _process_pool
+    _process_max = cpu_count() * 2
+
+    # Number of active processes
+    _process_pool = set()
+
+    # Queue for processes to return results. See process_wrapper.
+    _process_results = Queue()
+
+    def __init__(self, *args, **kwargs):
+        super(VImage, self).__init__(*args, **kwargs)
+
     @classmethod
     def disable_warnings(cls):
+        """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
+
+    # Decorator. Cannot be @staticmethod, as you would assume.
+    def process_wrapper(q):
+        """
+        Decorator to wrap functions, that are split into Processes, so that
+        they will return results or Exceptions in a Queue.
+        """
+        def wrap(target):
+            @wraps(target)
+            def wrapped(*args, **kwargs):
+                extras = kwargs.pop('_extras', None)
+                try:
+                    q.put(target(*args, **kwargs))
+                except Exception as e:
+                    if extras is not None:
+                        e.extras = extras
+                    q.put(e)
+            return wrapped
+        return wrap
+
+    @classmethod
+    def _start_process(cls, target, args=(), kwargs={}):
+        """
+        Start target as a Process and put it in the Process pool.
+
+        Limit the number of active processes to ``VImage._process_max``.
+        """
+        while len(cls._process_pool) >= cls._process_max:
+            cls._wait_process()
+        p = Process(target=target, args=args, kwargs=kwargs)
+        cls._process_pool.add(p)
+        p.start()
+        return p
+
+    @classmethod
+    def _wait_process(cls):
+        """
+        Wait for a process to finish and return (process, result).
+        """
+        # Wait for a process to put a result on the queue, which means it is
+        # about to die.
+        result = cls._get_process_result(block=True)
+        while cls._process_pool:
+            # Spin until we find the dead process.
+            for p in cls._process_pool:
+                if not p.is_alive():
+                    p.join()
+                    cls._process_pool.remove(p)
+                    return (p, result)
+
+    @classmethod
+    def _wait_all_processes(cls):
+        """
+        Wait for all processes to finish.
+
+        Returns a list of (process, result).
+        """
+        results = []
+        for p in cls._process_pool:
+            p.join()
+            results.append((p, cls._get_process_result(block=True)))
+        cls._process_pool.clear()
+
+    @classmethod
+    def _get_process_result(cls, block):
+        """
+        Returns the result of a process.
+
+        Blocks for a result if block is True.
+
+        Returns None if there are no results pending and block is False.
+        """
+        try:
+            result = cls._process_results.get(block=block)
+        except QueueEmpty:
+            return
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    @classmethod
+    @process_wrapper(q=_process_results)
+    def _write_to_png(cls, image, filename):
+        """Helper method to write a VIPS image to filename."""
+        return image.vips2png(filename)
 
     def _tms_slice(self, outputdir, tile_width, tile_height,
                     offset_x=0, offset_y=0):
-        """Helper function that actually slices tiles. See ``tile_slice``."""
+        """Helper function that actually slices tiles. See ``tms_slice``."""
         with self.disable_warnings():
             image_width = self.Xsize()
             image_height = self.Ysize()
@@ -63,7 +164,20 @@ class VImage(vipsCC.VImage.VImage):
                                    os.path.join(outputdir, filename))
                     else:
                         seen[hashed] = filename
-                        out.vips2png(os.path.join(outputdir, filename))
+                        self._start_process(
+                            target=self._write_to_png,
+                            kwargs=dict(
+                                image=out,
+                                filename=os.path.join(outputdir, filename),
+                                _extras=dict(
+                                    x=x, y=y,
+                                    outputdir=outputdir,
+                                    filename=filename,
+                                    inputfile=self.filename(),
+                                ),
+                            )
+                        )
+            self._wait_all_processes()
 
     def tms_slice(self, outputdir, tile_width, tile_height,
                    offset_x=0, offset_y=0):
