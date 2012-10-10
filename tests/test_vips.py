@@ -7,6 +7,7 @@ import unittest
 
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
+from gdal2mbtiles.utils import recursive_listdir
 from gdal2mbtiles.vips import image_slice
 
 
@@ -34,24 +35,34 @@ class TestImageSlice(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.inputfile, outputdir=outputdir)
-            lower_left, upper_right = Dataset(self.inputfile).GetTmsExtents()
+            dataset = Dataset(self.inputfile)
+            lower_left, upper_right = dataset.GetTmsExtents()
+            resolution = dataset.GetNativeResolution()
 
-            files = set(self.normalize_filenames(os.listdir(outputdir)))
-            self.assertEqual(files,
-                             set('{0}-{1}-hash.png'.format(x, y)
-                                 for x in range(lower_left.x, upper_right.x)
-                                 for y in range(lower_left.y, upper_right.y)))
+            files = set(self.normalize_filenames(recursive_listdir(outputdir)))
+            self.assertEqual(
+                files,
+                (set('{z}/{x}-{y}-hash.png'.format(z=resolution, x=x, y=y)
+                    for x in range(lower_left.x, upper_right.x)
+                    for y in range(lower_left.y, upper_right.y)) |
+                set([str(resolution)]))
+            )
 
     def test_aligned(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.alignedfile, outputdir=outputdir)
-            lower_left, upper_right = Dataset(self.alignedfile).GetTmsExtents()
+            dataset = Dataset(self.alignedfile)
+            lower_left, upper_right = dataset.GetTmsExtents()
+            resolution = dataset.GetNativeResolution()
 
-            files = set(self.normalize_filenames(os.listdir(outputdir)))
-            self.assertEqual(files,
-                             set('{0}-{1}-hash.png'.format(x, y)
-                                 for x in range(lower_left.x, upper_right.x)
-                                 for y in range(lower_left.y, upper_right.y)))
+            files = set(self.normalize_filenames(recursive_listdir(outputdir)))
+            self.assertEqual(
+                files,
+                (set('{z}/{x}-{y}-hash.png'.format(z=resolution, x=x, y=y)
+                     for x in range(lower_left.x, upper_right.x)
+                     for y in range(lower_left.y, upper_right.y)) |
+                 set([str(resolution)]))
+            )
 
     def test_spanning(self):
         with NamedTemporaryDir() as outputdir:

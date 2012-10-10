@@ -48,8 +48,8 @@ class VImage(vipsCC.VImage.VImage):
         """Helper method to write a VIPS image to filename."""
         return image.vips2png(filename)
 
-    def _tms_slice(self, outputdir, tile_width, tile_height,
-                    offset_x=0, offset_y=0):
+    def _tms_slice(self, outputdir, resolution,
+                   tile_width, tile_height, offset_x=0, offset_y=0):
         """Helper function that actually slices tiles. See ``tms_slice``."""
         with self.disable_warnings():
             image_width = self.Xsize()
@@ -69,25 +69,23 @@ class VImage(vipsCC.VImage.VImage):
                         y=((image_height - y) / tile_height + offset_y - 1),
                         hashed=hashed
                     )
+                    filepath = os.path.join(outputdir,
+                                            str(resolution), filename)
 
                     if hashed in seen:
                         # Symlink so we don't have to generate PNGs for tiles
                         # this process has already seen.
-                        os.symlink(seen[hashed],
-                                   os.path.join(outputdir, filename))
+                        os.symlink(seen[hashed], filepath)
                     else:
                         seen[hashed] = filename
                         pool.apply_async(
                             func=self._write_to_png,
-                            kwds=dict(
-                                image=out,
-                                filename=os.path.join(outputdir, filename),
-                            )
+                            kwds=dict(image=out, filename=filepath)
                         )
             pool.join()
 
-    def tms_slice(self, outputdir, tile_width, tile_height,
-                   offset_x=0, offset_y=0):
+    def tms_slice(self, outputdir, resolution,
+                  tile_width, tile_height, offset_x=0, offset_y=0):
         """
         Slices a VIPS image object into TMS tiles in PNG format.
 
@@ -102,6 +100,13 @@ class VImage(vipsCC.VImage.VImage):
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
+        # Make directory for this resolution
+        try:
+            os.makedirs(os.path.join(outputdir, str(resolution)))
+        except OSError as e:
+            if e.errno != errno.EEXIST:  # OK if the outputdir exists
+                raise
+
         with self.disable_warnings():
             image_width = self.Xsize()
             image_height = self.Ysize()
@@ -118,14 +123,9 @@ class VImage(vipsCC.VImage.VImage):
                                      image_height, tile_height
                                  ))
 
-            try:
-                os.makedirs(outputdir)
-            except OSError as e:
-                if e.errno != errno.EEXIST:  # OK if the outputdir exists
-                    raise
-
             return self._tms_slice(
                 outputdir=outputdir,
+                resolution=resolution,
                 tile_width=tile_width, tile_height=tile_height,
                 offset_x=offset_x, offset_y=offset_y
             )
@@ -138,16 +138,18 @@ def image_slice(inputfile, outputdir):
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
 
-    Filenames are in the format ``{tms_x}-{tms_y}-{image_hash}.png``.
+    Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     is created instead of rendering the same tile to PNG again.
     """
     dataset = Dataset(inputfile)
     lower_left, upper_right = dataset.GetTmsExtents()
+    resolution = dataset.GetNativeResolution()
 
     with VImage.disable_warnings():
         image = VImage(inputfile)
         return image.tms_slice(outputdir=outputdir,
+                               resolution=resolution,
                                tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                                offset_x=lower_left.x, offset_y=lower_left.y)
