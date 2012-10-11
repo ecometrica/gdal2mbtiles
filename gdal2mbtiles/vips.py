@@ -4,7 +4,6 @@ from __future__ import absolute_import, division
 
 from math import ceil
 import os
-import platform
 
 import vipsCC.VImage
 
@@ -12,25 +11,7 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .pool import Pool
 from .types import XY
-from .utils import makedirs, tempenv
-
-
-def get_hasher():
-    """Returns a sensible, fast hashing algorithm"""
-    try:
-        import smhasher
-
-        machine = platform.machine()
-        if machine == 'x86_64':
-            return smhasher.murmur3_x64_128
-        elif machine == 'i386':
-            return smhasher.murmur3_x86_128
-    except ImportError:
-        pass
-    # No hasher was found
-    import hashlib
-    return (lambda x: int(hashlib.md5(x).hexdigest(), base=16))
-hasher = get_hasher()
+from .utils import get_hasher, makedirs, tempenv
 
 
 # Process pool
@@ -162,7 +143,7 @@ class TmsTiles(object):
     """Represents a set of tiles in TMS co-ordinates."""
 
     def __init__(self, image, outputdir, tile_width, tile_height,
-                 offset, resolution=None):
+                 offset, resolution=None, hasher=None):
         """
         image: gdal2mbtiles.vips.VImage
         outputdir: Output directory for TMS tiles in PNG format
@@ -181,6 +162,10 @@ class TmsTiles(object):
         self.tile_height = tile_height
         self.offset = offset
         self.resolution = resolution
+
+        if hasher is None:
+            hasher = get_hasher()
+        self.hasher = hasher
 
     @property
     def image_width(self):
@@ -203,7 +188,7 @@ class TmsTiles(object):
                         self.tile_width, self.tile_height
                     )
 
-                    hashed = hasher(out.tobuffer())
+                    hashed = self.hasher(out.tobuffer())
                     filename = '{x}-{y}-{hashed:x}.png'.format(
                         x=int(x / self.tile_width + self.offset.x),
                         y=int((self.image_height - y) / self.tile_height +
@@ -277,14 +262,15 @@ class TmsTiles(object):
 
         tiles = self.__class__(image=aligned,
                                outputdir=self.outputdir,
-                               resolution=resolution,
                                tile_width=self.tile_width,
                                tile_height=self.tile_height,
-                               offset=XY(int(offset.x), int(offset.y)))
+                               offset=XY(int(offset.x), int(offset.y)),
+                               resolution=resolution,
+                               hasher=self.hasher)
         return tiles
 
 
-def image_pyramid(inputfile, outputdir):
+def image_pyramid(inputfile, outputdir, hasher=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -306,7 +292,8 @@ def image_pyramid(inputfile, outputdir):
                          outputdir=outputdir,
                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                          offset=lower_left,
-                         resolution=resolution)
+                         resolution=resolution,
+                         hasher=hasher)
         tiles.slice()
 
         # Downsampling one zoom level at a time
@@ -315,7 +302,7 @@ def image_pyramid(inputfile, outputdir):
             tiles.slice()
 
 
-def image_slice(inputfile, outputdir):
+def image_slice(inputfile, outputdir, hasher=None):
     """
     Slices a GDAL-readable inputfile into PNG tiles.
 
@@ -335,5 +322,6 @@ def image_slice(inputfile, outputdir):
         native = TmsTiles(image=VImage(inputfile),
                           outputdir=outputdir,
                           tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                          offset=lower_left)
+                          offset=lower_left,
+                          hasher=hasher)
         native.slice()
