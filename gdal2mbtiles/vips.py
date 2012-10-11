@@ -212,7 +212,7 @@ class TmsTiles(object):
     """Represents a set of tiles in TMS co-ordinates."""
 
     def __init__(self, image, outputdir, tile_width, tile_height,
-                 offset, resolution=None, hasher=None):
+                 offset, resolution=None, max_resolution=None, hasher=None):
         """
         image: gdal2mbtiles.vips.VImage
         outputdir: Output directory for TMS tiles in PNG format
@@ -224,13 +224,24 @@ class TmsTiles(object):
                         ``{tms_x}-{tms_y}-{image_hash}.png``.
                     If an integer, filenames are in the format
                         ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+        max_resolution: Maximum resolution to upsample tiles.
+                        If None, don't upsample.
         """
         self.image = image
         self.outputdir = outputdir
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.offset = offset
+
         self.resolution = resolution
+        self.max_resolution = max_resolution
+        if max_resolution is not None and max_resolution < resolution:
+            raise ValueError(
+                'max_resolution {0!r} must be '
+                'greater than resolution {1!r}'.format(
+                    max_resolution, resolution
+                )
+            )
 
         if hasher is None:
             hasher = get_hasher()
@@ -281,6 +292,10 @@ class TmsTiles(object):
                             func=VImage._write_to_png,
                             kwds=dict(image=out, filename=filepath)
                         )
+
+                    if self.max_resolution is not None:
+                        # Upsample
+                        pass
             pool.join()
 
     def slice(self):
@@ -335,25 +350,36 @@ class TmsTiles(object):
                                tile_height=self.tile_height,
                                offset=XY(int(offset.x), int(offset.y)),
                                resolution=resolution,
+                               max_resolution=None,
                                hasher=self.hasher)
         return tiles
 
 
-def image_pyramid(inputfile, outputdir, hasher=None):
+def image_pyramid(inputfile, outputdir,
+                  min_resolution=None, max_resolution=None,
+                  hasher=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
+    min_resolution: Minimum resolution to downsample tiles.
+    max_resolution: Maximum resolution to upsample tiles.
 
     Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     may be created instead of rendering the same tile to PNG again.
+
+    If `min_resolution` is None, don't downsample.
+    If `max_resolution` is None, don't upsample.
     """
     dataset = Dataset(inputfile)
     lower_left, upper_right = dataset.GetTmsExtents()
     resolution = dataset.GetNativeResolution()
+
+    if min_resolution is None:
+        min_resolution = resolution
 
     with VImage.disable_warnings():
         # Native resolution
@@ -362,11 +388,12 @@ def image_pyramid(inputfile, outputdir, hasher=None):
                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                          offset=lower_left,
                          resolution=resolution,
+                         max_resolution=max_resolution,
                          hasher=hasher)
         tiles.slice()
 
         # Downsampling one zoom level at a time
-        for res in reversed(range(resolution)):
+        for res in reversed(range(min_resolution, resolution)):
             tiles = tiles.downsample(resolution=res)
             tiles.slice()
 

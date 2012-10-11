@@ -196,7 +196,39 @@ class TestImagePyramid(unittest.TestCase):
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
+            # Native resolution only
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir)
+            dataset = Dataset(self.inputfile)
+            lower_left, upper_right = dataset.GetTmsExtents()
+
+            files = set(recursive_listdir(outputdir))
+            self.assertEqual(
+                files,
+                set((
+                    '2/',
+                    '2/0-0-2884b0a95c6396d62082d18ec1bfae1d.png',
+                    '2/0-1-3a32ed5c6fb3cc90250af471c285a42.png',
+                    '2/0-2-18afcdf7a913666913c595c296cfd03e.png',
+                    '2/0-3-c4ec8c1279fa96cd90458b77c958c998.png',
+                    '2/1-0-7b0a7ac32c27ac1d945158db86cf26bf.png',
+                    '2/1-1-300f6831956650386ffdd110a5d83fd8.png',
+                    '2/1-2-64bd81c269c44a54b7acc6d960e693ac.png',
+                    '2/1-3-eefeafcbddc5ff5eccda0b3d1201855.png',
+                    '2/2-0-bb90c2ceaf024ae9171f60121fbbf0e6.png',
+                    '2/2-1-da2376bbe16f8156d98e6917573e4341.png',
+                    '2/2-2-aa19d8b479de0400ac766419091beca2.png',
+                    '2/2-3-b696b40998a89d928ec9e35141070a00.png',
+                    '2/3-0-b4ac40ff44a06433db00412be5c7402a.png',
+                    '2/3-1-565ac38cb22c44d4abf435d5627c33f.png',
+                    '2/3-2-58785c65e6dfa2eed8ffa72fbcd3f968.png',
+                    '2/3-3-8cbdbb18dc83be0706d9a9baac5b573b.png',
+                ))
+            )
+
+    def test_downsample(self):
+        with NamedTemporaryDir() as outputdir:
+            image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
+                          min_resolution=0)
             dataset = Dataset(self.inputfile)
             lower_left, upper_right = dataset.GetTmsExtents()
 
@@ -231,9 +263,10 @@ class TestImagePyramid(unittest.TestCase):
                 ))
             )
 
-    def test_aligned(self):
+    def test_downsample_aligned(self):
         with NamedTemporaryDir() as outputdir:
-            image_pyramid(inputfile=self.alignedfile, outputdir=outputdir)
+            image_pyramid(inputfile=self.alignedfile, outputdir=outputdir,
+                          min_resolution=0)
             dataset = Dataset(self.alignedfile)
             lower_left, upper_right = dataset.GetTmsExtents()
 
@@ -250,8 +283,9 @@ class TestImagePyramid(unittest.TestCase):
                 ))
             )
 
-    def test_spanning(self):
+    def test_downsample_spanning(self):
         with NamedTemporaryDir() as outputdir:
             self.assertRaises(UnalignedInputError,
                               image_pyramid,
-                              inputfile=self.spanningfile, outputdir=outputdir)
+                              inputfile=self.spanningfile, outputdir=outputdir,
+                              min_resolution=0)
