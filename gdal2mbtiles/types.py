@@ -18,12 +18,12 @@ class rgba(_rgba):
     def __new__(cls, r, g, b, a=255):
         return super(rgba, cls).__new__(cls, r, g, b, a)
 
-
-def hcolour(s):
-    """Returns an RGBA colour from its HTML/CSS representation."""
-    if s.startswith('#'):
-        return rgba(*webcolors.hex_to_rgb(s))
-    return rgba(*webcolors.name_to_rgb(s))
+    @classmethod
+    def webcolor(cls, color):
+        """Returns an RGBA colour from its HTML/CSS representation."""
+        if color.startswith('#'):
+            return cls(*webcolors.hex_to_rgb(color))
+        return cls(*webcolors.name_to_rgb(color))
 
 
 _Extents = namedtuple('Extents', ['lower_left', 'upper_right'])
