@@ -36,15 +36,75 @@ class TestVImage(unittest.TestCase):
 
     def test_stretch(self):
         image = VImage.new_rgba(width=16, height=16)
+
+        # No stretch
+        stretched = image.stretch(xscale=1.0, yscale=1.0)
+        self.assertEqual(stretched.Xsize(), image.Xsize())
+        self.assertEqual(stretched.Ysize(), image.Ysize())
+
+        # X direction
+        stretched = image.stretch(xscale=2.0, yscale=1.0)
+        self.assertEqual(stretched.Xsize(), image.Xsize() * 2.0)
+        self.assertEqual(stretched.Ysize(), image.Ysize())
+
+        # Y direction
+        stretched = image.stretch(xscale=1.0, yscale=4.0)
+        self.assertEqual(stretched.Xsize(), image.Xsize())
+        self.assertEqual(stretched.Ysize(), image.Ysize() * 4.0)
+
+        # Both directions
         stretched = image.stretch(xscale=2.0, yscale=4.0)
         self.assertEqual(stretched.Xsize(), image.Xsize() * 2.0)
         self.assertEqual(stretched.Ysize(), image.Ysize() * 4.0)
 
+        # Not a power of 2
+        stretched = image.stretch(xscale=3.0, yscale=5.0)
+        self.assertEqual(stretched.Xsize(), image.Xsize() * 3.0)
+        self.assertEqual(stretched.Ysize(), image.Ysize() * 5.0)
+
+        # Out of bounds
+        self.assertRaises(ValueError,
+                          image.stretch, xscale=0.5, yscale=1.0)
+        self.assertRaises(ValueError,
+                          image.stretch, xscale=1.0, yscale=0.5)
+
     def test_shrink(self):
         image = VImage.new_rgba(width=16, height=16)
+
+        # No shrink
+        shrunk = image.shrink(xscale=1.0, yscale=1.0)
+        self.assertEqual(shrunk.Xsize(), image.Xsize())
+        self.assertEqual(shrunk.Ysize(), image.Ysize())
+
+        # X direction
+        shrunk = image.shrink(xscale=0.25, yscale=1.0)
+        self.assertEqual(shrunk.Xsize(), image.Xsize() * 0.25)
+        self.assertEqual(shrunk.Ysize(), image.Ysize())
+
+        # Y direction
+        shrunk = image.shrink(xscale=1.0, yscale=0.5)
+        self.assertEqual(shrunk.Xsize(), image.Xsize())
+        self.assertEqual(shrunk.Ysize(), image.Ysize() * 0.5)
+
+        # Both directions
         shrunk = image.shrink(xscale=0.25, yscale=0.5)
         self.assertEqual(shrunk.Xsize(), image.Xsize() * 0.25)
         self.assertEqual(shrunk.Ysize(), image.Ysize() * 0.5)
+
+        # Not a power of 2
+        shrunk = image.shrink(xscale=0.1, yscale=0.2)
+        self.assertEqual(shrunk.Xsize(), int(image.Xsize() * 0.1))
+        self.assertEqual(shrunk.Ysize(), int(image.Ysize() * 0.2))
+
+        # Out of bounds
+        self.assertRaises(ValueError,
+                          image.shrink, xscale=0.0, yscale=1.0)
+        self.assertRaises(ValueError,
+                          image.shrink, xscale=2.0, yscale=1.0)
+        self.assertRaises(ValueError,
+                          image.shrink, xscale=1.0, yscale=0.0)
+        self.assertRaises(ValueError,
+                          image.shrink, xscale=1.0, yscale=2.0)
 
     def test_tms_align(self):
         image = VImage.new_rgba(width=16, height=16)

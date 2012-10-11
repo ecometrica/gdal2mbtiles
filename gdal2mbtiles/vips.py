@@ -72,8 +72,14 @@ class VImage(vipsCC.VImage.VImage):
         # extrapolation near the boundary when enlarging. Instead of aligning
         # the outer corners, we align the centers of the corner pixels.
 
-        assert xscale >= 1.0
-        assert yscale >= 1.0
+        if xscale < 1.0:
+            raise ValueError(
+                'xscale {0!r} cannot be less than 1.0'.format(xscale)
+            )
+        if yscale < 1.0:
+            raise ValueError(
+                'yscale {0!r} cannot be less than 1.0'.format(yscale)
+            )
 
         # The centers of the corners of input.img are located at:
         #     (0,0), (0,m), (n,0) and (n,m).
@@ -124,8 +130,14 @@ class VImage(vipsCC.VImage.VImage):
         # filtering, for example). With this convention, there is no
         # extrapolation near the boundary when downsampling.
 
-        assert 0.0 < xscale <= 1.0
-        assert 0.0 < yscale <= 1.0
+        if not 0.0 < xscale <= 1.0:
+            raise ValueError(
+                'xscale {0!r} be between 0.0 and 1.0'.format(xscale)
+            )
+        if not 0.0 < yscale <= 1.0:
+            raise ValueError(
+                'yscale {0!r} be between 0.0 and 1.0'.format(yscale)
+            )
 
         # The corners of input.img are located at:
         #     (-.5,-.5), (-.5,m-.5), (n-.5,-.5) and (n-.5,m-.5).
