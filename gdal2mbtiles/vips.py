@@ -115,37 +115,41 @@ class VImage(vipsCC.VImage.VImage):
         yscale: floating point scaling value for image
         """
         # Shrink by aligning the corners of the input and output images.
-
+        #
         # See the following blog post, written by the VIPS people:
         # http://libvips.blogspot.ca/2011/12/task-of-day-resize-image-with-align.html
-
+        #
         # This is the image size convention which is ideal for reducing the
         # number of pixels in each direction by an exact fraction (with box
         # filtering, for example). With this convention, there is no
         # extrapolation near the boundary when downsampling.
 
-        assert 0.0 < xscale < 1.0
-        assert 0.0 < yscale < 1.0
-
-        # Use the transformation matrix:
-        #     [[xscale,      0],
-        #      [     0, yscale]]
-        a, b, c, d = xscale, 0, 0, yscale
+        assert 0.0 < xscale <= 1.0
+        assert 0.0 < yscale <= 1.0
 
         # The corners of input.img are located at:
         #     (-.5,-.5), (-.5,m-.5), (n-.5,-.5) and (n-.5,m-.5).
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
+
+        output_width = int(self.Xsize() * xscale)
+        output_height = int(self.Ysize() * yscale)
+
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
         #     X = (M / m) * x + (M / m - 1) / 2
         #     Y = (N / n) * y + (N / n - 1) / 2
+        #
         # Since M = m * xscale and N = n * yscale
         #     X = xscale * x + (xscale - 1) / 2
         #     Y = yscale * y + (yscale - 1) / 2
-        output_width = int(self.Xsize() * a)
-        output_height = int(self.Ysize() * d)
-        # Align the corners
+        #
+        # Use the transformation matrix:
+        #     [[xscale,      0],
+        #      [     0, yscale]]
+        a, b, c, d = xscale, 0, 0, yscale
+
+        # Align the corners with the constant term of X and Y
         offset_x = (a - 1) / 2
         offset_y = (d - 1) / 2
 
