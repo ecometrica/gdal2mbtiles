@@ -49,11 +49,6 @@ class VImage(vipsCC.VImage.VImage):
         """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
 
-    @classmethod
-    def _write_to_png(cls, image, filename):
-        """Helper method to write a VIPS image to filename."""
-        return image.vips2png(filename)
-
     def stretch(self, xscale, yscale):
         """
         Returns a new VImage that has been stretched by `xscale` and `yscale`.
@@ -258,6 +253,39 @@ class TmsTiles(object):
         """Returns the height of self.image in pixels."""
         return self.image.Ysize()
 
+    @classmethod
+    def _render_png(cls, image, filename):
+        """Helper method to write a VIPS image to filename."""
+        return image.vips2png(filename)
+
+    def render(self, seen, pool):
+        hashed = self.hasher(self.image.tobuffer())
+        filename = '{offset.x}-{offset.y}-{hashed:x}.png'.format(
+            offset=self.offset,
+            hashed=hashed
+        )
+        if self.resolution is None:
+            filepath = os.path.join(self.outputdir, filename)
+        else:
+            filepath = os.path.join(self.outputdir,
+                                    str(self.resolution),
+                                    filename)
+
+        if hashed in seen:
+            # Symlink so we don't have to generate PNGs for tiles
+            # this process has already seen.
+            os.symlink(seen[hashed], filepath)
+        else:
+            seen[hashed] = filename
+            pool.apply_async(
+                func=self._render_png,
+                kwds=dict(image=self.image, filename=filepath)
+            )
+
+        if self.max_resolution is not None:
+            # Upsample
+            pass
+
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
         with self.image.disable_warnings():
@@ -269,34 +297,22 @@ class TmsTiles(object):
                         self.tile_width, self.tile_height
                     )
 
-                    hashed = self.hasher(out.tobuffer())
-                    filename = '{x}-{y}-{hashed:x}.png'.format(
+                    offset = XY(
                         x=int(x / self.tile_width + self.offset.x),
                         y=int((self.image_height - y) / self.tile_height +
-                              self.offset.y - 1),
-                        hashed=hashed
+                              self.offset.y - 1)
                     )
-                    if self.resolution is None:
-                        filepath = os.path.join(self.outputdir, filename)
-                    else:
-                        filepath = os.path.join(self.outputdir,
-                                                str(self.resolution),
-                                                filename)
-
-                    if hashed in seen:
-                        # Symlink so we don't have to generate PNGs for tiles
-                        # this process has already seen.
-                        os.symlink(seen[hashed], filepath)
-                    else:
-                        seen[hashed] = filename
-                        pool.apply_async(
-                            func=VImage._write_to_png,
-                            kwds=dict(image=out, filename=filepath)
-                        )
-
-                    if self.max_resolution is not None:
-                        # Upsample
-                        pass
+                    tile = self.__class__(
+                        image=out,
+                        outputdir=self.outputdir,
+                        tile_width=self.tile_width,
+                        tile_height=self.tile_height,
+                        offset=offset,
+                        resolution=self.resolution,
+                        max_resolution=self.max_resolution,
+                        hasher=self.hasher,
+                    )
+                    tile.render(seen=seen, pool=pool)
             pool.join()
 
     def slice(self):
