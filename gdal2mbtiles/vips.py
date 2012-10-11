@@ -54,6 +54,59 @@ class VImage(vipsCC.VImage.VImage):
         """Helper method to write a VIPS image to filename."""
         return image.vips2png(filename)
 
+    def stretch(self, xscale, yscale):
+        """
+        Returns a new VImage that has been stretched by `xscale` and `yscale`.
+
+        xscale: floating point scaling value for image
+        yscale: floating point scaling value for image
+        """
+        # Stretch by aligning the centers of the input and output images.
+        #
+        # See the following blog post, written by the VIPS people:
+        # http://libvips.blogspot.ca/2011/12/task-of-day-resize-image-with-align.html
+        #
+        # This is the image size convention which is ideal for expanding the
+        # number of pixels in each direction by an exact fraction (with box
+        # filtering, for example). With this image size convention, there is no
+        # extrapolation near the boundary when enlarging. Instead of aligning
+        # the outer corners, we align the centers of the corner pixels.
+
+        assert xscale >= 1.0
+        assert yscale >= 1.0
+
+        # The centers of the corners of input.img are located at:
+        #     (0,0), (0,m), (n,0) and (n,m).
+        # The centers of output.img are located at:
+        #     (0,0), (0,M), (N,0) and (N,M).
+        output_width = N = int(self.Xsize() * xscale)
+        output_height = M = int(self.Ysize() * yscale)
+
+        # The affine transformation that sends each input corner to the
+        # corresponding output corner is:
+        #     X = ((N-1)/(n-1)) x
+        #     Y = ((M-1)/(m-1)) y
+        #
+        # Use the transformation matrix:
+        #     [[(N-1)/(n-1),           0],
+        #      [          0, (M-1)/(m-1)]]
+        a = (N - 1) / (self.Xsize() - 1)
+        b = 0
+        c = 0
+        d = (M - 1) / (self.Ysize() - 1)
+
+        # Align the centers, because X and Y have no constant term.
+        offset_x = 0
+        offset_y = 0
+
+        # No translation, so top-left corners match.
+        output_x, output_y = 0, 0
+
+        return self.from_vimage(
+            self.affine(a, b, c, d, offset_x, offset_y,
+                        output_x, output_y, output_width, output_height)
+        )
+
     def shrink(self, xscale, yscale):
         """
         Returns a new VImage that has been shrunk by `xscale` and `yscale`.

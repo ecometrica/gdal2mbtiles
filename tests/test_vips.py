@@ -34,6 +34,12 @@ class TestVImage(unittest.TestCase):
         self.assertEqual(VImage.from_vimage(image).tostring(),
                          image.tostring())
 
+    def test_stretch(self):
+        image = VImage.new_rgba(width=16, height=16)
+        stretched = image.stretch(xscale=2.0, yscale=4.0)
+        self.assertEqual(stretched.Xsize(), image.Xsize() * 2.0)
+        self.assertEqual(stretched.Ysize(), image.Ysize() * 4.0)
+
     def test_shrink(self):
         image = VImage.new_rgba(width=16, height=16)
         shrunk = image.shrink(xscale=0.25, yscale=0.5)
