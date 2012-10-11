@@ -203,7 +203,7 @@ class TmsTiles(object):
                         self.tile_width, self.tile_height
                     )
 
-                    hashed = hasher(out.tostring())
+                    hashed = hasher(out.tobuffer())
                     filename = '{x}-{y}-{hashed:x}.png'.format(
                         x=int(x / self.tile_width + self.offset.x),
                         y=int((self.image_height - y) / self.tile_height +
