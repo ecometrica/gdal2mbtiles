@@ -226,6 +226,7 @@ class TmsTiles(object):
                         ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
         max_resolution: Maximum resolution to upsample tiles.
                         If None, don't upsample.
+        hasher: Hashing function to use for image data.
         """
         self.image = image
         self.outputdir = outputdir
@@ -365,6 +366,7 @@ def image_pyramid(inputfile, outputdir,
     outputdir: The output directory for the PNG tiles.
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
+    hasher: Hashing function to use for image data.
 
     Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
 
@@ -404,6 +406,7 @@ def image_slice(inputfile, outputdir, hasher=None):
 
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
+    hasher: Hashing function to use for image data.
 
     Filenames are in the format ``{tms_x}-{tms_y}-{image_hash}.png``.
 
