@@ -7,6 +7,7 @@ import unittest
 
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
+from gdal2mbtiles.types import XY
 from gdal2mbtiles.utils import recursive_listdir
 from gdal2mbtiles.vips import image_pyramid, image_slice, VImage
 
@@ -44,19 +45,19 @@ class TestVImage(unittest.TestCase):
 
         # Already aligned to integer offsets
         result = image.tms_align(tile_width=16, tile_height=16,
-                                 offset_x=1, offset_y=1)
+                                 offset=XY(1, 1))
         self.assertEqual(result.Xsize(), image.Xsize())
         self.assertEqual(result.Ysize(), image.Ysize())
 
         # Spanning by half tiles in both X and Y directions
         result = image.tms_align(tile_width=16, tile_height=16,
-                                 offset_x=1.5, offset_y=1.5)
+                                 offset=XY(1.5, 1.5))
         self.assertEqual(result.Xsize(), image.Xsize() * 2)
         self.assertEqual(result.Ysize(), image.Ysize() * 2)
 
         # Image is quarter tile
         result = image.tms_align(tile_width=32, tile_height=32,
-                                 offset_x=1, offset_y=1)
+                                 offset=XY(1, 1))
         self.assertEqual(result.Xsize(), image.Xsize() * 2)
         self.assertEqual(result.Ysize(), image.Ysize() * 2)
 

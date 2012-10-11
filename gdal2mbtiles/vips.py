@@ -11,6 +11,7 @@ import vipsCC.VImage
 from .constants import TILE_SIDE
 from .gdal import Dataset
 from .pool import Pool
+from .types import XY
 from .utils import makedirs, tempenv
 
 
@@ -122,14 +123,13 @@ class VImage(vipsCC.VImage.VImage):
                         output_x, output_y, output_width, output_height)
         )
 
-    def tms_align(self, tile_width, tile_height, offset_x, offset_y):
+    def tms_align(self, tile_width, tile_height, offset):
         """
         Pads and aligns the VIPS Image object to the TMS grid.
 
         tile_width: Number of pixels for each tile
         tile_height: Number of pixels for each tile
-        offset_x: TMS offset for the lower-left tile
-        offset_y: TMS offset for the lower-left tile
+        offset: TMS offset for the lower-left tile
         """
         _type = 0               # Transparent
 
@@ -137,8 +137,8 @@ class VImage(vipsCC.VImage.VImage):
         #
         # The y value needs to be converted from the lower-left corner to the
         # top-left corner.
-        x = int(round(offset_x * tile_width)) % tile_width
-        y = int(round(self.Ysize() - offset_y * tile_height)) % tile_height
+        x = int(round(offset.x * tile_width)) % tile_width
+        y = int(round(self.Ysize() - offset.y * tile_height)) % tile_height
 
         # Number of tiles for the aligned image, rounded up to provide
         # right and bottom borders.
@@ -157,33 +157,65 @@ class VImage(vipsCC.VImage.VImage):
         # Resize
         return self.from_vimage(self.embed(_type, x, y, width, height))
 
-    def _tms_slice(self, outputdir,
-                   tile_width, tile_height, offset_x=0, offset_y=0,
-                   resolution=None):
-        """Helper function that actually slices tiles. See ``tms_slice``."""
-        with self.disable_warnings():
-            image_width = self.Xsize()
-            image_height = self.Ysize()
 
+class TmsTiles(object):
+    """Represents a set of tiles in TMS co-ordinates."""
+
+    def __init__(self, image, outputdir, tile_width, tile_height,
+                 offset, resolution=None):
+        """
+        image: gdal2mbtiles.vips.VImage
+        outputdir: Output directory for TMS tiles in PNG format
+        tile_width: Number of pixels for each tile
+        tile_height: Number of pixels for each tile
+        offset: TMS offset for the lower-left tile
+        resolution: Resolution for the image.
+                    If None, filenames are in the format
+                        ``{tms_x}-{tms_y}-{image_hash}.png``.
+                    If an integer, filenames are in the format
+                        ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+        """
+        self.image = image
+        self.outputdir = outputdir
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+        self.offset = offset
+        self.resolution = resolution
+
+    @property
+    def image_width(self):
+        """Returns the width of self.image in pixels."""
+        return self.image.Xsize()
+
+    @property
+    def image_height(self):
+        """Returns the height of self.image in pixels."""
+        return self.image.Ysize()
+
+    def _slice(self):
+        """Helper function that actually slices tiles. See ``slice``."""
+        with self.image.disable_warnings():
             seen = {}
-            for y in xrange(0, image_height, tile_height):
-                for x in xrange(0, image_width, tile_width):
-                    out = self.extract_area(
+            for y in xrange(0, self.image_height, self.tile_height):
+                for x in xrange(0, self.image_width, self.tile_width):
+                    out = self.image.extract_area(
                         x, y,                    # left, top offsets
-                        tile_width, tile_height
+                        self.tile_width, self.tile_height
                     )
 
                     hashed = hasher(out.tostring())
                     filename = '{x}-{y}-{hashed:x}.png'.format(
-                        x=int(x / tile_width + offset_x),
-                        y=int((image_height - y) / tile_height + offset_y - 1),
+                        x=int(x / self.tile_width + self.offset.x),
+                        y=int((self.image_height - y) / self.tile_height +
+                              self.offset.y - 1),
                         hashed=hashed
                     )
-                    if resolution is None:
-                        filepath = os.path.join(outputdir, filename)
+                    if self.resolution is None:
+                        filepath = os.path.join(self.outputdir, filename)
                     else:
-                        filepath = os.path.join(outputdir,
-                                                str(resolution), filename)
+                        filepath = os.path.join(self.outputdir,
+                                                str(self.resolution),
+                                                filename)
 
                     if hashed in seen:
                         # Symlink so we don't have to generate PNGs for tiles
@@ -192,89 +224,64 @@ class VImage(vipsCC.VImage.VImage):
                     else:
                         seen[hashed] = filename
                         pool.apply_async(
-                            func=self._write_to_png,
+                            func=VImage._write_to_png,
                             kwds=dict(image=out, filename=filepath)
                         )
             pool.join()
 
-    def tms_slice(self, outputdir,
-                  tile_width, tile_height, offset_x=0, offset_y=0,
-                  resolution=None):
+    def slice(self):
         """
         Slices a VIPS image object into TMS tiles in PNG format.
-
-        outputdir: The output directory for the tiles.
-        tile_width: Number of pixels for each tile
-        tile_height: Number of pixels for each tile
-        offset_x: TMS offset for the lower-left tile
-        offset_y: TMS offset for the lower-left tile
-
-        resolution: If None, filenames are in the format
-                        ``{tms_x}-{tms_y}-{image_hash}.png``.
-                    If an integer, filenames are in the format
-                        ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
 
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
         # Make directory for this resolution
-        makedirs(outputdir, ignore_exists=True)
-        if resolution is not None:
-            makedirs(os.path.join(outputdir, str(resolution)),
+        makedirs(self.outputdir, ignore_exists=True)
+        if self.resolution is not None:
+            makedirs(os.path.join(self.outputdir, str(self.resolution)),
                      ignore_exists=True)
 
-        with self.disable_warnings():
-            image_width = self.Xsize()
-            image_height = self.Ysize()
-
-            if image_width % tile_width != 0:
+        with self.image.disable_warnings():
+            if self.image_width % self.tile_width != 0:
                 raise ValueError('image width {0!r} does not contain a whole '
                                  'number of tiles of width {1!r}'.format(
-                                     image_width, tile_width
+                                     self.image_width, self.tile_width
                                  ))
 
-            if image_height % tile_height != 0:
+            if self.image_height % self.tile_height != 0:
                 raise ValueError('image height {0!r} does not contain a whole '
                                  'number of tiles of height {1!r}'.format(
-                                     image_height, tile_height
+                                     self.image_height, self.tile_height
                                  ))
 
-            return self._tms_slice(
-                outputdir=outputdir,
-                resolution=resolution,
-                tile_width=tile_width, tile_height=tile_height,
-                offset_x=offset_x, offset_y=offset_y
-            )
+            return self._slice()
 
-    def downsample(self, resolution, outputdir, tile_width, tile_height,
-                   offset_x=0, offset_y=0):
+    def downsample(self, resolution):
         """
-        Downsamples the VIPS image by one resolution.
+        Downsamples the image by one resolution.
 
         resolution: Target resolution for the downsampled image.
-        outputdir: The output directory for the tiles.
-        tile_width: Number of pixels for each tile
-        tile_height: Number of pixels for each tile
-        offset_x: TMS offset for the lower-left tile
-        offset_y: TMS offset for the lower-left tile
 
-        Returns (image, offset_x, offset_y) for the new downsampled image.
+        Returns a new TmsTiles object containing the downsampled image.
         """
-        assert resolution > 0
+        assert resolution >= 0 and resolution == (self.resolution - 1)
 
-        offset_x /= 2.0
-        offset_y /= 2.0
+        offset = XY(self.offset.x / 2.0,
+                    self.offset.y / 2.0)
 
-        shrunk = self.shrink(xscale=0.5, yscale=0.5)
-        aligned = shrunk.tms_align(tile_width=tile_width,
-                                   tile_height=tile_height,
-                                   offset_x=offset_x, offset_y=offset_y)
+        shrunk = self.image.shrink(xscale=0.5, yscale=0.5)
+        aligned = shrunk.tms_align(tile_width=self.tile_width,
+                                   tile_height=self.tile_height,
+                                   offset=offset)
 
-        aligned.tms_slice(outputdir=outputdir,
-                          resolution=(resolution - 1),
-                          tile_width=tile_width, tile_height=tile_height,
-                          offset_x=offset_x, offset_y=offset_y)
-        return aligned, offset_x, offset_y
+        tiles = self.__class__(image=aligned,
+                               outputdir=self.outputdir,
+                               resolution=resolution,
+                               tile_width=self.tile_width,
+                               tile_height=self.tile_height,
+                               offset=XY(int(offset.x), int(offset.y)))
+        return tiles
 
 
 def image_pyramid(inputfile, outputdir):
@@ -295,20 +302,17 @@ def image_pyramid(inputfile, outputdir):
 
     with VImage.disable_warnings():
         # Native resolution
-        image = VImage(inputfile)
-        image.tms_slice(outputdir=outputdir,
-                        resolution=resolution,
-                        tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                        offset_x=lower_left.x, offset_y=lower_left.y)
+        tiles = TmsTiles(image=VImage(inputfile),
+                         outputdir=outputdir,
+                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                         offset=lower_left,
+                         resolution=resolution)
+        tiles.slice()
 
         # Downsampling one zoom level at a time
-        offset_x, offset_y = lower_left.x, lower_left.y
-        for res in range(resolution, 0, -1):
-            image, offset_x, offset_y = image.downsample(
-                resolution=res, outputdir=outputdir,
-                tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                offset_x=offset_x, offset_y=offset_y,
-            )
+        for res in reversed(range(resolution)):
+            tiles = tiles.downsample(resolution=res)
+            tiles.slice()
 
 
 def image_slice(inputfile, outputdir):
@@ -328,7 +332,8 @@ def image_slice(inputfile, outputdir):
 
     with VImage.disable_warnings():
         # Native resolution
-        image = VImage(inputfile)
-        image.tms_slice(outputdir=outputdir,
-                        tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                        offset_x=lower_left.x, offset_y=lower_left.y)
+        native = TmsTiles(image=VImage(inputfile),
+                          outputdir=outputdir,
+                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                          offset=lower_left)
+        native.slice()
