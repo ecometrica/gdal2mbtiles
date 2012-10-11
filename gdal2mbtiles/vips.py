@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 from math import ceil
 import os
@@ -142,8 +142,8 @@ class VImage(vipsCC.VImage.VImage):
 
         # Number of tiles for the aligned image, rounded up to provide
         # right and bottom borders.
-        tiles_x = ceil(float(self.Xsize() + x / 2) / tile_width)
-        tiles_y = ceil(float(self.Ysize() + y / 2) / tile_height)
+        tiles_x = ceil((self.Xsize() + x / 2) / tile_width)
+        tiles_y = ceil((self.Ysize() + y / 2) / tile_height)
 
         # Pixel width and height for the aligned image.
         width = int(tiles_x * tile_width)
@@ -175,8 +175,8 @@ class VImage(vipsCC.VImage.VImage):
 
                     hashed = hasher(out.tostring())
                     filename = '{x}-{y}-{hashed:x}.png'.format(
-                        x=(x / tile_width + offset_x),
-                        y=((image_height - y) / tile_height + offset_y - 1),
+                        x=int(x / tile_width + offset_x),
+                        y=int((image_height - y) / tile_height + offset_y - 1),
                         hashed=hashed
                     )
                     if resolution is None:
@@ -270,7 +270,6 @@ class VImage(vipsCC.VImage.VImage):
                                    tile_height=tile_height,
                                    offset_x=offset_x, offset_y=offset_y)
 
-        offset_x, offset_y = int(offset_x), int(offset_y)
         aligned.tms_slice(outputdir=outputdir,
                           resolution=(resolution - 1),
                           tile_width=tile_width, tile_height=tile_height,
