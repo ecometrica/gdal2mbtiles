@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import errno
 import os
 
 
@@ -13,6 +14,16 @@ def tempenv(name, value):
         os.environ[name] = original
 
 
+def makedirs(d, ignore_exists=False):
+    """Like `os.makedirs`, but doesn't raise OSError if ignore_exists."""
+    try:
+        os.makedirs(d)
+    except OSError as e:
+        if ignore_exists and e.errno == errno.EEXIST:
+            return
+        raise
+
+
 def recursive_listdir(directory):
     """Generator of all files in `directory`, recursively."""
     for root, dirs, files in os.walk(directory):
@@ -20,6 +31,6 @@ def recursive_listdir(directory):
         if root == '.':
             root = ''
         for d in dirs:
-            yield os.path.join(root, d)
+            yield os.path.join(root, d) + os.path.sep
         for f in files:
             yield os.path.join(root, f)
