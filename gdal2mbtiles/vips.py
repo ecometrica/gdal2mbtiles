@@ -11,7 +11,7 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .pool import Pool
 from .types import XY
-from .utils import get_hasher, mkdir, makedirs, tempenv
+from .utils import get_hasher, makedirs, tempenv
 
 
 # Process pool
@@ -211,8 +211,7 @@ class VImage(vipsCC.VImage.VImage):
 class TmsBase(object):
     """Base class for an image in TMS space."""
 
-    def __init__(self, image, outputdir, offset,
-                 resolution=None, max_resolution=None, hasher=None):
+    def __init__(self, image, outputdir, offset, resolution=None, hasher=None):
         """
         image: gdal2mbtiles.vips.VImage
         outputdir: Output directory for TMS tiles in PNG format
@@ -222,23 +221,12 @@ class TmsBase(object):
                         ``{tms_x}-{tms_y}-{image_hash}.png``.
                     If an integer, filenames are in the format
                         ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
-        max_resolution: Maximum resolution to upsample tiles.
-                        If None, don't upsample.
         hasher: Hashing function to use for image data.
         """
         self.image = image
         self.outputdir = outputdir
         self.offset = offset
-
         self.resolution = resolution
-        self.max_resolution = max_resolution
-        if max_resolution is not None and max_resolution < resolution:
-            raise ValueError(
-                'max_resolution {0!r} must be '
-                'greater than resolution {1!r}'.format(
-                    max_resolution, resolution
-                )
-            )
 
         if hasher is None:
             hasher = get_hasher()
@@ -262,71 +250,40 @@ class TmsBase(object):
 class TmsTile(TmsBase):
     """Represents a single tile in TMS co-ordinates."""
 
-    def render(self, seen, pool):
-        hashed = self.hasher(self.image.tobuffer())
-        filename = '{offset.x}-{offset.y}-{hashed:x}.png'.format(
-            offset=self.offset,
-            hashed=hashed
-        )
-        if self.resolution is None:
-            filepath = os.path.join(self.outputdir, filename)
-        else:
-            filepath = os.path.join(self.outputdir,
-                                    str(self.resolution),
-                                    filename)
+    def get_hash(self):
+        """Returns the image content hash."""
+        return self.hasher(self.image.tobuffer())
 
+    def create_symlink(self, source, filepath):
+        """Creates a relative symlink from filepath to source."""
+        absfilepath = os.path.join(self.outputdir, filepath)
+        abssourcepath = os.path.join(self.outputdir, source)
+        sourcepath = os.path.relpath(abssourcepath,
+                                     start=os.path.dirname(absfilepath))
+        os.symlink(sourcepath, absfilepath)
+
+    def generate_filepath(self, key, resolution, offset):
+        """Returns the filepath, relative to self.outputdir."""
+        filename = '{offset.x}-{offset.y}-{key:x}.png'.format(
+            offset=offset, key=key
+        )
+        resolution = '' if resolution is None else str(resolution)
+        return os.path.join(resolution, filename)
+
+    def render(self, seen, pool):
+        """Renders this tile."""
+        hashed = self.get_hash()
+        filepath = self.generate_filepath(key=hashed,
+                                          resolution=self.resolution,
+                                          offset=self.offset)
         if hashed in seen:
-            # Symlink so we don't have to generate PNGs for tiles
-            # this process has already seen.
-            os.symlink(seen[hashed], filepath)
+            self.create_symlink(source=seen[hashed], filepath=filepath)
         else:
-            seen[hashed] = filename
+            seen[hashed] = filepath
             pool.apply_async(
                 func=self._render_png,
-                kwds=dict(filename=filepath)
+                kwds=dict(filename=os.path.join(self.outputdir, filepath))
             )
-
-        self.upsample(seen=seen, pool=pool)
-
-    def upsample(self, seen, pool):
-        """
-        Upsamples the image up to self.max_resolution.
-        """
-        if self.max_resolution is None:
-            # No upsampling requested
-            return
-
-        if self.max_resolution <= self.resolution:
-            # Can't upsample any further.
-            return
-
-        tile_width = self.image_width
-        tile_height = self.image_height
-
-        stretched = self.image.stretch(xscale=2.0, yscale=2.0)
-        offset = XY(self.offset.x * 2,
-                    self.offset.y * 2)
-
-        with stretched.disable_warnings():
-            for y in xrange(0, stretched.Xsize(), tile_height):
-                for x in xrange(0, stretched.Ysize(), tile_width):
-                    out = stretched.extract_area(left=x, top=y,
-                                                 width=tile_width,
-                                                 height=tile_height)
-
-                    offset_x = int(x / tile_width + offset.x)
-                    offset_y = int((stretched.Ysize() - y) / tile_height +
-                                   offset.y - 1)
-
-                    tile = self.__class__(
-                        image=out,
-                        outputdir=self.outputdir,
-                        offset=XY(offset_x, offset_y),
-                        resolution=(self.resolution + 1),
-                        max_resolution=self.max_resolution,
-                        hasher=self.hasher,
-                    )
-                    tile.render(seen=seen, pool=pool)
 
 
 class TmsTiles(TmsBase):
@@ -346,8 +303,6 @@ class TmsTiles(TmsBase):
                         ``{tms_x}-{tms_y}-{image_hash}.png``.
                     If an integer, filenames are in the format
                         ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
-        max_resolution: Maximum resolution to upsample tiles.
-                        If None, don't upsample.
         hasher: Hashing function to use for image data.
         """
         super(TmsTiles, self).__init__(**kwargs)
@@ -375,7 +330,6 @@ class TmsTiles(TmsBase):
                         outputdir=self.outputdir,
                         offset=offset,
                         resolution=self.resolution,
-                        max_resolution=self.max_resolution,
                         hasher=self.hasher,
                     )
                     tile.render(seen=seen, pool=pool)
@@ -388,17 +342,12 @@ class TmsTiles(TmsBase):
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
-        # Make self.outputdir, since it's always needed
-        makedirs(self.outputdir, ignore_exists=True)
-        # Make directories for self.resolution up to self.max_resolution
-        if self.resolution is not None:
-            if self.max_resolution is not None:
-                max_resolution = self.max_resolution
-            else:
-                max_resolution = self.resolution
-            for res in range(self.resolution, max_resolution + 1):
-                mkdir(os.path.join(self.outputdir, str(res)),
-                      ignore_exists=True)
+        # Make self.outputdir and potentially the resolution subdir
+        if self.resolution is None:
+            makedirs(self.outputdir, ignore_exists=True)
+        else:
+            makedirs(os.path.join(self.outputdir, str(self.resolution)),
+                     ignore_exists=True)
 
         with self.image.disable_warnings():
             if self.image_width % self.tile_width != 0:
@@ -439,7 +388,37 @@ class TmsTiles(TmsBase):
                                tile_height=self.tile_height,
                                offset=XY(int(offset.x), int(offset.y)),
                                resolution=resolution,
-                               max_resolution=None,
+                               hasher=self.hasher)
+        return tiles
+
+    def upsample(self, resolution):
+        """
+        Upsample the image.
+
+        resolution: Target resolution for the upsampled image.
+
+        Returns a new TmsTiles object containing the upsampled image.
+        """
+        # Note: You cannot upsample tile-by-tile because it looks ugly at the
+        # boundaries.
+        assert resolution > self.resolution
+
+        scale = 2 ** (resolution - self.resolution)
+
+        offset = XY(self.offset.x * scale,
+                    self.offset.y * scale)
+
+        stretched = self.image.stretch(xscale=scale, yscale=scale)
+        aligned = stretched.tms_align(tile_width=self.tile_width,
+                                      tile_height=self.tile_height,
+                                      offset=offset)
+
+        tiles = self.__class__(image=aligned,
+                               outputdir=self.outputdir,
+                               tile_width=self.tile_width,
+                               tile_height=self.tile_height,
+                               offset=XY(int(offset.x), int(offset.y)),
+                               resolution=resolution,
                                hasher=self.hasher)
         return tiles
 
@@ -468,9 +447,6 @@ def image_pyramid(inputfile, outputdir,
     lower_left, upper_right = dataset.GetTmsExtents()
     resolution = dataset.GetNativeResolution()
 
-    if min_resolution is None:
-        min_resolution = resolution
-
     with VImage.disable_warnings():
         # Native resolution
         tiles = TmsTiles(image=VImage(inputfile),
@@ -478,14 +454,20 @@ def image_pyramid(inputfile, outputdir,
                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                          offset=lower_left,
                          resolution=resolution,
-                         max_resolution=max_resolution,
                          hasher=hasher)
         tiles.slice()
 
         # Downsampling one zoom level at a time
-        for res in reversed(range(min_resolution, resolution)):
-            tiles = tiles.downsample(resolution=res)
-            tiles.slice()
+        if min_resolution is not None:
+            for res in reversed(range(min_resolution, resolution)):
+                tiles = tiles.downsample(resolution=res)
+                tiles.slice()
+
+        # Upsampling one zoom level at a time.
+        if max_resolution is not None:
+            for res in range(resolution + 1, max_resolution + 1):
+                tiles = tiles.upsample(resolution=res)
+                tiles.slice()
 
 
 def image_slice(inputfile, outputdir, hasher=None):

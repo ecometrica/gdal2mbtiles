@@ -16,16 +16,6 @@ def tempenv(name, value):
         os.environ[name] = original
 
 
-def mkdir(d, ignore_exists=False):
-    """Like `os.mkdir`, but doesn't raise OSError if ignore_exists."""
-    try:
-        os.mkdir(d)
-    except OSError as e:
-        if ignore_exists and e.errno == errno.EEXIST:
-            return
-        raise
-
-
 def makedirs(d, ignore_exists=False):
     """Like `os.makedirs`, but doesn't raise OSError if ignore_exists."""
     try:
