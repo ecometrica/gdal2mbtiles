@@ -11,7 +11,7 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .pool import Pool
 from .types import XY
-from .utils import get_hasher, makedirs, tempenv
+from .utils import get_hasher, mkdir, makedirs, tempenv
 
 
 # Process pool
@@ -48,6 +48,11 @@ class VImage(vipsCC.VImage.VImage):
     def disable_warnings(cls):
         """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
+
+    def extract_area(self, left, top, width, height):
+        return self.from_vimage(
+            super(VImage, self).extract_area(left, top, width, height)
+        )
 
     def stretch(self, xscale, yscale):
         """
@@ -239,10 +244,9 @@ class TmsBase(object):
             hasher = get_hasher()
         self.hasher = hasher
 
-    @classmethod
-    def _render_png(cls, image, filename):
+    def _render_png(self, filename):
         """Helper method to write a VIPS image to filename."""
-        return image.vips2png(filename)
+        return self.image.vips2png(filename)
 
     @property
     def image_width(self):
@@ -279,13 +283,50 @@ class TmsTile(TmsBase):
             seen[hashed] = filename
             pool.apply_async(
                 func=self._render_png,
-                kwds=dict(image=self.image, filename=filepath)
+                kwds=dict(filename=filepath)
             )
 
-        if self.max_resolution is not None and \
-           self.resolution <= self.max_resolution:
-            # Upsample
-            pass
+        self.upsample(seen=seen, pool=pool)
+
+    def upsample(self, seen, pool):
+        """
+        Upsamples the image up to self.max_resolution.
+        """
+        if self.max_resolution is None:
+            # No upsampling requested
+            return
+
+        if self.max_resolution <= self.resolution:
+            # Can't upsample any further.
+            return
+
+        tile_width = self.image_width
+        tile_height = self.image_height
+
+        stretched = self.image.stretch(xscale=2.0, yscale=2.0)
+        offset = XY(self.offset.x * 2,
+                    self.offset.y * 2)
+
+        with stretched.disable_warnings():
+            for y in xrange(0, stretched.Xsize(), tile_height):
+                for x in xrange(0, stretched.Ysize(), tile_width):
+                    out = stretched.extract_area(left=x, top=y,
+                                                 width=tile_width,
+                                                 height=tile_height)
+
+                    offset_x = int(x / tile_width + offset.x)
+                    offset_y = int((stretched.Ysize() - y) / tile_height +
+                                   offset.y - 1)
+
+                    tile = self.__class__(
+                        image=out,
+                        outputdir=self.outputdir,
+                        offset=XY(offset_x, offset_y),
+                        resolution=(self.resolution + 1),
+                        max_resolution=self.max_resolution,
+                        hasher=self.hasher,
+                    )
+                    tile.render(seen=seen, pool=pool)
 
 
 class TmsTiles(TmsBase):
@@ -347,11 +388,17 @@ class TmsTiles(TmsBase):
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
-        # Make directory for this resolution
+        # Make self.outputdir, since it's always needed
         makedirs(self.outputdir, ignore_exists=True)
+        # Make directories for self.resolution up to self.max_resolution
         if self.resolution is not None:
-            makedirs(os.path.join(self.outputdir, str(self.resolution)),
-                     ignore_exists=True)
+            if self.max_resolution is not None:
+                max_resolution = self.max_resolution
+            else:
+                max_resolution = self.resolution
+            for res in range(self.resolution, max_resolution + 1):
+                mkdir(os.path.join(self.outputdir, str(res)),
+                      ignore_exists=True)
 
         with self.image.disable_warnings():
             if self.image_width % self.tile_width != 0:
