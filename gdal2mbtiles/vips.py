@@ -203,16 +203,14 @@ class VImage(vipsCC.VImage.VImage):
         return self.from_vimage(self.embed(_type, x, y, width, height))
 
 
-class TmsTiles(object):
-    """Represents a set of tiles in TMS co-ordinates."""
+class TmsBase(object):
+    """Base class for an image in TMS space."""
 
-    def __init__(self, image, outputdir, tile_width, tile_height,
-                 offset, resolution=None, max_resolution=None, hasher=None):
+    def __init__(self, image, outputdir, offset,
+                 resolution=None, max_resolution=None, hasher=None):
         """
         image: gdal2mbtiles.vips.VImage
         outputdir: Output directory for TMS tiles in PNG format
-        tile_width: Number of pixels for each tile
-        tile_height: Number of pixels for each tile
         offset: TMS offset for the lower-left tile
         resolution: Resolution for the image.
                     If None, filenames are in the format
@@ -225,8 +223,6 @@ class TmsTiles(object):
         """
         self.image = image
         self.outputdir = outputdir
-        self.tile_width = tile_width
-        self.tile_height = tile_height
         self.offset = offset
 
         self.resolution = resolution
@@ -243,6 +239,11 @@ class TmsTiles(object):
             hasher = get_hasher()
         self.hasher = hasher
 
+    @classmethod
+    def _render_png(cls, image, filename):
+        """Helper method to write a VIPS image to filename."""
+        return image.vips2png(filename)
+
     @property
     def image_width(self):
         """Returns the width of self.image in pixels."""
@@ -253,10 +254,9 @@ class TmsTiles(object):
         """Returns the height of self.image in pixels."""
         return self.image.Ysize()
 
-    @classmethod
-    def _render_png(cls, image, filename):
-        """Helper method to write a VIPS image to filename."""
-        return image.vips2png(filename)
+
+class TmsTile(TmsBase):
+    """Represents a single tile in TMS co-ordinates."""
 
     def render(self, seen, pool):
         hashed = self.hasher(self.image.tobuffer())
@@ -282,9 +282,36 @@ class TmsTiles(object):
                 kwds=dict(image=self.image, filename=filepath)
             )
 
-        if self.max_resolution is not None:
+        if self.max_resolution is not None and \
+           self.resolution <= self.max_resolution:
             # Upsample
             pass
+
+
+class TmsTiles(TmsBase):
+    """Represents a set of tiles in TMS co-ordinates."""
+
+    Tile = TmsTile
+
+    def __init__(self, tile_width, tile_height, **kwargs):
+        """
+        image: gdal2mbtiles.vips.VImage
+        outputdir: Output directory for TMS tiles in PNG format
+        tile_width: Number of pixels for each tile
+        tile_height: Number of pixels for each tile
+        offset: TMS offset for the lower-left tile
+        resolution: Resolution for the image.
+                    If None, filenames are in the format
+                        ``{tms_x}-{tms_y}-{image_hash}.png``.
+                    If an integer, filenames are in the format
+                        ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+        max_resolution: Maximum resolution to upsample tiles.
+                        If None, don't upsample.
+        hasher: Hashing function to use for image data.
+        """
+        super(TmsTiles, self).__init__(**kwargs)
+        self.tile_width = tile_width
+        self.tile_height = tile_height
 
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
@@ -302,11 +329,9 @@ class TmsTiles(object):
                         y=int((self.image_height - y) / self.tile_height +
                               self.offset.y - 1)
                     )
-                    tile = self.__class__(
+                    tile = self.Tile(
                         image=out,
                         outputdir=self.outputdir,
-                        tile_width=self.tile_width,
-                        tile_height=self.tile_height,
                         offset=offset,
                         resolution=self.resolution,
                         max_resolution=self.max_resolution,
