@@ -139,8 +139,6 @@ class TestImageSlice(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.inputfile, outputdir=outputdir,
                         hasher=intmd5)
-            dataset = Dataset(self.inputfile)
-            lower_left, upper_right = dataset.GetTmsExtents()
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -169,8 +167,6 @@ class TestImageSlice(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.alignedfile, outputdir=outputdir,
                         hasher=intmd5)
-            dataset = Dataset(self.alignedfile)
-            lower_left, upper_right = dataset.GetTmsExtents()
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -198,8 +194,6 @@ class TestImagePyramid(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             # Native resolution only
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir)
-            dataset = Dataset(self.inputfile)
-            lower_left, upper_right = dataset.GetTmsExtents()
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -229,8 +223,6 @@ class TestImagePyramid(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
                           min_resolution=0)
-            dataset = Dataset(self.inputfile)
-            lower_left, upper_right = dataset.GetTmsExtents()
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -267,8 +259,6 @@ class TestImagePyramid(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.alignedfile, outputdir=outputdir,
                           min_resolution=0)
-            dataset = Dataset(self.alignedfile)
-            lower_left, upper_right = dataset.GetTmsExtents()
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
