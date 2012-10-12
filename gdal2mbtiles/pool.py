@@ -3,6 +3,33 @@ from functools import wraps
 from multiprocessing import cpu_count, Process, Queue, TimeoutError
 from Queue import Empty as QueueEmpty
 from select import select
+import sys
+import traceback
+
+
+class ChildException(RuntimeError):
+    def __init__(self, exc_type, exc_repr, exc_str, format_traceback):
+        self.exc_type = exc_type
+        self.exc_repr = exc_repr
+        self.exc_str = exc_str
+        self.format_traceback = format_traceback
+
+    def __repr__(self):
+        return self.exc_repr
+
+    def __str__(self):
+        return self.exc_str
+
+    def is_subclass(self, superclass):
+        return issubclass(self.exc_type, superclass)
+
+    def format_tb(self):
+        return self.format_traceback
+
+    def format_exception(self):
+        return '\n'.join(('Traceback (most recent call last):',
+                          self.format_traceback,
+                          self.exc_repr))
 
 
 class ApplyResult(object):
@@ -88,7 +115,7 @@ class ApplyResult(object):
         if not self.ready():
             raise TimeoutError
         if not self._success:
-            raise self._result
+            raise ChildException(*self._result)
         return self._result
 
     def _run(self):
@@ -108,8 +135,13 @@ class ApplyResult(object):
         def wrapped(*args, **kwargs):
             try:
                 queue.put((True, target(*args, **kwargs)))
-            except Exception as e:
-                queue.put((False, e))
+            except Exception:
+                # Exception may be unpickleable, so we have to wrap it in
+                # things that are. It will get unpacked in self.get() as a
+                # ChildException
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                queue.put((False, (exc_type, repr(exc_value), str(exc_value),
+                                   traceback.format_tb(exc_traceback))))
         return wrapped
 
 
