@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from fnmatch import fnmatch
 import os
 import re
 from shutil import rmtree
@@ -378,9 +379,11 @@ class TestImagePyramid(unittest.TestCase):
 
     def test_upsample_symlink(self):
         with NamedTemporaryDir() as outputdir:
+            zoom = 3
+
             dataset = Dataset(self.upsamplingfile)
             image_pyramid(inputfile=self.upsamplingfile, outputdir=outputdir,
-                          max_resolution=dataset.GetNativeResolution() + 3)
+                          max_resolution=dataset.GetNativeResolution() + zoom)
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -477,3 +480,21 @@ class TestImagePyramid(unittest.TestCase):
                     '3/7-7-ad6a507db06c218d12f06492a90ab71b.png',
                 ])
             )
+
+            # Test that symlinks are actually created
+            same_hashes = [
+                os.path.join(outputdir, f) for f in files
+                if fnmatch(f, '*-930daf2533fdd1e69d638f0946791694.png')
+            ]
+            real_files = set([f for f in same_hashes if not os.path.islink(f)])
+            self.assertTrue(len(real_files) < zoom,
+                            'Too many real files: {0}'.format(real_files))
+
+            symlinks = [f for f in same_hashes if os.path.islink(f)]
+            self.assertTrue(symlinks)
+            for f in symlinks:
+                source = os.path.realpath(os.path.join(os.path.dirname(f),
+                                                       os.readlink(f)))
+                self.assertTrue(source in real_files,
+                                '{0} -> {1} is not in {2}'.format(source, f,
+                                                                  real_files))
