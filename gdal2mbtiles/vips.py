@@ -19,6 +19,14 @@ pool = Pool(processes=None)
 
 
 class VImage(vipsCC.VImage.VImage):
+    FILL_OPTIONS = {
+        'black': 0,                 # Fill bands with 0
+        'extend': 1,                # Extend bands from image to edge
+        'tile': 2,                  # Tile bands from image
+        'mirror': 3,                # Mirror bands from image
+        'white': 4,                 # Fill bands with 255
+    }
+
     def __init__(self, *args, **kwargs):
         super(VImage, self).__init__(*args, **kwargs)
 
@@ -49,73 +57,25 @@ class VImage(vipsCC.VImage.VImage):
         """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
 
+    def embed(self, fill, left, top, width, height):
+        """Returns a new VImage with this VImage embedded within it."""
+        if isinstance(fill, basestring):
+            if fill not in self.FILL_OPTIONS:
+                raise ValueError('Invalid fill: {0!r}'.format(fill))
+            fill = self.FILL_OPTIONS[fill]
+        return self.from_vimage(
+            super(VImage, self).embed(fill, left, top, width, height)
+        )
+
     def extract_area(self, left, top, width, height):
+        """Returns a new VImage with a region cropped out of this VImage."""
         return self.from_vimage(
             super(VImage, self).extract_area(left, top, width, height)
         )
 
-    def stretch(self, xscale, yscale):
+    def _scale(self, xscale, yscale):
         """
-        Returns a new VImage that has been stretched by `xscale` and `yscale`.
-
-        xscale: floating point scaling value for image
-        yscale: floating point scaling value for image
-        """
-        # Stretch by aligning the centers of the input and output images.
-        #
-        # See the following blog post, written by the VIPS people:
-        # http://libvips.blogspot.ca/2011/12/task-of-day-resize-image-with-align.html
-        #
-        # This is the image size convention which is ideal for expanding the
-        # number of pixels in each direction by an exact fraction (with box
-        # filtering, for example). With this image size convention, there is no
-        # extrapolation near the boundary when enlarging. Instead of aligning
-        # the outer corners, we align the centers of the corner pixels.
-
-        if xscale < 1.0:
-            raise ValueError(
-                'xscale {0!r} cannot be less than 1.0'.format(xscale)
-            )
-        if yscale < 1.0:
-            raise ValueError(
-                'yscale {0!r} cannot be less than 1.0'.format(yscale)
-            )
-
-        # The centers of the corners of input.img are located at:
-        #     (0,0), (0,m), (n,0) and (n,m).
-        # The centers of output.img are located at:
-        #     (0,0), (0,M), (N,0) and (N,M).
-        output_width = N = int(self.Xsize() * xscale)
-        output_height = M = int(self.Ysize() * yscale)
-
-        # The affine transformation that sends each input corner to the
-        # corresponding output corner is:
-        #     X = ((N-1)/(n-1)) x
-        #     Y = ((M-1)/(m-1)) y
-        #
-        # Use the transformation matrix:
-        #     [[(N-1)/(n-1),           0],
-        #      [          0, (M-1)/(m-1)]]
-        a = (N - 1) / (self.Xsize() - 1)
-        b = 0
-        c = 0
-        d = (M - 1) / (self.Ysize() - 1)
-
-        # Align the centers, because X and Y have no constant term.
-        offset_x = 0
-        offset_y = 0
-
-        # No translation, so top-left corners match.
-        output_x, output_y = 0, 0
-
-        return self.from_vimage(
-            self.affine(a, b, c, d, offset_x, offset_y,
-                        output_x, output_y, output_width, output_height)
-        )
-
-    def shrink(self, xscale, yscale):
-        """
-        Returns a new VImage that has been shrunk by `xscale` and `yscale`.
+        Returns a new VImage that has been scaled by `xscale` and `yscale`.
 
         xscale: floating point scaling value for image
         yscale: floating point scaling value for image
@@ -129,15 +89,6 @@ class VImage(vipsCC.VImage.VImage):
         # number of pixels in each direction by an exact fraction (with box
         # filtering, for example). With this convention, there is no
         # extrapolation near the boundary when downsampling.
-
-        if not 0.0 < xscale <= 1.0:
-            raise ValueError(
-                'xscale {0!r} be between 0.0 and 1.0'.format(xscale)
-            )
-        if not 0.0 < yscale <= 1.0:
-            raise ValueError(
-                'yscale {0!r} be between 0.0 and 1.0'.format(yscale)
-            )
 
         # The corners of input.img are located at:
         #     (-.5,-.5), (-.5,m-.5), (n-.5,-.5) and (n-.5,m-.5).
@@ -172,6 +123,56 @@ class VImage(vipsCC.VImage.VImage):
             self.affine(a, b, c, d, offset_x, offset_y,
                         output_x, output_y, output_width, output_height)
         )
+
+    def shrink(self, xscale, yscale):
+        """
+        Returns a new VImage that has been shrunk by `xscale` and `yscale`.
+
+        xscale: floating point scaling value for image
+        yscale: floating point scaling value for image
+        """
+        if not 0.0 < xscale <= 1.0:
+            raise ValueError(
+                'xscale {0!r} be between 0.0 and 1.0'.format(xscale)
+            )
+        if not 0.0 < yscale <= 1.0:
+            raise ValueError(
+                'yscale {0!r} be between 0.0 and 1.0'.format(yscale)
+            )
+        return self._scale(xscale=xscale, yscale=yscale)
+
+    def stretch(self, xscale, yscale):
+        """
+        Returns a new VImage that has been stretched by `xscale` and `yscale`.
+
+        xscale: floating point scaling value for image
+        yscale: floating point scaling value for image
+        """
+        if xscale < 1.0:
+            raise ValueError(
+                'xscale {0!r} cannot be less than 1.0'.format(xscale)
+            )
+        if yscale < 1.0:
+            raise ValueError(
+                'yscale {0!r} cannot be less than 1.0'.format(yscale)
+            )
+
+        # We need to extend the image past its border so that interpolation
+        # does not cause black borders due to missing data.
+        border = XY(1, 1)               # Add a pixel border for interpolation
+        extended = self.embed(fill='extend', left=border.x, top=border.y,
+                              width=self.Xsize() + border.x * 2,
+                              height=self.Ysize() + border.y * 2)
+
+        # Now we can safely call _scale() without worrying about black borders.
+        stretched = extended._scale(xscale=xscale, yscale=yscale)
+
+        # Crop to the final extents, taking away the extra border we
+        # introduced.
+        return stretched.extract_area(left=int(border.x * xscale),
+                                      top=int(border.y * yscale),
+                                      width=int(self.Xsize() * xscale),
+                                      height=int(self.Ysize() * yscale))
 
     def tms_align(self, tile_width, tile_height, offset):
         """
