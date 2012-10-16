@@ -401,6 +401,101 @@ class TmsTiles(TmsBase):
         return tiles
 
 
+class TmsPyramid(object):
+    TmsTiles = TmsTiles
+
+    def __init__(self, inputfile, outputdir, min_resolution=None,
+                 max_resolution=None, hasher=None):
+        """
+        Represents a pyramid of PNG tiles.
+
+        inputfile: Filename
+        outputdir: The output directory for the PNG tiles.
+        min_resolution: Minimum resolution to downsample tiles.
+        max_resolution: Maximum resolution to upsample tiles.
+        hasher: Hashing function to use for image data.
+
+        Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+
+        If a tile duplicates another tile already known to this process, a
+        symlink may be created instead of rendering the same tile to PNG again.
+
+        If `min_resolution` is None, don't downsample.
+        If `max_resolution` is None, don't upsample.
+        """
+        self.inputfile = inputfile
+        self.outputdir = outputdir
+        self.min_resolution = min_resolution
+        self.max_resolution = max_resolution
+        self.hasher = hasher
+
+        self._dataset = None
+        self._image = None
+        self._resolution = None
+
+    @property
+    def dataset(self):
+        if self._dataset is None:
+            self._dataset = Dataset(self.inputfile)
+        return self._dataset
+
+    @property
+    def image(self):
+        if self._image is None:
+            self._image = VImage(self.inputfile)
+        return self._image
+
+    @property
+    def resolution(self):
+        if self._resolution is None:
+            self._resolution = self.dataset.GetNativeResolution()
+        return self._resolution
+
+    def slice_downsample(self, tiles, min_resolution):
+        """Downsamples the input TmsTiles down to min_resolution and slices."""
+        with VImage.disable_warnings():
+            # Downsampling one zoom level at a time, using the previous
+            # downsampled results.
+            for res in reversed(range(min_resolution, self.resolution)):
+                outputdir = os.path.join(self.outputdir, str(res))
+                tiles = tiles.downsample(outputdir=outputdir)
+                tiles._slice()
+
+    def slice_native(self):
+        """Slices the input image at native resolution."""
+        with VImage.disable_warnings():
+            offset = self.dataset.GetTmsExtents()
+            tiles = self.TmsTiles(image=self.image,
+                                  outputdir=os.path.join(self.outputdir,
+                                                         str(self.resolution)),
+                                  tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                                  offset=offset.lower_left,
+                                  hasher=self.hasher)
+            tiles._slice()
+            return tiles
+
+    def slice_upsample(self, tiles, max_resolution):
+        """Upsamples the input TmsTiles up to max_resolution and slices."""
+        with VImage.disable_warnings():
+            # Upsampling one zoom level at a time, from the native image.
+            for res in range(self.resolution + 1, max_resolution + 1):
+                outputdir = os.path.join(self.outputdir, str(res))
+                upsampled = tiles.upsample(levels=(res - self.resolution),
+                                           outputdir=outputdir)
+                upsampled._slice()
+
+    def slice(self):
+        """Slices the input image into the pyramid of PNG tiles."""
+        tiles = self.slice_native()
+        if self.min_resolution is not None:
+            self.slice_downsample(tiles=tiles,
+                                  min_resolution=self.min_resolution)
+        if self.max_resolution is not None:
+            self.slice_upsample(tiles=tiles,
+                                max_resolution=self.max_resolution)
+        pool.join()
+
+
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None,
                   hasher=None):
@@ -421,37 +516,11 @@ def image_pyramid(inputfile, outputdir,
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
     """
-    dataset = Dataset(inputfile)
-    lower_left, upper_right = dataset.GetTmsExtents()
-    resolution = dataset.GetNativeResolution()
-
-    with VImage.disable_warnings():
-        # Native resolution
-        tiles = TmsTiles(image=VImage(inputfile),
-                         outputdir=os.path.join(outputdir, str(resolution)),
-                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                         offset=lower_left,
+    pyramid = TmsPyramid(inputfile=inputfile, outputdir=outputdir,
+                         min_resolution=min_resolution,
+                         max_resolution=max_resolution,
                          hasher=hasher)
-        tiles._slice()
-
-        # Downsampling one zoom level at a time, using the previous downsampled
-        # results.
-        dtiles = tiles
-        if min_resolution is not None:
-            for res in reversed(range(min_resolution, resolution)):
-                dtiles = dtiles.downsample(outputdir=os.path.join(outputdir,
-                                                                  str(res)))
-                dtiles._slice()
-
-        # Upsampling one zoom level at a time, from the native image.
-        if max_resolution is not None:
-            for res in range(resolution + 1, max_resolution + 1):
-                utiles = tiles.upsample(levels=(res - resolution),
-                                        outputdir=os.path.join(outputdir,
-                                                               str(res)))
-                utiles._slice()
-
-        pool.join()
+    pyramid.slice()
 
 
 def image_slice(inputfile, outputdir, hasher=None):
@@ -467,14 +536,11 @@ def image_slice(inputfile, outputdir, hasher=None):
     If a tile duplicates another tile already known to this process, a symlink
     is created instead of rendering the same tile to PNG again.
     """
-    dataset = Dataset(inputfile)
-    lower_left, upper_right = dataset.GetTmsExtents()
-
     with VImage.disable_warnings():
-        # Native resolution
-        native = TmsTiles(image=VImage(inputfile),
-                          outputdir=outputdir,
-                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                          offset=lower_left,
-                          hasher=hasher)
-        native.slice()
+        dataset = Dataset(inputfile)
+        tiles = TmsTiles(image=VImage(inputfile),
+                         outputdir=outputdir,
+                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                         offset=dataset.GetTmsExtents().lower_left,
+                         hasher=hasher)
+        tiles.slice()
