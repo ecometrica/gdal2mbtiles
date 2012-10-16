@@ -312,6 +312,13 @@ class TmsTiles(TmsBase):
 
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
+        # Make self.outputdir and potentially the resolution subdir
+        if self.resolution is None:
+            makedirs(self.outputdir, ignore_exists=True)
+        else:
+            makedirs(os.path.join(self.outputdir, str(self.resolution)),
+                     ignore_exists=True)
+
         with self.image.disable_warnings():
             seen = {}
             for y in xrange(0, self.image_height, self.tile_height):
@@ -334,7 +341,6 @@ class TmsTiles(TmsBase):
                         hasher=self.hasher,
                     )
                     tile.render(seen=seen, pool=pool)
-            pool.join()
 
     def slice(self):
         """
@@ -343,13 +349,6 @@ class TmsTiles(TmsBase):
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
-        # Make self.outputdir and potentially the resolution subdir
-        if self.resolution is None:
-            makedirs(self.outputdir, ignore_exists=True)
-        else:
-            makedirs(os.path.join(self.outputdir, str(self.resolution)),
-                     ignore_exists=True)
-
         with self.image.disable_warnings():
             if self.image_width % self.tile_width != 0:
                 raise ValueError('image width {0!r} does not contain a whole '
@@ -363,7 +362,8 @@ class TmsTiles(TmsBase):
                                      self.image_height, self.tile_height
                                  ))
 
-            return self._slice()
+        self._slice()
+        pool.join()
 
     def downsample(self, resolution):
         """
@@ -456,19 +456,21 @@ def image_pyramid(inputfile, outputdir,
                          offset=lower_left,
                          resolution=resolution,
                          hasher=hasher)
-        tiles.slice()
+        tiles._slice()
 
         # Downsampling one zoom level at a time
         if min_resolution is not None:
             for res in reversed(range(min_resolution, resolution)):
                 tiles = tiles.downsample(resolution=res)
-                tiles.slice()
+                tiles._slice()
 
         # Upsampling one zoom level at a time.
         if max_resolution is not None:
             for res in range(resolution + 1, max_resolution + 1):
                 tiles = tiles.upsample(resolution=res)
-                tiles.slice()
+                tiles._slice()
+
+        pool.join()
 
 
 def image_slice(inputfile, outputdir, hasher=None):
