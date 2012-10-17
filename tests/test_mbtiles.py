@@ -18,7 +18,6 @@ class TestMBTiles(unittest.TestCase):
 
         # File are auto-opened
         self.assertFalse(mbtiles.closed)
-        self.assertTrue(mbtiles.cursor)
         conn = mbtiles._conn
 
         # Open again
@@ -27,7 +26,6 @@ class TestMBTiles(unittest.TestCase):
         # Close
         mbtiles.close()
         self.assertTrue(mbtiles.closed)
-        self.assertEqual(mbtiles.cursor, None)
 
     def test_create(self):
         # Create when filename does not exist

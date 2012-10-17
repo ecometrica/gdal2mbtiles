@@ -30,20 +30,20 @@ class Metadata(DictMixin):
 
     def __delitem__(self, y):
         """Removes key `y` from the database."""
-        cursor = self.mbtiles.cursor.execute(
-            """
-            DELETE FROM metadata
-            WHERE name = :name
-            """,
-            {'name': y}
-        )
-        if not cursor.rowcount:
-            raise KeyError(repr(y))
-        self.mbtiles.commit()
+        with self.mbtiles._conn:
+            cursor = self.mbtiles._conn.execute(
+                """
+                DELETE FROM metadata
+                WHERE name = :name
+                """,
+                {'name': y}
+            )
+            if not cursor.rowcount:
+                raise KeyError(repr(y))
 
     def __getitem__(self, y):
         """Gets value for key `y` from the database."""
-        cursor = self.mbtiles.cursor.execute(
+        cursor = self.mbtiles._conn.execute(
             """
             SELECT value FROM metadata
             WHERE name = :name
@@ -57,18 +57,18 @@ class Metadata(DictMixin):
 
     def __setitem__(self, i, y):
         """Sets value `y` for key `i` in the database."""
-        self.mbtiles.cursor.execute(
-            """
-            INSERT OR REPLACE INTO metadata (name, value)
-                VALUES (:name, :value)
-            """,
-            {'name': i, 'value': y}
-        )
-        self.mbtiles.commit()
+        with self.mbtiles._conn:
+            self.mbtiles._conn.execute(
+                """
+                INSERT OR REPLACE INTO metadata (name, value)
+                    VALUES (:name, :value)
+                """,
+                {'name': i, 'value': y}
+            )
 
     def keys(self):
         """Returns a list of keys from the database."""
-        cursor = self.mbtiles.cursor.execute(
+        cursor = self.mbtiles._conn.execute(
             """
             SELECT name FROM metadata
             """,
@@ -85,7 +85,6 @@ class MBTiles(object):
         """Opens an MBTiles file named `filename`"""
         self.filename = filename
         self._conn = None
-        self._cursor = None
         self._metadata = None
         self.open()
 
@@ -94,7 +93,6 @@ class MBTiles(object):
         if self._conn is not None:
             self._conn.close()
             self._conn = None
-            self._cursor = None
 
     @property
     def closed(self):
@@ -105,29 +103,17 @@ class MBTiles(object):
         """Re-opens the file."""
         self.close()
         self._conn = sqlite3.connect(self.filename)
+        self._conn.executescript(
+            """
+            PRAGMA auto_vacuum = NONE;
+            PRAGMA encoding = "UTF-8";
+            PRAGMA foreign_keys = 0;
+            PRAGMA journal_mode = TRUNCATE;
+            PRAGMA locking_mode = EXCLUSIVE;
+            PRAGMA synchronous = OFF;
+            """
+        )
         return self._conn
-
-    @property
-    def cursor(self):
-        """Returns a SQLite database cursor."""
-        if self.closed:
-            return None
-        if self._cursor is None:
-            self._cursor = self._conn.cursor()
-            self._cursor.executescript(
-                """
-                PRAGMA auto_vacuum = NONE;
-                PRAGMA encoding = "UTF-8";
-                PRAGMA foreign_keys = 0;
-                PRAGMA journal_mode = TRUNCATE;
-                PRAGMA locking_mode = EXCLUSIVE;
-                PRAGMA synchronous = OFF;
-                """
-            )
-        return self._cursor
-
-    def commit(self):
-        return self._conn.commit()
 
     @classmethod
     def create(cls, filename):
@@ -154,49 +140,51 @@ class MBTiles(object):
 
         mbtiles = cls(filename=filename)
 
-        mbtiles.cursor.execute(
-            """
-            CREATE TABLE images (
-                tile_id INTEGER PRIMARY KEY,
-                tile_data BLOB NOT NULL
+        conn = mbtiles._conn
+        with conn:
+            conn.execute(
+                """
+                CREATE TABLE images (
+                    tile_id INTEGER PRIMARY KEY,
+                    tile_data BLOB NOT NULL
+                )
+                """
             )
-            """
-        )
 
-        # Then we reference the Z/X/Y coordinates in the map table.
-        mbtiles.cursor.execute(
-            """
-            CREATE TABLE map (
-                zoom_level INTEGER NOT NULL,
-                tile_column INTEGER NOT NULL,
-                tile_row INTEGER NOT NULL,
-                tile_id INTEGER NOT NULL
-                    REFERENCES images (tile_id)
-                    ON DELETE CASCADE ON UPDATE CASCADE,
-                PRIMARY KEY (zoom_level, tile_column, tile_row)
+            # Then we reference the Z/X/Y coordinates in the map table.
+            conn.execute(
+                """
+                CREATE TABLE map (
+                    zoom_level INTEGER NOT NULL,
+                    tile_column INTEGER NOT NULL,
+                    tile_row INTEGER NOT NULL,
+                    tile_id INTEGER NOT NULL
+                        REFERENCES images (tile_id)
+                        ON DELETE CASCADE ON UPDATE CASCADE,
+                    PRIMARY KEY (zoom_level, tile_column, tile_row)
+                )
+                """
             )
-            """
-        )
 
-        # Finally, we emulate the tiles table using a view.
-        mbtiles.cursor.execute(
-            """
-            CREATE VIEW tiles AS
-                SELECT zoom_level, tile_column, tile_row, tile_data
-                FROM map, images
-                WHERE map.tile_id = images.tile_id
-            """
-        )
-
-        # We also need a table to store metadata.
-        mbtiles.cursor.execute(
-            """
-            CREATE TABLE metadata (
-                name TEXT PRIMARY KEY,
-                value TEXT NOT NULL
+            # Finally, we emulate the tiles table using a view.
+            conn.execute(
+                """
+                CREATE VIEW tiles AS
+                    SELECT zoom_level, tile_column, tile_row, tile_data
+                    FROM map, images
+                    WHERE map.tile_id = images.tile_id
+                """
             )
-            """
-        )
+
+            # We also need a table to store metadata.
+            conn.execute(
+                """
+                CREATE TABLE metadata (
+                    name TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
 
         return mbtiles
 
@@ -215,26 +203,26 @@ class MBTiles(object):
         hashed: Integer hash of the raw image data, not compressed or encoded.
         data: Compressed and encoded image file.
         """
-        if data is not None:
-            # Insert tile data into images
-            self.cursor.execute(
-                """
-                INSERT OR REPLACE INTO images (tile_id, tile_data)
-                VALUES (:hashed, :data)
-                """,
-                {'hashed': hashed, 'data': data}
-            )
+        with self._conn:
+            if data is not None:
+                # Insert tile data into images
+                self._conn.execute(
+                    """
+                    INSERT OR REPLACE INTO images (tile_id, tile_data)
+                    VALUES (:hashed, :data)
+                    """,
+                    {'hashed': hashed, 'data': data}
+                )
 
-        # Always associate map with image
-        self.cursor.execute(
-            """
-            INSERT OR REPLACE
-            INTO map (zoom_level, tile_column, tile_row, tile_id)
-            VALUES (:z, :x, :y, :hashed)
-            """,
-            {'x': x, 'y': y, 'z': z, 'hashed': hashed}
-        )
-        self.commit()
+            # Always associate map with image
+            self._conn.execute(
+                """
+                INSERT OR REPLACE
+                INTO map (zoom_level, tile_column, tile_row, tile_id)
+                VALUES (:z, :x, :y, :hashed)
+                """,
+                {'x': x, 'y': y, 'z': z, 'hashed': hashed}
+            )
 
     def get_tile(self, x, y, z):
         """
@@ -242,7 +230,7 @@ class MBTiles(object):
 
         x, y, z: TMS coordinates for the tile.
         """
-        cursor = self.cursor.execute(
+        cursor = self._conn.execute(
             """
             SELECT tile_data FROM tiles
             WHERE zoom_level = :z AND
