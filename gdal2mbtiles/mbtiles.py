@@ -81,12 +81,22 @@ class MBTiles(object):
 
     Metadata = Metadata
 
-    def __init__(self, filename):
+    # Pragmas for the SQLite connection
+    _connection_options = {
+        'auto_vacuum': 'NONE',
+        'encoding': '"UTF-8"',
+        'foreign_keys': '0',
+        'journal_mode': 'TRUNCATE',
+        'locking_mode': 'EXCLUSIVE',
+        'synchronous': 'OFF',
+    }
+
+    def __init__(self, filename, options=None):
         """Opens an MBTiles file named `filename`"""
         self.filename = filename
         self._conn = None
         self._metadata = None
-        self.open()
+        self.open(options=options)
 
     def close(self):
         """Closes the file."""
@@ -99,19 +109,17 @@ class MBTiles(object):
         """Returns True if the file is closed."""
         return not bool(self._conn)
 
-    def open(self):
+    def open(self, options=None):
         """Re-opens the file."""
         self.close()
         self._conn = sqlite3.connect(self.filename)
+
+        # Pragmas derived from options
+        if options is None:
+            options = self._connection_options
         self._conn.executescript(
-            """
-            PRAGMA auto_vacuum = NONE;
-            PRAGMA encoding = "UTF-8";
-            PRAGMA foreign_keys = 0;
-            PRAGMA journal_mode = TRUNCATE;
-            PRAGMA locking_mode = EXCLUSIVE;
-            PRAGMA synchronous = OFF;
-            """
+            '\n'.join('PRAGMA {0} = {1};'.format(k, v)
+                      for k, v in options.iteritems())
         )
         return self._conn
 
