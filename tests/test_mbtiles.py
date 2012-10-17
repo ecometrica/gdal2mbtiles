@@ -47,11 +47,10 @@ class TestMBTiles(unittest.TestCase):
 
         # Set
         metadata['name'] = ''
+        self.assertEqual(metadata['name'], '')
 
         # Set again
         metadata['name'] = 'Tileset'
-
-        # Get
         self.assertEqual(metadata['name'], 'Tileset')
 
         # Get missing
@@ -133,3 +132,32 @@ class TestMBTiles(unittest.TestCase):
 
         # Get tile again
         self.assertEqual(mbtiles.get_tile(x=1, y=1, z=1), data)
+
+    def test_autocommit(self):
+        mbtiles = MBTiles.create(filename=self.filename)
+        data = 'PNG image'
+        hashed = hash(data)
+
+        # Insert tile
+        mbtiles.insert_tile(x=0, y=0, z=0, hashed=hashed, data=data)
+        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), data)
+
+        # Reopen
+        mbtiles.open()
+        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), data)
+
+        # Insert metadata
+        mbtiles.metadata['name'] = 'Tileset'
+        self.assertEqual(mbtiles.metadata['name'], 'Tileset')
+
+        # Reopen
+        mbtiles.open()
+        self.assertEqual(mbtiles.metadata['name'], 'Tileset')
+
+        # Delete metadata
+        del mbtiles.metadata['name']
+        self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'name')
+
+        # Reopen
+        mbtiles.open()
+        self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'name')

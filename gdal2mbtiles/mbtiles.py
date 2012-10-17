@@ -39,6 +39,7 @@ class Metadata(DictMixin):
         )
         if not cursor.rowcount:
             raise KeyError(repr(y))
+        self.mbtiles.commit()
 
     def __getitem__(self, y):
         """Gets value for key `y` from the database."""
@@ -63,6 +64,7 @@ class Metadata(DictMixin):
             """,
             {'name': i, 'value': y}
         )
+        self.mbtiles.commit()
 
     def keys(self):
         """Returns a list of keys from the database."""
@@ -123,6 +125,9 @@ class MBTiles(object):
                 """
             )
         return self._cursor
+
+    def commit(self):
+        return self._conn.commit()
 
     @classmethod
     def create(cls, filename):
@@ -229,6 +234,7 @@ class MBTiles(object):
             """,
             {'x': x, 'y': y, 'z': z, 'hashed': hashed}
         )
+        self.commit()
 
     def get_tile(self, x, y, z):
         """
