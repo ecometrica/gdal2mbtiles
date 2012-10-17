@@ -9,13 +9,10 @@ import vipsCC.VImage
 
 from .constants import TILE_SIDE
 from .gdal import Dataset
-from .pool import Pool
+from .renderers import PngRenderer
+from .storages import SimpleFileStorage
 from .types import XY
-from .utils import get_hasher, makedirs, tempenv
-
-
-# Process pool
-pool = Pool(processes=None)
+from .utils import tempenv
 
 
 class VImage(vipsCC.VImage.VImage):
@@ -209,27 +206,25 @@ class VImage(vipsCC.VImage.VImage):
         return self.from_vimage(self.embed(_type, x, y, width, height))
 
 
-class TmsBase(object):
-    """Base class for an image in TMS space."""
+class TmsTiles(object):
+    """Represents a set of tiles in TMS co-ordinates."""
 
-    def __init__(self, image, outputdir, offset, hasher=None):
+    def __init__(self, image, storage, tile_width, tile_height, offset,
+                 resolution):
         """
         image: gdal2mbtiles.vips.VImage
-        outputdir: Output directory for TMS tiles in PNG format
+        storage: Storage for rendered tiles
+        tile_width: Number of pixels for each tile
+        tile_height: Number of pixels for each tile
         offset: TMS offset for the lower-left tile
-        hasher: Hashing function to use for image data.
+        resolution: TMS resolution for this image.
         """
         self.image = image
-        self.outputdir = outputdir
+        self.storage = storage
+        self.tile_width = tile_width
+        self.tile_height = tile_height
         self.offset = offset
-
-        if hasher is None:
-            hasher = get_hasher()
-        self.hasher = hasher
-
-    def _render_png(self, filename):
-        """Helper method to write a VIPS image to filename."""
-        return self.image.vips2png(filename)
+        self.resolution = resolution
 
     @property
     def image_width(self):
@@ -241,68 +236,9 @@ class TmsBase(object):
         """Returns the height of self.image in pixels."""
         return self.image.Ysize()
 
-
-class TmsTile(TmsBase):
-    """Represents a single tile in TMS co-ordinates."""
-
-    def get_hash(self):
-        """Returns the image content hash."""
-        return self.hasher(self.image.tobuffer())
-
-    def create_symlink(self, source, filepath):
-        """Creates a relative symlink from filepath to source."""
-        absfilepath = os.path.join(self.outputdir, filepath)
-        abssourcepath = os.path.join(self.outputdir, source)
-        sourcepath = os.path.relpath(abssourcepath,
-                                     start=os.path.dirname(absfilepath))
-        os.symlink(sourcepath, absfilepath)
-
-    def generate_filepath(self, key, offset):
-        """Returns the filepath, relative to self.outputdir."""
-        return '{offset.x}-{offset.y}-{key:x}.png'.format(
-            offset=offset, key=key
-        )
-
-    def render(self, seen, pool):
-        """Renders this tile."""
-        hashed = self.get_hash()
-        filepath = self.generate_filepath(key=hashed,
-                                          offset=self.offset)
-        if hashed in seen:
-            self.create_symlink(source=seen[hashed], filepath=filepath)
-        else:
-            seen[hashed] = filepath
-            pool.apply_async(
-                func=self._render_png,
-                kwds=dict(filename=os.path.join(self.outputdir, filepath))
-            )
-
-
-class TmsTiles(TmsBase):
-    """Represents a set of tiles in TMS co-ordinates."""
-
-    Tile = TmsTile
-
-    def __init__(self, tile_width, tile_height, **kwargs):
-        """
-        image: gdal2mbtiles.vips.VImage
-        outputdir: Output directory for TMS tiles in PNG format
-        tile_width: Number of pixels for each tile
-        tile_height: Number of pixels for each tile
-        offset: TMS offset for the lower-left tile
-        hasher: Hashing function to use for image data.
-        """
-        super(TmsTiles, self).__init__(**kwargs)
-        self.tile_width = tile_width
-        self.tile_height = tile_height
-
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
-
-        makedirs(self.outputdir, ignore_exists=True)
-
         with self.image.disable_warnings():
-            seen = {}
             for y in xrange(0, self.image_height, self.tile_height):
                 for x in xrange(0, self.image_width, self.tile_width):
                     out = self.image.extract_area(
@@ -315,13 +251,8 @@ class TmsTiles(TmsBase):
                         y=int((self.image_height - y) / self.tile_height +
                               self.offset.y - 1)
                     )
-                    tile = self.Tile(
-                        image=out,
-                        outputdir=self.outputdir,
-                        offset=offset,
-                        hasher=self.hasher,
-                    )
-                    tile.render(seen=seen, pool=pool)
+                    self.storage.save(x=offset.x, y=offset.y, z=self.resolution,
+                                      image=out)
 
     def slice(self):
         """
@@ -344,16 +275,16 @@ class TmsTiles(TmsBase):
                                  ))
 
         self._slice()
-        pool.join()
+        self.storage.waitall()
 
-    def downsample(self, outputdir):
+    def downsample(self):
         """
         Downsamples the image by one resolution.
 
-        outputdir: Target output directory
-
         Returns a new TmsTiles object containing the downsampled image.
         """
+        assert self.resolution > 0
+
         offset = XY(self.offset.x / 2.0,
                     self.offset.y / 2.0)
 
@@ -363,19 +294,18 @@ class TmsTiles(TmsBase):
                                    offset=offset)
 
         tiles = self.__class__(image=aligned,
-                               outputdir=outputdir,
+                               storage=self.storage,
                                tile_width=self.tile_width,
                                tile_height=self.tile_height,
                                offset=XY(int(offset.x), int(offset.y)),
-                               hasher=self.hasher)
+                               resolution=self.resolution - 1)
         return tiles
 
-    def upsample(self, levels, outputdir):
+    def upsample(self, levels):
         """
         Upsample the image.
 
         levels: Number of levels to upsample the image.
-        outputdir: Target output directory
 
         Returns a new TmsTiles object containing the upsampled image.
         """
@@ -393,27 +323,28 @@ class TmsTiles(TmsBase):
                                       offset=offset)
 
         tiles = self.__class__(image=aligned,
-                               outputdir=outputdir,
+                               storage=self.storage,
                                tile_width=self.tile_width,
                                tile_height=self.tile_height,
                                offset=XY(int(offset.x), int(offset.y)),
-                               hasher=self.hasher)
+                               resolution=self.resolution + levels)
         return tiles
 
 
 class TmsPyramid(object):
+    """Represents an image pyramid of TMS tiles."""
+
     TmsTiles = TmsTiles
 
-    def __init__(self, inputfile, outputdir, min_resolution=None,
-                 max_resolution=None, hasher=None):
+    def __init__(self, inputfile, storage,
+                 min_resolution=None, max_resolution=None):
         """
         Represents a pyramid of PNG tiles.
 
         inputfile: Filename
-        outputdir: The output directory for the PNG tiles.
+        storage: Storage for rendered tiles
         min_resolution: Minimum resolution to downsample tiles.
         max_resolution: Maximum resolution to upsample tiles.
-        hasher: Hashing function to use for image data.
 
         Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
 
@@ -424,10 +355,9 @@ class TmsPyramid(object):
         If `max_resolution` is None, don't upsample.
         """
         self.inputfile = inputfile
-        self.outputdir = outputdir
+        self.storage = storage
         self.min_resolution = min_resolution
         self.max_resolution = max_resolution
-        self.hasher = hasher
 
         self._dataset = None
         self._image = None
@@ -457,8 +387,7 @@ class TmsPyramid(object):
             # Downsampling one zoom level at a time, using the previous
             # downsampled results.
             for res in reversed(range(min_resolution, self.resolution)):
-                outputdir = os.path.join(self.outputdir, str(res))
-                tiles = tiles.downsample(outputdir=outputdir)
+                tiles = tiles.downsample()
                 tiles._slice()
 
     def slice_native(self):
@@ -466,11 +395,10 @@ class TmsPyramid(object):
         with VImage.disable_warnings():
             offset = self.dataset.GetTmsExtents()
             tiles = self.TmsTiles(image=self.image,
-                                  outputdir=os.path.join(self.outputdir,
-                                                         str(self.resolution)),
+                                  storage=self.storage,
                                   tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                                   offset=offset.lower_left,
-                                  hasher=self.hasher)
+                                  resolution=self.resolution)
             tiles._slice()
             return tiles
 
@@ -479,9 +407,7 @@ class TmsPyramid(object):
         with VImage.disable_warnings():
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
-                outputdir = os.path.join(self.outputdir, str(res))
-                upsampled = tiles.upsample(levels=(res - self.resolution),
-                                           outputdir=outputdir)
+                upsampled = tiles.upsample(levels=(res - self.resolution))
                 upsampled._slice()
 
     def slice(self):
@@ -493,12 +419,12 @@ class TmsPyramid(object):
         if self.max_resolution is not None:
             self.slice_upsample(tiles=tiles,
                                 max_resolution=self.max_resolution)
-        pool.join()
+        self.storage.waitall()
 
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None,
-                  hasher=None):
+                  renderer=None, hasher=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -508,7 +434,7 @@ def image_pyramid(inputfile, outputdir,
     max_resolution: Maximum resolution to upsample tiles.
     hasher: Hashing function to use for image data.
 
-    Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+    Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     may be created instead of rendering the same tile to PNG again.
@@ -516,14 +442,19 @@ def image_pyramid(inputfile, outputdir,
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
     """
-    pyramid = TmsPyramid(inputfile=inputfile, outputdir=outputdir,
+    if renderer is None:
+        renderer = PngRenderer
+    storage = SimpleFileStorage(outputdir=outputdir,
+                                renderer=renderer,
+                                hasher=hasher)
+    pyramid = TmsPyramid(inputfile=inputfile,
+                         storage=storage,
                          min_resolution=min_resolution,
-                         max_resolution=max_resolution,
-                         hasher=hasher)
+                         max_resolution=max_resolution)
     pyramid.slice()
 
 
-def image_slice(inputfile, outputdir, hasher=None):
+def image_slice(inputfile, outputdir, hasher=None, renderer=None):
     """
     Slices a GDAL-readable inputfile into PNG tiles.
 
@@ -531,16 +462,18 @@ def image_slice(inputfile, outputdir, hasher=None):
     outputdir: The output directory for the PNG tiles.
     hasher: Hashing function to use for image data.
 
-    Filenames are in the format ``{tms_x}-{tms_y}-{image_hash}.png``.
+    Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     is created instead of rendering the same tile to PNG again.
     """
-    with VImage.disable_warnings():
-        dataset = Dataset(inputfile)
-        tiles = TmsTiles(image=VImage(inputfile),
-                         outputdir=outputdir,
-                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                         offset=dataset.GetTmsExtents().lower_left,
-                         hasher=hasher)
-        tiles.slice()
+    if renderer is None:
+        renderer = PngRenderer
+    storage = SimpleFileStorage(outputdir=outputdir,
+                                renderer=renderer,
+                                hasher=hasher)
+    pyramid = TmsPyramid(inputfile=inputfile,
+                         storage=storage,
+                         min_resolution=None,
+                         max_resolution=None)
+    pyramid.slice()

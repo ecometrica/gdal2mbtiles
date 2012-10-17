@@ -3,6 +3,8 @@ import errno
 from hashlib import md5
 import os
 import platform
+from shutil import rmtree
+from tempfile import mkdtemp
 
 
 @contextmanager
@@ -14,6 +16,13 @@ def tempenv(name, value):
         del os.environ[name]
     else:
         os.environ[name] = original
+
+
+@contextmanager
+def NamedTemporaryDir(**kwargs):
+    dirname = mkdtemp(**kwargs)
+    yield dirname
+    rmtree(dirname, ignore_errors=True)
 
 
 def makedirs(d, ignore_exists=False):
