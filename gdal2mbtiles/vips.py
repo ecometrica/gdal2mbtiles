@@ -277,31 +277,36 @@ class TmsTiles(object):
         self._slice()
         self.storage.waitall()
 
-    def downsample(self):
+    def downsample(self, levels=1):
         """
         Downsamples the image by one resolution.
 
         Returns a new TmsTiles object containing the downsampled image.
         """
-        assert self.resolution > 0
+        assert self.resolution >= levels and levels > 0
 
-        offset = XY(self.offset.x / 2.0,
-                    self.offset.y / 2.0)
+        image = self.image
+        offset = self.offset
 
-        shrunk = self.image.shrink(xscale=0.5, yscale=0.5)
-        aligned = shrunk.tms_align(tile_width=self.tile_width,
+        for res in reversed(range(self.resolution - levels, self.resolution)):
+            offset = XY(x=offset.x / 2.0,
+                        y=offset.y / 2.0)
+
+            shrunk = image.shrink(xscale=0.5, yscale=0.5)
+            aligned = shrunk.tms_align(tile_width=self.tile_width,
+                                       tile_height=self.tile_height,
+                                       offset=offset)
+
+            tiles = self.__class__(image=aligned,
+                                   storage=self.storage,
+                                   tile_width=self.tile_width,
                                    tile_height=self.tile_height,
-                                   offset=offset)
-
-        tiles = self.__class__(image=aligned,
-                               storage=self.storage,
-                               tile_width=self.tile_width,
-                               tile_height=self.tile_height,
-                               offset=XY(int(offset.x), int(offset.y)),
-                               resolution=self.resolution - 1)
+                                   offset=XY(int(offset.x), int(offset.y)),
+                                   resolution=res)
+            image = tiles.image
         return tiles
 
-    def upsample(self, levels):
+    def upsample(self, levels=1):
         """
         Upsample the image.
 

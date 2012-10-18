@@ -3,12 +3,14 @@ import os
 import re
 import unittest
 
+from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
 from gdal2mbtiles.renderers import TouchRenderer
+from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import XY
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
-from gdal2mbtiles.vips import image_pyramid, image_slice, VImage
+from gdal2mbtiles.vips import image_pyramid, image_slice, TmsTiles, VImage
 
 
 __dir__ = os.path.dirname(__file__)
@@ -173,6 +175,101 @@ class TestImageSlice(unittest.TestCase):
             self.assertRaises(UnalignedInputError,
                               image_slice,
                               inputfile=self.spanningfile, outputdir=outputdir)
+
+
+class TestTmsTiles(unittest.TestCase):
+    def test_dimensions(self):
+        # Very small WGS84 map. :-)
+        image = VImage.new_rgba(width=2, height=1)
+        tiles = TmsTiles(image=image,
+                         storage=Storage(renderer=None),
+                         tile_width=1, tile_height=1,
+                         offset=XY(0, 0), resolution=0)
+        self.assertEqual(tiles.image_width, 2)
+        self.assertEqual(tiles.image_height, 1)
+
+    def test_downsample(self):
+        resolution = 2
+        image = VImage.new_rgba(width=TILE_SIDE * 2 ** resolution,
+                                height=TILE_SIDE * 2 ** resolution)
+        tiles = TmsTiles(image=image,
+                         storage=Storage(renderer=None),
+                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                         offset=XY(0, 0),
+                         resolution=resolution)
+
+        # Zero levels - invalid
+        self.assertRaises(AssertionError,
+                          tiles.downsample, levels=0)
+
+        # One level
+        tiles1a = tiles.downsample()
+        self.assertEqual(tiles1a.image_width,
+                         TILE_SIDE * 2 ** (resolution - 1))
+        self.assertEqual(tiles1a.image_height,
+                         TILE_SIDE * 2 ** (resolution - 1))
+        self.assertEqual(tiles1a.resolution,
+                         resolution - 1)
+
+        tiles1b = tiles.downsample(levels=1)
+        self.assertEqual(tiles1b.image_width,
+                         TILE_SIDE * 2 ** (resolution - 1))
+        self.assertEqual(tiles1b.image_height,
+                         TILE_SIDE * 2 ** (resolution - 1))
+        self.assertEqual(tiles1b.resolution,
+                         resolution - 1)
+
+        # Two levels
+        tiles2 = tiles.downsample(levels=2)
+        self.assertEqual(tiles2.image_width,
+                         TILE_SIDE * 2 ** (resolution - 2))
+        self.assertEqual(tiles2.image_height,
+                         TILE_SIDE * 2 ** (resolution - 2))
+        self.assertEqual(tiles2.resolution,
+                         resolution - 2)
+
+        # Three levels - invalid since resolution is 2
+        self.assertRaises(AssertionError,
+                          tiles.downsample, levels=3)
+
+    def test_upsample(self):
+        resolution = 0
+        image = VImage.new_rgba(width=TILE_SIDE * 2 ** resolution,
+                                height=TILE_SIDE * 2 ** resolution)
+        tiles = TmsTiles(image=image,
+                         storage=Storage(renderer=None),
+                         tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                         offset=XY(0, 0), resolution=resolution)
+
+        # Zero levels
+        self.assertRaises(AssertionError,
+                          tiles.upsample, levels=0)
+
+        # One level
+        tiles1a = tiles.upsample()
+        self.assertEqual(tiles1a.image_width,
+                         TILE_SIDE * 2 ** (resolution + 1))
+        self.assertEqual(tiles1a.image_height,
+                         TILE_SIDE * 2 ** (resolution + 1))
+        self.assertEqual(tiles1a.resolution,
+                         resolution + 1)
+
+        tiles1b = tiles.upsample(levels=1)
+        self.assertEqual(tiles1b.image_width,
+                         TILE_SIDE * 2 ** (resolution + 1))
+        self.assertEqual(tiles1b.image_height,
+                         TILE_SIDE * 2 ** (resolution + 1))
+        self.assertEqual(tiles1b.resolution,
+                         resolution + 1)
+
+        # Two levels
+        tiles2 = tiles.upsample(levels=2)
+        self.assertEqual(tiles2.image_width,
+                         TILE_SIDE * 2 ** (resolution + 2))
+        self.assertEqual(tiles2.image_height,
+                         TILE_SIDE * 2 ** (resolution + 2))
+        self.assertEqual(tiles2.resolution,
+                         resolution + 2)
 
 
 class TestImagePyramid(unittest.TestCase):
