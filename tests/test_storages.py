@@ -49,9 +49,28 @@ class TestSimpleFileStorage(unittest.TestCase):
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
+        self.storage.save(x=1, y=0, z=2, image=image)
         self.storage.waitall()
-        self.assertEqual(os.listdir(self.outputdir),
-                         ['2-0-1-f1d3ff8443297732862df21dc4e57262.png'])
+        self.assertEqual(set(os.listdir(self.outputdir)),
+                         set([
+                             '2-0-1-f1d3ff8443297732862df21dc4e57262.png',
+                             '2-1-0-f1d3ff8443297732862df21dc4e57262.png'
+                         ]))
+
+        # Is this a real file?
+        self.assertFalse(
+            os.path.islink(os.path.join(
+                self.outputdir, '2-0-1-f1d3ff8443297732862df21dc4e57262.png'
+            ))
+        )
+
+        # Does the symlinking work?
+        self.assertEqual(
+            os.readlink(os.path.join(
+                self.outputdir, '2-1-0-f1d3ff8443297732862df21dc4e57262.png'
+            )),
+            '2-0-1-f1d3ff8443297732862df21dc4e57262.png'
+        )
 
     def test_symlink(self):
         # Same directory
@@ -125,8 +144,30 @@ class TestNestedFileStorage(unittest.TestCase):
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
+        self.storage.save(x=1, y=0, z=2, image=image)
+        self.storage.save(x=1, y=0, z=3, image=image)
         self.storage.waitall()
         self.assertEqual(set(recursive_listdir(self.outputdir)),
                          set(['2/',
                               '2/0/',
-                              '2/0/1.png']))
+                              '2/0/1.png',
+                              '2/1/',
+                              '2/1/0.png',
+                              '3/',
+                              '3/1/',
+                              '3/1/0.png']))
+
+        # Is this a real file?
+        self.assertFalse(
+            os.path.islink(os.path.join(self.outputdir, '2', '0', '1.png'))
+        )
+
+        # Does the symlinking work?
+        self.assertEqual(
+            os.readlink(os.path.join(self.outputdir, '2', '1', '0.png')),
+            os.path.join(os.path.pardir, '0', '1.png')
+        )
+        self.assertEqual(
+            os.readlink(os.path.join(self.outputdir, '3', '1', '0.png')),
+            os.path.join(os.path.pardir, os.path.pardir, '2', '0', '1.png')
+        )
