@@ -28,7 +28,7 @@ class VImage(vipsCC.VImage.VImage):
         super(VImage, self).__init__(*args, **kwargs)
 
     @classmethod
-    def new_rgba(cls, width, height):
+    def new_rgba(cls, width, height, ink=None):
         """Creates a new transparent RGBA image sized width × height."""
         bands = 4                  # RGBA
         bandfmt = cls.FMTUCHAR     # 8-bit unsigned
@@ -40,6 +40,10 @@ class VImage(vipsCC.VImage.VImage):
         image = cls("", "p")       # Working buffer
         image.initdesc(width, height, bands, bandfmt, coding, _type,
                        xres, yres, xo, yo)
+
+        if ink is not None:
+            image.draw_rect(left=0, top=0, width=width, height=height,
+                            fill=True, ink=ink)
         return image
 
     @classmethod
@@ -48,6 +52,10 @@ class VImage(vipsCC.VImage.VImage):
         new = cls()
         new.__dict__.update(other.__dict__)
         return new
+
+    def draw_rect(self, left, top, width, height, fill, ink):
+        return super(VImage, self).draw_rect(left, top, width, height,
+                                             int(fill), ink)
 
     @classmethod
     def disable_warnings(cls):

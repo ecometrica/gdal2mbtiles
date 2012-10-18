@@ -20,11 +20,6 @@ class TestSimpleFileStorage(unittest.TestCase):
     def tearDown(self):
         self.tempdir.__exit__(None, None, None)
 
-    def make_transparent_image(self):
-        image = VImage.new_rgba(width=1, height=1)
-        image.draw_flood(0, 0, rgba(r=0, g=0, b=0, a=0))
-        return image
-
     def test_create(self):
         # Make a new directory if it doesn't exist
         os.rmdir(self.outputdir)
@@ -44,12 +39,12 @@ class TestSimpleFileStorage(unittest.TestCase):
                          '2-0-1-deadbeef' + self.renderer.suffix)
 
     def test_get_hash(self):
-        image = self.make_transparent_image()
+        image = VImage.new_rgba(width=1, height=1, ink=rgba(r=0, g=0, b=0, a=0))
         self.assertEqual(self.storage.get_hash(image=image),
                          long('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
-        image = self.make_transparent_image()
+        image = VImage.new_rgba(width=1, height=1, ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.waitall()
         self.assertEqual(os.listdir(self.outputdir),

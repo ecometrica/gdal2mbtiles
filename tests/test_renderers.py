@@ -13,8 +13,8 @@ class TestPngRenderer(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryFile() as outfile:
             # Transparent 1×1 image
-            image = VImage.new_rgba(width=1, height=1)
-            image.draw_flood(0, 0, rgba(r=0, g=0, b=0, a=0))
+            image = VImage.new_rgba(width=1, height=1,
+                                    ink=rgba(r=0, g=0, b=0, a=0))
 
             renderer = PngRenderer()
             renderer.render(image=image, filename=outfile.name)
