@@ -1,10 +1,11 @@
 import os
+from shutil import rmtree
 import unittest
 
 from gdal2mbtiles.renderers import TouchRenderer
-from gdal2mbtiles.storages import SimpleFileStorage
+from gdal2mbtiles.storages import NestedFileStorage, SimpleFileStorage
 from gdal2mbtiles.types import rgba
-from gdal2mbtiles.utils import intmd5, NamedTemporaryDir
+from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 from gdal2mbtiles.vips import VImage
 
 
@@ -70,3 +71,62 @@ class TestSimpleFileStorage(unittest.TestCase):
                          [dst])
         self.assertEqual(os.readlink(os.path.join(subdir, dst)),
                          os.path.join(os.path.pardir, src))
+
+
+class TestNestedFileStorage(unittest.TestCase):
+    def setUp(self):
+        self.tempdir = NamedTemporaryDir()
+        self.outputdir = self.tempdir.__enter__()
+        self.renderer = TouchRenderer(suffix='.png')
+        self.storage = NestedFileStorage(outputdir=self.outputdir,
+                                         renderer=self.renderer,
+                                         hasher=intmd5)
+
+    def tearDown(self):
+        self.tempdir.__exit__(None, None, None)
+
+    def test_create(self):
+        # Make a new directory if it doesn't exist
+        os.rmdir(self.outputdir)
+        storage = NestedFileStorage(outputdir=self.outputdir,
+                                    renderer=self.renderer)
+        self.assertEqual(storage.outputdir, self.outputdir)
+        self.assertTrue(os.path.isdir(self.outputdir))
+
+        # Make a duplicate directory
+        NestedFileStorage(outputdir=self.outputdir,
+                          renderer=self.renderer)
+        self.assertTrue(os.path.isdir(self.outputdir))
+
+    def test_filepath(self):
+        self.assertEqual(self.storage.filepath(x=0, y=1, z=2,
+                                               hashed=0xdeadbeef),
+                         '2/0/1' + self.renderer.suffix)
+
+    def test_makedirs(self):
+        # Cache should be empty
+        self.assertFalse(self.storage.madedirs)
+
+        self.storage.makedirs(x=0, y=1, z=2)
+        self.assertEqual(set(recursive_listdir(self.outputdir)),
+                         set(['2/',
+                              '2/0/']))
+
+        # Is cache populated?
+        self.assertTrue(self.storage.madedirs[2][0])
+
+        # Delete and readd without clearing cache
+        rmtree(os.path.join(self.outputdir, '2'))
+        self.assertEqual(os.listdir(self.outputdir), [])
+        self.storage.makedirs(x=0, y=1, z=2)
+        self.assertEqual(os.listdir(self.outputdir), [])
+
+    def test_save(self):
+        image = VImage.new_rgba(width=1, height=1,
+                                ink=rgba(r=0, g=0, b=0, a=0))
+        self.storage.save(x=0, y=1, z=2, image=image)
+        self.storage.waitall()
+        self.assertEqual(set(recursive_listdir(self.outputdir)),
+                         set(['2/',
+                              '2/0/',
+                              '2/0/1.png']))

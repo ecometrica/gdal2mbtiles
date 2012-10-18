@@ -2,6 +2,8 @@
 
 from __future__ import absolute_import
 
+from collections import defaultdict
+from functools import partial
 import os
 
 from .pool import Pool
@@ -96,3 +98,40 @@ class SimpleFileStorage(Storage):
         srcpath = os.path.relpath(abssrc,
                                   start=os.path.dirname(absdst))
         os.symlink(srcpath, absdst)
+
+
+class NestedFileStorage(SimpleFileStorage):
+    """
+    Saves tiles in `outputdir` as 'z/x/y.ext' for serving via static site.
+    """
+
+    def __init__(self, renderer, outputdir, seen=None, **kwargs):
+        """
+        Initializes storage.
+
+        renderer: Used to render images into tiles.
+        outputdir: Output directory for tiles
+        pool: Process pool to coordinate subprocesses.
+        hasher: Hashing function to use for image data.
+        """
+        super(NestedFileStorage, self).__init__(renderer=renderer,
+                                                outputdir=outputdir,
+                                                seen=seen,
+                                                **kwargs)
+        self.madedirs = defaultdict(partial(defaultdict, bool))
+
+    def filepath(self, x, y, z, hashed):
+        """Returns the filepath, relative to self.outputdir."""
+        return (os.path.join(unicode(z), unicode(x), unicode(y)) +
+                self.renderer.suffix)
+
+    def makedirs(self, x, y, z):
+        if not self.madedirs[z][x]:
+            makedirs(os.path.join(self.outputdir, unicode(z), unicode(x)),
+                     ignore_exists=True)
+            self.madedirs[z][x] = True
+
+    def save(self, x, y, z, image):
+        """Saves `image` at coordinates `x`, `y`, and `z`."""
+        self.makedirs(x=x, y=y, z=z)
+        return super(NestedFileStorage, self).save(x=x, y=y, z=z, image=image)
