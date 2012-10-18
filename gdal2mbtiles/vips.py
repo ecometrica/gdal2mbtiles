@@ -3,7 +3,6 @@
 from __future__ import absolute_import, division
 
 from math import ceil
-import os
 
 import vipsCC.VImage
 
@@ -259,7 +258,8 @@ class TmsTiles(object):
                         y=int((self.image_height - y) / self.tile_height +
                               self.offset.y - 1)
                     )
-                    self.storage.save(x=offset.x, y=offset.y, z=self.resolution,
+                    self.storage.save(x=offset.x, y=offset.y,
+                                      z=self.resolution,
                                       image=out)
 
     def slice(self):
@@ -359,7 +359,7 @@ class TmsPyramid(object):
         min_resolution: Minimum resolution to downsample tiles.
         max_resolution: Maximum resolution to upsample tiles.
 
-        Filenames are in the format ``{tms_z}/{tms_x}-{tms_y}-{image_hash}.png``.
+        Filenames are in the format `{tms_z}/{tms_x}-{tms_y}-{image_hash}.png`.
 
         If a tile duplicates another tile already known to this process, a
         symlink may be created instead of rendering the same tile to PNG again.

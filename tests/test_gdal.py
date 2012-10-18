@@ -891,8 +891,10 @@ class TestSpatialReference(unittest.TestCase):
         major_half_circumference = mercator.GetMajorCircumference() / 2
         minor_half_circumference = mercator.GetMinorCircumference() / 2
         world = Extents(
-            lower_left=XY(-major_half_circumference, -minor_half_circumference),
-            upper_right=XY(major_half_circumference, minor_half_circumference)
+            lower_left=XY(-major_half_circumference,
+                          -minor_half_circumference),
+            upper_right=XY(major_half_circumference,
+                           minor_half_circumference)
         )
 
         # Resolution 0 is 1×1 for the whole world

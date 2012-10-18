@@ -63,7 +63,7 @@ def preprocess(inputfile, outputfile, colours, band=None, spatial_ref=None,
 
 def pipeline(inputfile, outputfile, functions, **kwargs):
     """
-    Applies VRT-functions to a GDAL-readable inputfile, rendering to outputfile.
+    Applies VRT-functions to a GDAL-readable inputfile, rendering outputfile.
 
     Functions must be an iterable of single-parameter functions that take a
     filename as input.

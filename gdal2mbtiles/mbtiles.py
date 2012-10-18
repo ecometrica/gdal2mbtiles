@@ -13,9 +13,9 @@ class Metadata(DictMixin):
     # description: A description of the layer as plain text.
     # format: The image file format of the tile data: png or jpg
 
-    # bounds: The maximum extent of the rendered map area. Bounds must define an
-    # area covered by all zoom levels. The bounds are represented in WGS:84 -
-    # latitude and longitude values, in the OpenLayers Bounds format - left,
+    # bounds: The maximum extent of the rendered map area. Bounds must define
+    # an area covered by all zoom levels. The bounds are represented in WGS84
+    # latitude and longitude values, in the OpenLayers Bounds format: left,
     # bottom, right, top. Example of the full earth: -180.0,-85,180,85.
 
     # The global-mercator (aka Spherical Mercator) profile is assumed
