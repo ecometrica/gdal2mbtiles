@@ -5,6 +5,7 @@ import unittest
 
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
+from gdal2mbtiles.renderers import TouchRenderer
 from gdal2mbtiles.types import XY
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 from gdal2mbtiles.vips import image_pyramid, image_slice, VImage
@@ -129,7 +130,7 @@ class TestImageSlice(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.inputfile, outputdir=outputdir,
-                        hasher=intmd5)
+                        hasher=intmd5, renderer=TouchRenderer(suffix='.png'))
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -157,7 +158,7 @@ class TestImageSlice(unittest.TestCase):
     def test_aligned(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.alignedfile, outputdir=outputdir,
-                        hasher=intmd5)
+                        hasher=intmd5, renderer=TouchRenderer(suffix='.png'))
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -185,7 +186,8 @@ class TestImagePyramid(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
             # Native resolution only
-            image_pyramid(inputfile=self.inputfile, outputdir=outputdir)
+            image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
+                          renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -213,7 +215,7 @@ class TestImagePyramid(unittest.TestCase):
     def test_downsample(self):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
-                          min_resolution=0)
+                          min_resolution=0, renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -246,7 +248,8 @@ class TestImagePyramid(unittest.TestCase):
     def test_downsample_aligned(self):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.alignedfile, outputdir=outputdir,
-                          min_resolution=0)
+                          min_resolution=0,
+                          renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -263,13 +266,15 @@ class TestImagePyramid(unittest.TestCase):
             self.assertRaises(UnalignedInputError,
                               image_pyramid,
                               inputfile=self.spanningfile, outputdir=outputdir,
-                              min_resolution=0)
+                              min_resolution=0,
+                              renderer=TouchRenderer(suffix='.png'))
 
     def test_upsample(self):
         with NamedTemporaryDir() as outputdir:
             dataset = Dataset(self.inputfile)
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
-                          max_resolution=dataset.GetNativeResolution() + 1)
+                          max_resolution=dataset.GetNativeResolution() + 1,
+                          renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -364,7 +369,8 @@ class TestImagePyramid(unittest.TestCase):
 
             dataset = Dataset(self.upsamplingfile)
             image_pyramid(inputfile=self.upsamplingfile, outputdir=outputdir,
-                          max_resolution=dataset.GetNativeResolution() + zoom)
+                          max_resolution=dataset.GetNativeResolution() + zoom,
+                          renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(

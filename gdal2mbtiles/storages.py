@@ -72,7 +72,8 @@ class SimpleFileStorage(Storage):
 
     def filepath(self, x, y, z, hashed):
         """Returns the filepath, relative to self.outputdir."""
-        return '{z}-{x}-{y}-{hashed:x}'.format(**locals()) + self.renderer.ext
+        return ('{z}-{x}-{y}-{hashed:x}'.format(**locals()) +
+                self.renderer.suffix)
 
     def save(self, x, y, z, image):
         """Saves `image` at coordinates `x`, `y`, and `z`."""

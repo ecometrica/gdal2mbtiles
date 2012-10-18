@@ -443,7 +443,7 @@ def image_pyramid(inputfile, outputdir,
     If `max_resolution` is None, don't upsample.
     """
     if renderer is None:
-        renderer = PngRenderer
+        renderer = PngRenderer()
     storage = SimpleFileStorage(outputdir=outputdir,
                                 renderer=renderer,
                                 hasher=hasher)
@@ -468,7 +468,7 @@ def image_slice(inputfile, outputdir, hasher=None, renderer=None):
     is created instead of rendering the same tile to PNG again.
     """
     if renderer is None:
-        renderer = PngRenderer
+        renderer = PngRenderer()
     storage = SimpleFileStorage(outputdir=outputdir,
                                 renderer=renderer,
                                 hasher=hasher)

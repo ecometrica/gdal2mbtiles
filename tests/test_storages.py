@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from gdal2mbtiles.renderers import PngRenderer
+from gdal2mbtiles.renderers import TouchRenderer
 from gdal2mbtiles.storages import SimpleFileStorage
 from gdal2mbtiles.types import rgba
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir
@@ -12,7 +12,7 @@ class TestSimpleFileStorage(unittest.TestCase):
     def setUp(self):
         self.tempdir = NamedTemporaryDir()
         self.outputdir = self.tempdir.__enter__()
-        self.renderer = PngRenderer
+        self.renderer = TouchRenderer(suffix='.png')
         self.storage = SimpleFileStorage(outputdir=self.outputdir,
                                          renderer=self.renderer,
                                          hasher=intmd5)
@@ -29,19 +29,19 @@ class TestSimpleFileStorage(unittest.TestCase):
         # Make a new directory if it doesn't exist
         os.rmdir(self.outputdir)
         storage = SimpleFileStorage(outputdir=self.outputdir,
-                                    renderer=PngRenderer)
+                                    renderer=self.renderer)
         self.assertEqual(storage.outputdir, self.outputdir)
         self.assertTrue(os.path.isdir(self.outputdir))
 
         # Make a duplicate directory
         SimpleFileStorage(outputdir=self.outputdir,
-                          renderer=PngRenderer)
+                          renderer=self.renderer)
         self.assertTrue(os.path.isdir(self.outputdir))
 
     def test_filepath(self):
         self.assertEqual(self.storage.filepath(x=0, y=1, z=2,
                                                hashed=0xdeadbeef),
-                         '2-0-1-deadbeef' + self.renderer.ext)
+                         '2-0-1-deadbeef' + self.renderer.suffix)
 
     def test_get_hash(self):
         image = self.make_transparent_image()
