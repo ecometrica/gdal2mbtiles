@@ -80,7 +80,7 @@ class TestMBTiles(unittest.TestCase):
         # Create without version
         mbtiles3 = MBTiles.create(filename=self.filename,
                                   metadata=self.metadata)
-        self.assertEqual(mbtiles3.version, '1.0')
+        self.assertEqual(mbtiles3.version, self.version)
 
     def test_tiles(self):
         mbtiles = MBTiles.create(filename=self.filename,
