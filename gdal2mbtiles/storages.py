@@ -5,9 +5,11 @@ from __future__ import absolute_import
 from collections import defaultdict
 from functools import partial
 import os
+from tempfile import gettempdir, NamedTemporaryFile
 
+from .mbtiles import MBTiles
 from .pool import Pool
-from .utils import get_hasher, makedirs
+from .utils import get_hasher, makedirs, rmfile
 
 
 class Storage(object):
@@ -105,7 +107,7 @@ class NestedFileStorage(SimpleFileStorage):
     Saves tiles in `outputdir` as 'z/x/y.ext' for serving via static site.
     """
 
-    def __init__(self, renderer, outputdir, seen=None, **kwargs):
+    def __init__(self, renderer, **kwargs):
         """
         Initializes storage.
 
@@ -115,8 +117,6 @@ class NestedFileStorage(SimpleFileStorage):
         hasher: Hashing function to use for image data.
         """
         super(NestedFileStorage, self).__init__(renderer=renderer,
-                                                outputdir=outputdir,
-                                                seen=seen,
                                                 **kwargs)
         self.madedirs = defaultdict(partial(defaultdict, bool))
 
@@ -135,3 +135,98 @@ class NestedFileStorage(SimpleFileStorage):
         """Saves `image` at coordinates `x`, `y`, and `z`."""
         self.makedirs(x=x, y=y, z=z)
         return super(NestedFileStorage, self).save(x=x, y=y, z=z, image=image)
+
+
+class MbtilesStorage(Storage):
+    """
+    Saves tiles in `filename` in the MBTiles format.
+
+    http://mapbox.com/developers/mbtiles/
+    """
+    def __init__(self, renderer, filename, seen=None, tempdir=None, **kwargs):
+        """
+        Initializes storage.
+
+        renderer: Used to render images into tiles.
+        filename: Name of the MBTiles file.
+        pool: Process pool to coordinate subprocesses.
+        hasher: Hashing function to use for image data.
+        """
+        super(MbtilesStorage, self).__init__(renderer=renderer,
+                                             **kwargs)
+        if seen is None:
+            seen = set()
+        self.seen = seen
+
+        if tempdir is None:
+            tempdir = gettempdir()
+        self.tempdir = tempdir
+
+        if isinstance(filename, basestring):
+            self.filename = filename
+            self.mbtiles = MBTiles(filename=filename)
+        else:
+            self.mbtiles = filename
+            self.filename = self.mbtiles.filename
+
+    @classmethod
+    def create(cls, renderer, filename, metadata, version=None, tempdir=None,
+               **kwargs):
+        """
+        Creates a new MBTiles file.
+
+        renderer: Used to render images into tiles.
+        filename: Name of the MBTiles file.
+        metadata: Metadata dictionary.
+        version: Optional MBTiles version.
+        pool: Process pool to coordinate subprocesses.
+        hasher: Hashing function to use for image data.
+
+        Metadata is also taken as **kwargs. See `mbtiles.Metadata`.
+        """
+
+        bounds = metadata.get('bounds', None)
+        if bounds is not None and not isinstance(bounds, basestring):
+            metadata['bounds'] = (
+                '{ll.x!r},{ll.y!r},{ur.x!r},{ur.y!r}'.format(
+                    ll=bounds.lower_left,
+                    ur=bounds.upper_right
+                )
+            )
+        mbtiles = MBTiles.create(filename=filename, metadata=metadata,
+                                 version=version)
+        return cls(renderer=renderer,
+                   filename=mbtiles,
+                   tempdir=tempdir,
+                   **kwargs)
+
+    def save(self, x, y, z, image):
+        """Saves `image` at coordinates `x`, `y`, and `z`."""
+        hashed = self.get_hash(image)
+        if hashed in self.seen:
+            self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed)
+        else:
+            self.seen.add(hashed)
+            tempfile = NamedTemporaryFile(dir=self.tempdir,
+                                          suffix=self.renderer.suffix)
+            self.pool.apply_async(
+                func=self.renderer.render,
+                kwds=dict(image=image,
+                          filename=tempfile.name),
+                callback=self._make_callback(x=x, y=y, z=z, hashed=hashed,
+                                             tempfile=tempfile),
+            )
+
+    def _make_callback(self, x, y, z, hashed, tempfile):
+        """Returns a callback that saves the rendered image."""
+        def callback(filename):
+            # Insert the rendered file into the database
+            with open(filename) as output:
+                self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed,
+                                    data=buffer(output.read()))
+            # Delete tempfile
+            tempfile.close()
+            # Delete the rendered file if it wasn't tempfile
+            if filename != tempfile.name:
+                rmfile(filename, ignore_missing=True)
+        return callback

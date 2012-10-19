@@ -1,9 +1,13 @@
+import errno
 import os
 from shutil import rmtree
+from tempfile import NamedTemporaryFile
 import unittest
 
-from gdal2mbtiles.renderers import TouchRenderer
-from gdal2mbtiles.storages import NestedFileStorage, SimpleFileStorage
+from gdal2mbtiles.mbtiles import Metadata
+from gdal2mbtiles.renderers import PngRenderer, TouchRenderer
+from gdal2mbtiles.storages import (MbtilesStorage,
+                                   NestedFileStorage, SimpleFileStorage)
 from gdal2mbtiles.types import rgba
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 from gdal2mbtiles.vips import VImage
@@ -170,4 +174,73 @@ class TestNestedFileStorage(unittest.TestCase):
         self.assertEqual(
             os.readlink(os.path.join(self.outputdir, '3', '1', '0.png')),
             os.path.join(os.path.pardir, os.path.pardir, '2', '0', '1.png')
+        )
+
+
+class TestMbtilesStorage(unittest.TestCase):
+    def setUp(self):
+        self.tempfile = NamedTemporaryFile()
+        # Use the PngRenderer because we want to know that callback
+        # works properly.
+        self.renderer = PngRenderer()
+        self.metadata = dict(
+            name='transparent',
+            type=Metadata.latest().TYPES.BASELAYER,
+            version='1.0.0',
+            description='Transparent World 2012',
+            format=Metadata.latest().FORMATS.PNG,
+        )
+        self.storage = MbtilesStorage.create(renderer=self.renderer,
+                                             filename=self.tempfile.name,
+                                             metadata=self.metadata,
+                                             hasher=intmd5)
+
+    def tearDown(self):
+        try:
+            self.tempfile.close()
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+
+    def test_create(self):
+        # Make a new file if it doesn't exist
+        os.remove(self.tempfile.name)
+        storage = MbtilesStorage.create(renderer=self.renderer,
+                                        filename=self.tempfile.name,
+                                        metadata=self.metadata)
+        self.assertEqual(storage.filename, self.tempfile.name)
+        self.assertEqual(storage.mbtiles.metadata, self.metadata)
+        self.assertTrue(os.path.isfile(self.tempfile.name))
+
+        # Make a duplicate file
+        MbtilesStorage.create(renderer=self.renderer,
+                              filename=self.tempfile.name,
+                              metadata=self.metadata)
+        self.assertEqual(storage.filename, self.tempfile.name)
+        self.assertTrue(os.path.isfile(self.tempfile.name))
+
+    def test_open(self):
+        # Test opening a created file
+        # Test that the version is sensible
+        pass
+
+    def test_get_hash(self):
+        image = VImage.new_rgba(width=1, height=1,
+                                ink=rgba(r=0, g=0, b=0, a=0))
+        self.assertEqual(self.storage.get_hash(image=image),
+                         long('f1d3ff8443297732862df21dc4e57262', base=16))
+
+    def test_save(self):
+        image = VImage.new_rgba(width=1, height=1,
+                                ink=rgba(r=0, g=0, b=0, a=0))
+        self.storage.save(x=0, y=1, z=2, image=image)
+        self.storage.save(x=1, y=0, z=2, image=image)
+        self.storage.waitall()
+        self.assertEqual(
+            [(z, x, y, intmd5(data))
+             for z, x, y, data in self.storage.mbtiles.all()],
+            [
+                (2, 0, 1, 89446660811628514001822794642426893173),
+                (2, 1, 0, 89446660811628514001822794642426893173),
+            ]
         )

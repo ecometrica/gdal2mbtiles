@@ -35,6 +35,16 @@ def makedirs(d, ignore_exists=False):
         raise
 
 
+def rmfile(path, ignore_missing=False):
+    """Like `os.remove`, but doesn't raise OSError if ignore_missing."""
+    try:
+        os.remove(path)
+    except OSError as e:
+        if ignore_missing and e.errno == errno.ENOENT:
+            return
+        raise
+
+
 def recursive_listdir(directory):
     """Generator of all files in `directory`, recursively."""
     for root, dirs, files in os.walk(directory):
