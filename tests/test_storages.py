@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import errno
 import os
 from shutil import rmtree
@@ -219,11 +221,6 @@ class TestMbtilesStorage(unittest.TestCase):
         self.assertEqual(storage.filename, self.tempfile.name)
         self.assertTrue(os.path.isfile(self.tempfile.name))
 
-    def test_open(self):
-        # Test opening a created file
-        # Test that the version is sensible
-        pass
-
     def test_get_hash(self):
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
@@ -231,14 +228,36 @@ class TestMbtilesStorage(unittest.TestCase):
                          long('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
+        # Transparent 1×1 image
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
+
+        # Save it twice, assuming that MBTiles will deduplicate
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
         self.storage.waitall()
+
+        # Assert that things were saved properly
         self.assertEqual(
             [(z, x, y, intmd5(data))
              for z, x, y, data in self.storage.mbtiles.all()],
+            [
+                (2, 0, 1, 89446660811628514001822794642426893173),
+                (2, 1, 0, 89446660811628514001822794642426893173),
+            ]
+        )
+
+        # Close the existing database.
+        self.storage.mbtiles.close()
+
+        # Re-open the created file
+        storage = MbtilesStorage(renderer=self.renderer,
+                                 filename=self.tempfile.name)
+
+        # Read out of the backend
+        self.assertEqual(
+            [(z, x, y, intmd5(data))
+             for z, x, y, data in storage.mbtiles.all()],
             [
                 (2, 0, 1, 89446660811628514001822794642426893173),
                 (2, 1, 0, 89446660811628514001822794642426893173),
