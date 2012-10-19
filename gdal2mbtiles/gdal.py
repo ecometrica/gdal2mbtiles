@@ -49,14 +49,19 @@ def check_output_gdal(*popenargs, **kwargs):
     return stdoutdata
 
 
-def preprocess(inputfile, outputfile, colours, band=None, spatial_ref=None,
+def preprocess(inputfile, outputfile, colours=None, band=None, spatial_ref=None,
                resampling=None, compress=None, **kwargs):
     functions = [
-        (lambda f: colourize(inputfile=f, colours=colours, band=band)),
         (lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
                         resampling=resampling)),
-        (lambda f: expand_colour_bands(inputfile=f)),
     ]
+    if colours is not None:
+        # Colourization should wrap the other functions
+        functions = (
+            [(lambda f: colourize(inputfile=f, colours=colours, band=band))] +
+            functions +
+            [(lambda f: expand_colour_bands(inputfile=f))]
+        )
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
 

@@ -5,7 +5,8 @@ import unittest
 
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
-from gdal2mbtiles.helpers import image_pyramid, image_slice
+from gdal2mbtiles.helpers import (image_pyramid, image_slice, warp_pyramid,
+                                  warp_slice)
 from gdal2mbtiles.renderers import TouchRenderer
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 
@@ -411,3 +412,138 @@ class TestImageSlice(unittest.TestCase):
             self.assertRaises(UnalignedInputError,
                               image_slice,
                               inputfile=self.spanningfile, outputdir=outputdir)
+
+
+class TestWarpPyramid(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+
+    def test_simple(self):
+        with NamedTemporaryDir() as outputdir:
+            warp_pyramid(inputfile=self.inputfile, outputdir=outputdir,
+                         min_resolution=0, max_resolution=3,
+                         renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+            self.assertEqual(
+                set(os.listdir(outputdir)),
+                set((
+                    '0-0-0-cc5cff96b5fbc19e6d234f000b82a8d7.png',
+                    '1-0-0-ac833511a7ce7ba2dd63128879cdcd90.png',
+                    '2-0-0-26ef4e5b789cdc0646ca111264851a62.png',
+                    '2-0-1-a760093093243edf3557fddff32eba78.png',
+                    '2-1-0-3a60adfe5e110f70397d518d0bebc5fd.png',
+                    '2-1-1-fd0f72e802c90f4c3a2cbe25b7975d1.png',
+                    '3-0-0-5cfd9f8d239c01c7a816fc176b823808.png',
+                    '3-0-1-71a71fa62271ba9cdf197c82c96495fd.png',
+                    '3-0-2-53da1178ad53283b4394825a6194d827.png',
+                    '3-0-3-84543ff0b0b91dafdb8c2ba62d417dd.png',
+                    '3-1-0-9462d7456892ff231eb037fc9f9baa3b.png',
+                    '3-1-1-dcb4c96902275a429384ec7187c4e819.png',
+                    '3-1-2-8efe17f1a59bcaadcf2b72370dc3efa8.png',
+                    '3-1-3-5e604384489ce40d2e91251f63fbf722.png',
+                    '3-2-0-3dd3751e549dfbac5aa3a2451e7f0e75.png',
+                    '3-2-1-392c904d35d27a514ca592e01ee7a446.png',
+                    '3-2-2-106a99af2a82c6b5c23bb211db647736.png',
+                    '3-2-3-be4603ecc03da7320c6c768351a7c2c3.png',
+                    '3-3-0-c778d9a8ddd29a2abd059ea943c3ae22.png',
+                    '3-3-1-b1b8c26a3b92ea48e76cc9b9c4d3b7fd.png',
+                    '3-3-2-e42b1d10e4330d57d9ac00ce29ba93d9.png',
+                    '3-3-3-cdf56e4dcf633d6d9bc1e2d5cfec11c3.png',
+                    # The following are the borders
+                    '1-0-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '1-1-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '1-1-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-0-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-0-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-0-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-0-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-1-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-1-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-1-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-1-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-2-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-2-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-2-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-2-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-3-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-3-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-3-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-3-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-4-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-5-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-6-7-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-4-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-5-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-6-ec87a838931d4d5d2e94a04644788a55.png',
+                    '3-7-7-ec87a838931d4d5d2e94a04644788a55.png',
+                ))
+            )
+
+
+class TestWarpSlice(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+
+    def test_simple(self):
+        with NamedTemporaryDir() as outputdir:
+            warp_slice(inputfile=self.inputfile, outputdir=outputdir,
+                       renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+            self.assertEqual(
+                set(os.listdir(outputdir)),
+                set((
+                    '2-0-0-26ef4e5b789cdc0646ca111264851a62.png',
+                    '2-0-1-a760093093243edf3557fddff32eba78.png',
+                    '2-0-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-0-3a60adfe5e110f70397d518d0bebc5fd.png',
+                    '2-1-1-fd0f72e802c90f4c3a2cbe25b7975d1.png',
+                    # The following are the borders
+                    '2-0-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-3-ec87a838931d4d5d2e94a04644788a55.png',
+                ))
+            )
