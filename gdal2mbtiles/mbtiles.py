@@ -2,6 +2,7 @@ from distutils.version import LooseVersion
 import errno
 import os
 import sqlite3
+from struct import pack, unpack
 from UserDict import DictMixin
 
 from .types import enum
@@ -434,7 +435,9 @@ class MBTiles(object):
         hashed: Integer hash of the raw image data, not compressed or encoded.
         data: Compressed and encoded image buffer.
         """
-        hashed = int(hashed % 2 ** 32)    # hashed is only an INTEGER
+        # tile_id must be a 64-bit signed integer, but hashing functions
+        # produce unsigned integers.
+        hashed = unpack('q', pack('Q', hashed & 0xffffffffffffffff))[0]
 
         with self._conn:
             if data is not None:
