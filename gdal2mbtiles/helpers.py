@@ -6,13 +6,13 @@ from tempfile import NamedTemporaryFile
 
 from .gdal import preprocess
 from .renderers import PngRenderer
-from .storages import SimpleFileStorage
+from .storages import NestedFileStorage, SimpleFileStorage
 from .vips import TmsPyramid
 
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None,
-                  renderer=None, hasher=None):
+                  renderer=None, hasher=None, storage=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -22,7 +22,7 @@ def image_pyramid(inputfile, outputdir,
     max_resolution: Maximum resolution to upsample tiles.
     hasher: Hashing function to use for image data.
 
-    Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
+    Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     may be created instead of rendering the same tile to PNG again.
@@ -32,7 +32,7 @@ def image_pyramid(inputfile, outputdir,
     """
     if renderer is None:
         renderer = PngRenderer()
-    storage = SimpleFileStorage(outputdir=outputdir,
+    storage = NestedFileStorage(outputdir=outputdir,
                                 renderer=renderer,
                                 hasher=hasher)
     pyramid = TmsPyramid(inputfile=inputfile,
@@ -92,7 +92,7 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
     max_resolution: Maximum resolution to upsample tiles.
     hasher: Hashing function to use for image data.
 
-    Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
+    Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
 
     If a tile duplicates another tile already known to this process, a symlink
     may be created instead of rendering the same tile to PNG again.
@@ -146,5 +146,5 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress=compress)
-        return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
-                             renderer=renderer, hasher=hasher)
+        return image_slice(inputfile=tempfile.name, outputdir=outputdir,
+                           renderer=renderer, hasher=hasher)
