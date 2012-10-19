@@ -37,6 +37,12 @@ class Storage(object):
             hasher = get_hasher()
         self.hasher = hasher
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        return
+
     def get_hash(self, image):
         """Returns the image content hash."""
         return self.hasher(image.tobuffer())
@@ -199,6 +205,9 @@ class MbtilesStorage(Storage):
         else:
             self.mbtiles = filename
             self.filename = self.mbtiles.filename
+
+    def __exit__(self, type, value, traceback):
+        self.mbtiles.close()
 
     @classmethod
     def create(cls, renderer, filename, metadata, version=None, tempdir=None,

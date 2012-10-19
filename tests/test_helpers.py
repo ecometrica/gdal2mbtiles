@@ -1,16 +1,44 @@
-from fnmatch import fnmatch
 import os
-import re
+from tempfile import NamedTemporaryFile
 import unittest
 
 from gdal2mbtiles.exceptions import UnalignedInputError
 from gdal2mbtiles.gdal import Dataset
-from gdal2mbtiles.helpers import (image_pyramid, image_slice, warp_pyramid,
-                                  warp_slice)
+from gdal2mbtiles.helpers import (image_mbtiles, image_pyramid, image_slice,
+                                  warp_mbtiles, warp_pyramid, warp_slice)
 from gdal2mbtiles.renderers import TouchRenderer
+from gdal2mbtiles.storages import MbtilesStorage
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 
 __dir__ = os.path.dirname(__file__)
+
+
+class TestImageMbtiles(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
+
+    def test_simple(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as outputfile:
+            metadata = dict(
+                name='bluemarble-aligned',
+                type='baselayer',
+                version='1.0.0',
+                description='BlueMarble 2004-07 Aligned',
+                format='png',
+            )
+            image_mbtiles(inputfile=self.inputfile, outputfile=outputfile.name,
+                          metadata=metadata,
+                          min_resolution=0, max_resolution=3,
+                          renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+            with MbtilesStorage(renderer=None,
+                                filename=outputfile.name) as storage:
+                self.assertEqual(
+                    set((z, x, y) for z, x, y, data in storage.mbtiles.all()),
+                    set([(0, 0, 0)] +
+                        [(1, x, y) for x in range(0, 2) for y in range(0, 2)] +
+                        [(2, x, y) for x in range(0, 4) for y in range(0, 4)] +
+                        [(3, x, y) for x in range(0, 8) for y in range(0, 8)])
+                )
 
 
 class TestImagePyramid(unittest.TestCase):
@@ -450,6 +478,34 @@ class TestImageSlice(unittest.TestCase):
             self.assertRaises(UnalignedInputError,
                               image_slice,
                               inputfile=self.spanningfile, outputdir=outputdir)
+
+
+class TestWarpMbtiles(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+
+    def test_simple(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as outputfile:
+            metadata = dict(
+                name='bluemarble-aligned',
+                type='baselayer',
+                version='1.0.0',
+                description='BlueMarble 2004-07 Aligned',
+                format='png',
+            )
+            warp_mbtiles(inputfile=self.inputfile, outputfile=outputfile.name,
+                         metadata=metadata,
+                         min_resolution=0, max_resolution=3,
+                         renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+            with MbtilesStorage(renderer=None,
+                                filename=outputfile.name) as storage:
+                self.assertEqual(
+                    set((z, x, y) for z, x, y, data in storage.mbtiles.all()),
+                    set([(0, 0, 0)] +
+                        [(1, x, y) for x in range(0, 2) for y in range(0, 2)] +
+                        [(2, x, y) for x in range(0, 4) for y in range(0, 4)] +
+                        [(3, x, y) for x in range(0, 8) for y in range(0, 8)])
+                )
 
 
 class TestWarpPyramid(unittest.TestCase):
