@@ -259,6 +259,8 @@ class Metadata_1_2(Metadata_1_1):
 class MBTiles(object):
     """Represents an MBTiles file."""
 
+    Metadata = Metadata
+
     # Pragmas for the SQLite connection
     _connection_options = {
         'auto_vacuum': 'NONE',
@@ -327,7 +329,7 @@ class MBTiles(object):
     def create(cls, filename, metadata, version=None):
         """Create a new MBTiles file. See `Metadata`"""
         if version is None:
-            version = Metadata._detect(keys=metadata.keys())
+            version = cls.Metadata._detect(keys=metadata.keys())
         mbtiles = cls._create(filename=filename, version=version)
         mbtiles.metadata._setup(metadata)
         return mbtiles
@@ -408,7 +410,7 @@ class MBTiles(object):
     @property
     def version(self):
         if self._version is None:
-            self._version = Metadata.detect(mbtiles=self)
+            self._version = self.Metadata.detect(mbtiles=self)
         return self._version
 
     @property
@@ -416,7 +418,7 @@ class MBTiles(object):
         """Returns a dictionary-like Metadata object."""
         if self._metadata is None:
             try:
-                M = Metadata.all()[self.version]
+                M = self.Metadata.all()[self.version]
             except KeyError:
                 raise UnknownVersionError(
                     'Unknown version {0}'.format(self._version)
