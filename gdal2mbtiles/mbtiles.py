@@ -125,9 +125,13 @@ class Metadata(object, DictMixin):
 
     @classmethod
     def _detect(cls, keys):
-        for version, M in sorted(cls.all().items()):
+        version = None
+        for ver, M in sorted(cls.all().items()):
             if set(keys).issuperset(set(M.MANDATORY)):
-                return version
+                version = ver
+        if version is None:
+            raise InvalidFileError("Invalid MBTiles file.")
+        return version
 
     @classmethod
     def detect(cls, mbtiles):
@@ -405,8 +409,6 @@ class MBTiles(object):
     def version(self):
         if self._version is None:
             self._version = Metadata.detect(mbtiles=self)
-        if self._version is None:
-            raise InvalidFileError("Invalid MBTiles file.")
         return self._version
 
     @property

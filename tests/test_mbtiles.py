@@ -226,7 +226,13 @@ class TestMetadata(unittest.TestCase):
         self.assertRaises(MetadataKeyError,
                           MBTiles.create, filename=self.filename, metadata={},
                           version=version)
-        metadata['description'] = 'Transparent World 2012'
+        metadata.update(dict(
+            description='Transparent World 2012',
+        ))
+
+        with MBTiles.create(filename=self.filename,
+                            metadata=metadata) as mbtiles:
+            self.assertEqual(mbtiles.version, version)
 
         with MBTiles.create(filename=self.filename,
                             metadata=metadata,
@@ -260,7 +266,10 @@ class TestMetadata(unittest.TestCase):
         self.assertRaises(MetadataKeyError,
                           MBTiles.create, filename=self.filename,
                           metadata=self.metadata, version=version)
-        metadata['format'] = Metadata.all()[version].FORMATS.PNG
+        metadata.update(dict(
+            format=Metadata.all()[version].FORMATS.PNG,
+            bounds='-180.0,-85,180,85',
+        ))
 
         with MBTiles.create(filename=self.filename,
                             metadata=metadata,
@@ -303,7 +312,15 @@ class TestMetadata(unittest.TestCase):
         self.assertRaises(MetadataKeyError,
                           MBTiles.create, filename=self.filename,
                           metadata=self.metadata, version=version)
-        metadata['format'] = Metadata.all()[version].FORMATS.PNG
+        metadata.update(dict(
+            format=Metadata.all()[version].FORMATS.PNG,
+            bounds='-180.0,-85,180,85',
+            attribution='Brought to you by the letter A and the number 1.',
+        ))
+
+        with MBTiles.create(filename=self.filename,
+                            metadata=metadata) as mbtiles:
+            self.assertEqual(mbtiles.version, version)
 
         with MBTiles.create(filename=self.filename,
                             metadata=metadata,
