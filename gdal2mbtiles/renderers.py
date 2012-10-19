@@ -35,7 +35,7 @@ class JpegRenderer(Renderer):
         """
         if image.Bands() > 3:
             # Strip out alpha channel, otherwise transparent pixels turn white.
-            image = image.extract_bands(0, 3)
+            image = image.extract_bands(band=0, nbands=3)
         image.vips2jpeg(filename)
         return filename
 
