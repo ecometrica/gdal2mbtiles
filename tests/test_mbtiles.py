@@ -77,19 +77,19 @@ class TestMBTiles(unittest.TestCase):
         hashed = hash(data)
 
         # Get missing tile
-        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), None)
+        self.assertEqual(mbtiles.get(x=0, y=0, z=0), None)
 
         # Insert tile
-        mbtiles.insert_tile(x=0, y=0, z=0, hashed=hashed, data=data)
+        mbtiles.insert(x=0, y=0, z=0, hashed=hashed, data=data)
 
         # Get inserted tile
-        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), data)
+        self.assertEqual(mbtiles.get(x=0, y=0, z=0), data)
 
         # Link tile
-        mbtiles.insert_tile(x=1, y=1, z=1, hashed=hashed)
+        mbtiles.insert(x=1, y=1, z=1, hashed=hashed)
 
         # Get linked tile
-        self.assertEqual(mbtiles.get_tile(x=1, y=1, z=1), data)
+        self.assertEqual(mbtiles.get(x=1, y=1, z=1), data)
 
     def test_out_of_order_tile(self):
         mbtiles = MBTiles.create(filename=self.filename,
@@ -99,16 +99,16 @@ class TestMBTiles(unittest.TestCase):
         hashed = hash(data)
 
         # Link tile to nonexistent data
-        mbtiles.insert_tile(x=1, y=1, z=1, hashed=hashed)
+        mbtiles.insert(x=1, y=1, z=1, hashed=hashed)
 
         # Get linked tile
-        self.assertEqual(mbtiles.get_tile(x=1, y=1, z=1), None)
+        self.assertEqual(mbtiles.get(x=1, y=1, z=1), None)
 
         # Add nonexistent data
-        mbtiles.insert_tile(x=0, y=0, z=0, hashed=hashed, data=data)
+        mbtiles.insert(x=0, y=0, z=0, hashed=hashed, data=data)
 
         # Get tile again
-        self.assertEqual(mbtiles.get_tile(x=1, y=1, z=1), data)
+        self.assertEqual(mbtiles.get(x=1, y=1, z=1), data)
 
     def test_autocommit(self):
         mbtiles = MBTiles.create(filename=self.filename,
@@ -118,12 +118,12 @@ class TestMBTiles(unittest.TestCase):
         hashed = hash(data)
 
         # Insert tile
-        mbtiles.insert_tile(x=0, y=0, z=0, hashed=hashed, data=data)
-        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), data)
+        mbtiles.insert(x=0, y=0, z=0, hashed=hashed, data=data)
+        self.assertEqual(mbtiles.get(x=0, y=0, z=0), data)
 
         # Reopen
         mbtiles.open()
-        self.assertEqual(mbtiles.get_tile(x=0, y=0, z=0), data)
+        self.assertEqual(mbtiles.get(x=0, y=0, z=0), data)
 
 
 class TestMetadata(unittest.TestCase):

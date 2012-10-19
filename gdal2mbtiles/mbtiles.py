@@ -127,7 +127,7 @@ class Metadata(object, DictMixin):
     def _detect(cls, mbtiles):
         keys = set(cls(mbtiles=mbtiles).keys())
         for version, M in sorted(cls.all().items()):
-            if M.set(keys).issuperset(set(M.MANDATORY)):
+            if set(keys).issuperset(set(M.MANDATORY)):
                 return version
 
     @classmethod
@@ -414,7 +414,7 @@ class MBTiles(object):
             self._metadata = M(mbtiles=self)
         return self._metadata
 
-    def insert_tile(self, x, y, z, hashed, data=None):
+    def insert(self, x, y, z, hashed, data=None):
         """
         Inserts a tile in the database at coordinates `x`, `y`, `z`.
 
@@ -445,7 +445,7 @@ class MBTiles(object):
                 {'x': x, 'y': y, 'z': z, 'hashed': hashed}
             )
 
-    def get_tile(self, x, y, z):
+    def get(self, x, y, z):
         """
         Returns the compressed image data at coordinates `x`, `y`, `z`.
 
