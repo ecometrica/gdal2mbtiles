@@ -300,6 +300,34 @@ class TestMetadata(unittest.TestCase):
             self.assertRaises(MetadataValueError,
                               metadata.__setitem__, 'format', 'invalid')
 
+            metadata['bounds'] = '-1,-1,1,1'
+            metadata['bounds'] = '-1.0,-1.0,1.0,1.0'
+            metadata['bounds'] = '-1.0,-1.0,1.0,1.0'
+            # left < -180
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-180.1,-1,1,1')
+            # bottom < -90
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-90.1,1,1')
+            # right > 180
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-1,180.1,1')
+            # top > 90
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-1,1,90.1')
+            # left == right
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '1,-1,1,1')
+            # left > right
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '1.1,-1,1,1')
+            # bottom == top
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,1,1,1')
+            # bottom > top
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,1.1,1,1')
+
     def test_validate_1_2(self):
         version = '1.2'
         metadata = dict(
@@ -350,6 +378,34 @@ class TestMetadata(unittest.TestCase):
             self.assertEqual(metadata['format'], 'jpg')
             self.assertRaises(MetadataValueError,
                               metadata.__setitem__, 'format', 'invalid')
+
+            metadata['bounds'] = '-1,-1,1,1'
+            metadata['bounds'] = '-1.0,-1.0,1.0,1.0'
+            metadata['bounds'] = '-1.0,-1.0,1.0,1.0'
+            # left < -180
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-180.1,-1,1,1')
+            # bottom < -90
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-90.1,1,1')
+            # right > 180
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-1,180.1,1')
+            # top > 90
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,-1,1,90.1')
+            # left == right
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '1,-1,1,1')
+            # left > right
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '1.1,-1,1,1')
+            # bottom == top
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,1,1,1')
+            # bottom > top
+            self.assertRaises(MetadataValueError,
+                              metadata.__setitem__, 'bounds', '-1,1.1,1,1')
 
     def test_autocommit(self):
         mbtiles = MBTiles.create(filename=self.filename,
