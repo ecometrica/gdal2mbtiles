@@ -368,6 +368,10 @@ class TestDataset(TestCase):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
 
+        # Whole world: (180°W, 90°S), (180°E, 90°N)
+        self.wgs84file = os.path.join(__dir__,
+                                      'bluemarble-wgs84.tif')
+
         # Aligned partial: (90°W, 42.5°S), (0°E, 0°N)
         self.alignedfile = os.path.join(__dir__,
                                         'bluemarble-aligned-ll.tif')
@@ -752,6 +756,19 @@ class TestDataset(TestCase):
         self.assertExtentsEqual(dataset.GetTmsExtents(),
                                 Extents(lower_left=XY(0, 0),
                                         upper_right=XY(4, 4)))
+        # At resolution 0, there's only one tile
+        self.assertExtentsEqual(dataset.GetTmsExtents(resolution=0),
+                                Extents(lower_left=XY(0, 0),
+                                        upper_right=XY(1, 1)))
+
+    def test_get_tms_extents_wgs84(self):
+        # Resolution 0, WGS 84 projection, there are only two tiles
+        dataset = Dataset(self.wgs84file)
+        self.assertExtentsEqual(
+            dataset.GetTmsExtents(resolution=0),
+            Extents(lower_left=XY(0, 0),
+                    upper_right=XY(2, 1))
+        )
 
     def test_get_tms_extents_aligned(self):
         dataset = Dataset(self.alignedfile)
@@ -765,8 +782,71 @@ class TestDataset(TestCase):
         self.assertRaises(UnalignedInputError,
                           dataset.GetTmsExtents)
 
+    def test_get_world_tms_extents(self):
+        # World extents are exactly the same as GetTmsExtents() for a
+        # whole-world file.
+        dataset = Dataset(self.inputfile)
+        # The whole world goes from 0 to 3 in both dimensions
+        self.assertExtentsEqual(dataset.GetWorldTmsExtents(),
+                                dataset.GetTmsExtents())
+        # At resolution 0, there's only one tile
+        self.assertExtentsEqual(dataset.GetWorldTmsExtents(resolution=0),
+                                dataset.GetTmsExtents(resolution=0))
 
-class TestSpatialReference(unittest.TestCase):
+    def test_get_world_tms_extents_wgs84(self):
+        dataset = Dataset(self.wgs84file)
+        # Resolution 0, WGS 84 projection, there are two tiles, one for
+        # longitudinal hemisphere
+        transform = dataset.GetCoordinateTransformation(
+            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
+        )
+        self.assertExtentsEqual(
+            dataset.GetWorldTmsExtents(transform=transform),
+            dataset.GetTmsExtents(transform=transform)
+        )
+
+    def test_get_world_tms_extents_partial(self):
+        world = Dataset(self.inputfile)
+        aligned = Dataset(self.alignedfile)
+        spanning = Dataset(self.spanningfile)
+        # The whole world should always match the self.inputfile's extents
+        self.assertExtentsEqual(aligned.GetWorldTmsExtents(),
+                                world.GetTmsExtents())
+        self.assertExtentsEqual(spanning.GetWorldTmsExtents(),
+                                world.GetTmsExtents())
+
+    def test_get_world_tms_borders(self):
+        # World extents have no borders
+        dataset = Dataset(self.inputfile)
+        self.assertEqual(list(dataset.GetWorldTmsBorders()),
+                         [])
+
+    def test_get_world_tms_borders_aligned(self):
+        # Aligned file should have borders marked as + below:
+        #      3,3
+        #   ++++
+        #   ++++
+        #   + ++
+        #   ++++
+        # 0,0
+        dataset = Dataset(self.alignedfile)
+
+        # At native resolution, every tile except for (1, 1)
+        self.assertEqual(set(dataset.GetWorldTmsBorders()),
+                         set(XY(x, y)
+                             for x in range(0, 4)
+                             for y in range(0, 4)
+                             if (x, y) != (1, 1)))
+
+        # At resolution 1, every tile except for (0, 0)
+        self.assertEqual(set(dataset.GetWorldTmsBorders(resolution=1)),
+                         set(XY(x, y)
+                             for x in range(0, 2)
+                             for y in range(0, 2)
+                             if (x, y) != (0, 0)))
+
+
+class TestSpatialReference(TestCase):
     def setUp(self):
         self.wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
 
@@ -803,6 +883,19 @@ class TestSpatialReference(unittest.TestCase):
         self.assertAlmostEqual(mercator.GetMinorCircumference(),
                                40075016.6856,
                                places=4)
+
+    def test_get_world_extents(self):
+        # Degrees
+        self.assertExtentsEqual(self.wgs84.GetWorldExtents(),
+                                Extents(lower_left=XY(-180.0, -90.0),
+                                        upper_right=XY(180.0, 90.0)))
+
+        # Meters
+        mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+        self.assertExtentsEqual(
+            mercator.GetWorldExtents(),
+            Extents(lower_left=XY(-20037508.3428, -20037508.3428),
+                    upper_right=XY(20037508.3428, 20037508.3428)))
 
     def test_pixel_dimensions_wgs84(self):
         # Resolution 0 covers a longitudinal hemisphere.

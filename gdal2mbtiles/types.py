@@ -36,6 +36,15 @@ _Extents = namedtuple('Extents', ['lower_left', 'upper_right'])
 
 
 class Extents(_Extents):
+    def __contains__(self, other):
+        if isinstance(other, type(self)):
+            # TODO: Support testing against own type
+            raise NotImplementedError()
+        elif isinstance(other, (tuple, list, XY)):
+            return (self.lower_left.x <= other[0] < self.upper_right.x and
+                    self.lower_left.y <= other[1] < self.upper_right.y)
+        raise TypeError("Can't handle {0!r}".format(other))
+
     def almost_equal(self, other, places=None, delta=None):
         return (self.lower_left.almost_equal(other.lower_left,
                                              places=places, delta=delta) and

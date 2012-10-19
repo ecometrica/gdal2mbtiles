@@ -323,7 +323,7 @@ class MBTiles(object):
                           for k, v in options.iteritems())
             )
         except sqlite3.DatabaseError:
-            raise InvalidFileError("Invalid MBTiles file.")
+            raise InvalidFileError("Invalid MBTiles file")
         return self._conn
 
     @classmethod

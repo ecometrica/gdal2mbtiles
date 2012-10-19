@@ -454,32 +454,45 @@ class Dataset(gdal.Dataset):
         bottom -= bottom % tile_height
         top += -top % tile_height
 
-        # FIXME: Ensure that the extents within the boundaries of the
-        # destination projection.
+        # Undo the correction.
+        left, bottom = spatial_ref.OffsetPoint(left, bottom, reverse=True)
+        right, top = spatial_ref.OffsetPoint(right, top, reverse=True)
+
+        # Ensure that the extents within the boundaries of the destination
+        # projection.
+        world_extents = spatial_ref.GetWorldExtents()
+        left = max(left, world_extents.lower_left.x)
+        bottom = max(bottom, world_extents.lower_left.y)
+        right = min(right, world_extents.upper_right.x)
+        top = min(top, world_extents.upper_right.y)
 
         # Undo the correction.
-        return Extents(
-            lower_left=spatial_ref.OffsetPoint(left, bottom, reverse=True),
-            upper_right=spatial_ref.OffsetPoint(right, top, reverse=True)
-        )
+        return Extents(lower_left=XY(left, bottom),
+                       upper_right=XY(right, top))
 
-    def GetTmsExtents(self):
+    def GetTmsExtents(self, resolution=None, transform=None):
         """
         Returns (lower-left, upper-right) TMS tile coordinates.
 
         The upper-right coordinates are excluded from the range, while the
         lower-left are included.
         """
-        resolution = self.GetNativeResolution()
+        if resolution is None:
+            resolution = self.GetNativeResolution()
 
-        spatial_ref = self.GetSpatialReference()
+        if transform is None:
+            spatial_ref = self.GetSpatialReference()
+        else:
+            spatial_ref = transform.dst_ref
+
         tile_width, tile_height = spatial_ref.GetTileDimensions(
             resolution=resolution
         )
 
         # Get the extents in the native projection.
-        extents = self.GetTiledExtents()
-        if not extents.almost_equal(self.GetExtents(), places=2):
+        extents = self.GetTiledExtents(transform=transform)
+        if not extents.almost_equal(self.GetExtents(transform=transform),
+                                    places=2):
             raise UnalignedInputError('Dataset is not aligned to TMS grid')
 
         # Correct for origin, because you can't do modular arithmetic on
@@ -492,6 +505,35 @@ class Dataset(gdal.Dataset):
                                      int(bottom / tile_height)),
                        upper_right=XY(int(right / tile_width),
                                       int(top / tile_height)))
+
+    def GetWorldTmsExtents(self, resolution=None, transform=None):
+        if resolution is None:
+            resolution = self.GetNativeResolution()
+
+        if transform is None:
+            spatial_ref = self.GetSpatialReference()
+        else:
+            spatial_ref = transform.dst_ref
+
+        world_tiles = spatial_ref.GetTilesCount(
+            extents=spatial_ref.GetWorldExtents(),
+            resolution=resolution
+        )
+        return Extents(lower_left=XY(0, 0),
+                       upper_right=world_tiles)
+
+    def GetWorldTmsBorders(self, resolution=None, transform=None):
+        """Returns an iterable of TMS tiles that are outside this Dataset."""
+        world_extents = self.GetWorldTmsExtents(resolution=resolution,
+                                                transform=transform)
+        data_extents = self.GetTmsExtents(resolution=resolution,
+                                          transform=transform)
+        return (XY(x, y)
+                for x in xrange(world_extents.lower_left.x,
+                                world_extents.upper_right.x)
+                for y in xrange(world_extents.lower_left.y,
+                                world_extents.upper_right.y)
+                if XY(x, y) not in data_extents)
 
 
 class SpatialReference(osr.SpatialReference):
@@ -533,6 +575,14 @@ class SpatialReference(osr.SpatialReference):
         if self.IsProjected() == 0:
             return 2 * pi / self.GetAngularUnits()
         return self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
+
+    def GetWorldExtents(self):
+        major = self.GetMajorCircumference() / 2
+        minor = self.GetMinorCircumference() / 2
+        if self.IsProjected() == 0:
+            minor /= 2
+        return Extents(lower_left=XY(-major, -minor),
+                       upper_right=XY(major, minor))
 
     def OffsetPoint(self, x, y, reverse=False):
         major_offset = self.GetMajorCircumference() / 2
