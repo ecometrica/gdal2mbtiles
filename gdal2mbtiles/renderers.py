@@ -18,8 +18,30 @@ class Renderer(object):
         raise NotImplementedError()
 
 
+class JpegRenderer(Renderer):
+    """
+    Render a VIPS image as a JPEG to filename.
+
+    Since JPEGs cannot contain transparent areas, the alpha channel is
+    discarded.
+    """
+    _suffix = '.jpeg'
+
+    def render(self, image, filename):
+        """
+        Renders the VIPS `image` to `filename`.
+
+        Returns the filename actually rendered to.
+        """
+        if image.Bands() > 3:
+            # Strip out alpha channel, otherwise transparent pixels turn white.
+            image = image.extract_bands(0, 3)
+        image.vips2jpeg(filename)
+        return filename
+
+
 class PngRenderer(Renderer):
-    """Render a VIPS image to filename."""
+    """Render a VIPS image as a PNG to filename."""
     _suffix = '.png'
 
     def render(self, image, filename):

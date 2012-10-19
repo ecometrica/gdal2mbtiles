@@ -75,6 +75,17 @@ class VImage(vipsCC.VImage.VImage):
             super(VImage, self).extract_area(left, top, width, height)
         )
 
+    def extract_bands(self, band, nbands):
+        """
+        Returns a new VImage with a reduced number of bands.
+
+        band: First band to extract.
+        nbands: Number of bands to extract.
+        """
+        return self.from_vimage(
+            super(VImage, self).extract_bands(band, nbands)
+        )
+
     def _scale(self, xscale, yscale):
         """
         Returns a new VImage that has been scaled by `xscale` and `yscale`.
