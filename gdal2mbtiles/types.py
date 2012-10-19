@@ -9,6 +9,12 @@ GdalFormat = namedtuple(typename='GdalFormat',
                                      'has_virtual_io'])
 
 
+def enum(**enums):
+    E = namedtuple(typename='enum',
+                   field_names=enums.keys())
+    return E(**enums)
+
+
 _rgba = namedtuple(typename='_rgba',
                    field_names=['r', 'g', 'b', 'a'])
 
