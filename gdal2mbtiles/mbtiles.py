@@ -124,14 +124,19 @@ class Metadata(object, DictMixin):
         self.update(metadata)
 
     @classmethod
-    def _detect(cls, mbtiles):
-        keys = set(cls(mbtiles=mbtiles).keys())
+    def _detect(cls, keys):
         for version, M in sorted(cls.all().items()):
             if set(keys).issuperset(set(M.MANDATORY)):
                 return version
 
     @classmethod
+    def detect(cls, mbtiles):
+        """Returns the Metadata version detected from `mbtiles`."""
+        return cls._detect(keys=cls(mbtiles=mbtiles).keys())
+
+    @classmethod
     def all(cls):
+        """Returns all Metadata classes."""
         if cls._all is None:
             def subclasses(base):
                 for m in base.__subclasses__():
@@ -145,6 +150,7 @@ class Metadata(object, DictMixin):
 
     @classmethod
     def latest(cls):
+        """Returns the latest Metadata class."""
         return sorted(cls.all().items(),
                       key=(lambda k: LooseVersion(k[0])),
                       reverse=True)[0][1]
@@ -316,6 +322,8 @@ class MBTiles(object):
     @classmethod
     def create(cls, filename, metadata, version=None):
         """Create a new MBTiles file. See `Metadata`"""
+        if version is None:
+            version = Metadata._detect(keys=metadata.keys())
         mbtiles = cls._create(filename=filename, version=version)
         mbtiles.metadata._setup(metadata)
         return mbtiles
@@ -396,7 +404,7 @@ class MBTiles(object):
     @property
     def version(self):
         if self._version is None:
-            self._version = Metadata._detect(mbtiles=self)
+            self._version = Metadata.detect(mbtiles=self)
         if self._version is None:
             raise InvalidFileError("Invalid MBTiles file.")
         return self._version

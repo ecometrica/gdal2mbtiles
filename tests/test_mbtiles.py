@@ -1,3 +1,4 @@
+import errno
 import os
 from tempfile import NamedTemporaryFile
 import unittest
@@ -19,7 +20,11 @@ class TestMBTiles(unittest.TestCase):
         )
 
     def tearDown(self):
-        self.tempfile.close()
+        try:
+            self.tempfile.close()
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
 
     def test_open(self):
         with MBTiles.create(filename=self.filename,
@@ -28,6 +33,9 @@ class TestMBTiles(unittest.TestCase):
             pass
 
         mbtiles = MBTiles(filename=self.filename)
+
+        # Version detection
+        self.assertEqual(mbtiles.version, self.version)
 
         # File are auto-opened
         self.assertFalse(mbtiles.closed)
@@ -68,6 +76,11 @@ class TestMBTiles(unittest.TestCase):
         self.assertFalse(mbtiles2.closed)
 
         self.assertNotEqual(mbtiles1, mbtiles2)
+
+        # Create without version
+        mbtiles3 = MBTiles.create(filename=self.filename,
+                                  metadata=self.metadata)
+        self.assertEqual(mbtiles3.version, '1.0')
 
     def test_tiles(self):
         mbtiles = MBTiles.create(filename=self.filename,
@@ -139,7 +152,11 @@ class TestMetadata(unittest.TestCase):
         )
 
     def tearDown(self):
-        self.tempfile.close()
+        try:
+            self.tempfile.close()
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
 
     def test_simple(self):
         mbtiles = MBTiles.create(filename=self.filename,
