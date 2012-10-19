@@ -772,9 +772,18 @@ class TestDataset(TestCase):
 
     def test_get_tms_extents_aligned(self):
         dataset = Dataset(self.alignedfile)
+        # At native resolution, should only occupy its own tile
         self.assertExtentsEqual(dataset.GetTmsExtents(),
                                 Extents(lower_left=XY(1, 1),
                                         upper_right=XY(2, 2)))
+        # At resolution 1, should only occupy lower-left quadrant
+        self.assertExtentsEqual(dataset.GetTmsExtents(resolution=1),
+                                Extents(lower_left=XY(0, 0),
+                                        upper_right=XY(1, 1)))
+        # At resolution 0, should cover whole world
+        self.assertExtentsEqual(dataset.GetTmsExtents(resolution=0),
+                                Extents(lower_left=XY(0, 0),
+                                        upper_right=XY(1, 1)))
 
     def test_get_tms_extents_spanning(self):
         # This should fail because the input file is not tile aligned.

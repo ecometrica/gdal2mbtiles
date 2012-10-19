@@ -97,6 +97,32 @@ class TestSimpleFileStorage(unittest.TestCase):
         self.assertEqual(os.readlink(os.path.join(subdir, dst)),
                          os.path.join(os.path.pardir, src))
 
+    def test_save_border(self):
+        # Western hemisphere is border
+        self.storage.save_border(x=0, y=0, z=1)
+        self.storage.save_border(x=0, y=1, z=1)
+        self.storage.waitall()
+        self.assertEqual(set(os.listdir(self.outputdir)),
+                         set([
+                             '1-0-0-ec87a838931d4d5d2e94a04644788a55.png',
+                             '1-0-1-ec87a838931d4d5d2e94a04644788a55.png',
+                         ]))
+
+        # Is this a real file?
+        self.assertFalse(
+            os.path.islink(os.path.join(
+                self.outputdir, '1-0-0-ec87a838931d4d5d2e94a04644788a55.png'
+            ))
+        )
+
+        # Does the symlinking work?
+        self.assertEqual(
+            os.readlink(os.path.join(
+                self.outputdir, '1-0-1-ec87a838931d4d5d2e94a04644788a55.png'
+            )),
+            '1-0-0-ec87a838931d4d5d2e94a04644788a55.png'
+        )
+
 
 class TestNestedFileStorage(unittest.TestCase):
     def setUp(self):
@@ -176,6 +202,44 @@ class TestNestedFileStorage(unittest.TestCase):
         self.assertEqual(
             os.readlink(os.path.join(self.outputdir, '3', '1', '0.png')),
             os.path.join(os.path.pardir, os.path.pardir, '2', '0', '1.png')
+        )
+
+    def test_save_border(self):
+        # Western hemisphere is border
+        self.storage.save_border(x=0, y=0, z=1)
+        self.storage.save_border(x=0, y=1, z=1)
+        self.storage.save_border(x=0, y=1, z=2)
+        self.storage.waitall()
+        self.assertEqual(set(recursive_listdir(self.outputdir)),
+                         set([
+                             '1/',
+                             '1/0/',
+                             '1/0/0.png',
+                             '1/0/1.png',
+                             '2/',
+                             '2/0/',
+                             '2/0/1.png',
+                         ]))
+
+        # Is this a real file?
+        self.assertFalse(
+            os.path.islink(os.path.join(
+                self.outputdir, '1/0/0.png'
+            ))
+        )
+
+        # Does the symlinking work?
+        self.assertEqual(
+            os.readlink(os.path.join(
+                self.outputdir, '1/0/1.png'
+            )),
+            '0.png'
+        )
+        self.assertEqual(
+            os.readlink(os.path.join(
+                self.outputdir, '2/0/1.png'
+            )),
+            os.path.join(os.path.pardir, os.path.pardir, '1', '0', '0.png')
         )
 
 
@@ -261,5 +325,21 @@ class TestMbtilesStorage(unittest.TestCase):
             [
                 (2, 0, 1, 89446660811628514001822794642426893173),
                 (2, 1, 0, 89446660811628514001822794642426893173),
+            ]
+        )
+
+    def test_save_border(self):
+        # Western hemisphere is border
+        self.storage.save_border(x=0, y=0, z=1)
+        self.storage.save_border(x=0, y=1, z=1)
+        self.storage.waitall()
+
+        # Assert that things were saved properly
+        self.assertEqual(
+            [(z, x, y, intmd5(data))
+             for z, x, y, data in self.storage.mbtiles.all()],
+            [
+                (1, 0, 0, 182760986852492185208562855341207287999),
+                (1, 0, 1, 182760986852492185208562855341207287999),
             ]
         )

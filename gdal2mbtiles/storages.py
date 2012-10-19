@@ -7,9 +7,12 @@ from functools import partial
 import os
 from tempfile import gettempdir, NamedTemporaryFile
 
+from .constants import TILE_SIDE
 from .mbtiles import MBTiles
 from .pool import Pool
+from .types import rgba
 from .utils import get_hasher, makedirs, rmfile
+from .vips import VImage
 
 
 class Storage(object):
@@ -46,6 +49,16 @@ class Storage(object):
         """Saves `image` at coordinates `x`, `y`, and `z`."""
         raise NotImplementedError()
 
+    def save_border(self, x, y, z):
+        """Saves a border image at coordinates `x`, `y`, and `z`."""
+        self.save(x=x, y=y, z=z, image=self._border_image())
+
+    @classmethod
+    def _border_image(cls, width=TILE_SIDE, height=TILE_SIDE):
+        """Returns a border image suitable for borders."""
+        return VImage.new_rgba(width=width, height=height,
+                               ink=rgba(r=0, g=0, b=0, a=0))
+
     def waitall(self):
         """Waits until all saves are finished."""
         self.pool.join()
@@ -69,7 +82,8 @@ class SimpleFileStorage(Storage):
                                                 **kwargs)
         if seen is None:
             seen = {}
-            self.seen = seen
+        self.seen = seen
+        self._border_hashed = None
 
         self.outputdir = outputdir
         makedirs(self.outputdir, ignore_exists=True)
@@ -100,6 +114,17 @@ class SimpleFileStorage(Storage):
         srcpath = os.path.relpath(abssrc,
                                   start=os.path.dirname(absdst))
         os.symlink(srcpath, absdst)
+
+    def save_border(self, x, y, z):
+        """Saves a border image at coordinates `x`, `y`, and `z`."""
+        if self._border_hashed is None:
+            image = self._border_image()
+            self.save(x=x, y=y, z=z, image=image)
+            self._border_hashed = self.get_hash(image)
+        else:
+            # self._border_hashed will already be in self.seen
+            filepath = self.filepath(x=x, y=y, z=z, hashed=self._border_hashed)
+            self.symlink(src=self.seen[self._border_hashed], dst=filepath)
 
 
 class NestedFileStorage(SimpleFileStorage):
@@ -136,6 +161,11 @@ class NestedFileStorage(SimpleFileStorage):
         self.makedirs(x=x, y=y, z=z)
         return super(NestedFileStorage, self).save(x=x, y=y, z=z, image=image)
 
+    def save_border(self, x, y, z):
+        """Saves a border image at coordinates `x`, `y`, and `z`."""
+        self.makedirs(x=x, y=y, z=z)
+        return super(NestedFileStorage, self).save_border(x=x, y=y, z=z)
+
 
 class MbtilesStorage(Storage):
     """
@@ -157,6 +187,7 @@ class MbtilesStorage(Storage):
         if seen is None:
             seen = set()
         self.seen = seen
+        self._border_hashed = None
 
         if tempdir is None:
             tempdir = gettempdir()
@@ -230,3 +261,13 @@ class MbtilesStorage(Storage):
             if filename != tempfile.name:
                 rmfile(filename, ignore_missing=True)
         return callback
+
+    def save_border(self, x, y, z):
+        """Saves a border image at coordinates `x`, `y`, and `z`."""
+        if self._border_hashed is None:
+            image = self._border_image()
+            self.save(x=x, y=y, z=z, image=image)
+            self._border_hashed = self.get_hash(image)
+        else:
+            # self._border_hashed will already be inserted
+            self.mbtiles.insert(x=x, y=y, z=z, hashed=self._border_hashed)

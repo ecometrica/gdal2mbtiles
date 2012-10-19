@@ -97,6 +97,25 @@ class TestImagePyramid(unittest.TestCase):
                     '0-0-0-a20bf623a6e62ebf4417aba45868ba60.png',
                     '1-0-0-30befce37c5f3569426ab0043c80f28d.png',
                     '2-1-1-99c4a766657c5b65a62ef7da9906508b.png',
+                    # The following are the borders
+                    '1-0-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '1-1-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '1-1-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-3-ec87a838931d4d5d2e94a04644788a55.png',
                 ))
             )
 
@@ -368,6 +387,22 @@ class TestImageSlice(unittest.TestCase):
                 files,
                 set((
                     '2-1-1-99c4a766657c5b65a62ef7da9906508b.png',
+                    # The following are the borders
+                    '2-0-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-0-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-1-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-2-3-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-0-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-1-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-2-ec87a838931d4d5d2e94a04644788a55.png',
+                    '2-3-3-ec87a838931d4d5d2e94a04644788a55.png',
                 ))
             )
 

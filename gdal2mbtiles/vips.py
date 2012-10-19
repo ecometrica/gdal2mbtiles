@@ -252,6 +252,10 @@ class TmsTiles(object):
         """Returns the height of self.image in pixels."""
         return self.image.Ysize()
 
+    def fill_borders(self, borders, resolution):
+        for x, y in borders:
+            self.storage.save_border(x=x, y=y, z=resolution)
+
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
         with self.image.disable_warnings():
@@ -410,6 +414,10 @@ class TmsPyramid(object):
             # downsampled results.
             for res in reversed(range(min_resolution, self.resolution)):
                 tiles = tiles.downsample()
+                tiles.fill_borders(
+                    borders=self.dataset.GetWorldTmsBorders(resolution=res),
+                    resolution=res
+                )
                 tiles._slice()
 
     def slice_native(self):
@@ -421,6 +429,12 @@ class TmsPyramid(object):
                                   tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                                   offset=offset.lower_left,
                                   resolution=self.resolution)
+            tiles.fill_borders(
+                borders=self.dataset.GetWorldTmsBorders(
+                    resolution=self.resolution
+                ),
+                resolution=self.resolution
+            )
             tiles._slice()
             return tiles
 
@@ -430,6 +444,10 @@ class TmsPyramid(object):
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
                 upsampled = tiles.upsample(levels=(res - self.resolution))
+                upsampled.fill_borders(
+                    borders=self.dataset.GetWorldTmsBorders(resolution=res),
+                    resolution=res
+                )
                 upsampled._slice()
 
     def slice(self):

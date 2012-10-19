@@ -489,7 +489,7 @@ class Dataset(gdal.Dataset):
             resolution=resolution
         )
 
-        # Get the extents in the native projection.
+        # Validate that the native resolution extents are tile-aligned.
         extents = self.GetTiledExtents(transform=transform)
         if not extents.almost_equal(self.GetExtents(transform=transform),
                                     places=2):
@@ -497,6 +497,8 @@ class Dataset(gdal.Dataset):
 
         # Correct for origin, because you can't do modular arithmetic on
         # half-tiles.
+        extents = self.GetTiledExtents(transform=transform,
+                                       resolution=resolution)
         left, bottom = spatial_ref.OffsetPoint(*extents.lower_left)
         right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
