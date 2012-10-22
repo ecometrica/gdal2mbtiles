@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from collections import defaultdict
 from functools import partial
 import os
-from tempfile import gettempdir
 
 from .constants import TILE_SIDE
 from .mbtiles import MBTiles
@@ -188,7 +187,7 @@ class MbtilesStorage(Storage):
 
     http://mapbox.com/developers/mbtiles/
     """
-    def __init__(self, renderer, filename, seen=None, tempdir=None, **kwargs):
+    def __init__(self, renderer, filename, seen=None, **kwargs):
         """
         Initializes storage.
 
@@ -204,10 +203,6 @@ class MbtilesStorage(Storage):
         self.seen = seen
         self._border_hashed = None
 
-        if tempdir is None:
-            tempdir = gettempdir()
-        self.tempdir = tempdir
-
         if isinstance(filename, basestring):
             self.filename = filename
             self.mbtiles = MBTiles(filename=filename)
@@ -219,8 +214,7 @@ class MbtilesStorage(Storage):
         self.mbtiles.close()
 
     @classmethod
-    def create(cls, renderer, filename, metadata, version=None, tempdir=None,
-               **kwargs):
+    def create(cls, renderer, filename, metadata, version=None, **kwargs):
         """
         Creates a new MBTiles file.
 
@@ -246,7 +240,6 @@ class MbtilesStorage(Storage):
                                  version=version)
         return cls(renderer=renderer,
                    filename=mbtiles,
-                   tempdir=tempdir,
                    **kwargs)
 
     def save(self, x, y, z, image):
