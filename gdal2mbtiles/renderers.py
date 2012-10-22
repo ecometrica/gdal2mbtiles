@@ -4,7 +4,7 @@ from __future__ import absolute_import
 
 import os
 from subprocess import check_call
-from tempfile import NamedTemporaryFile
+from tempfile import gettempdir, NamedTemporaryFile
 
 from .utils import rmfile
 
@@ -12,10 +12,14 @@ from .utils import rmfile
 class Renderer(object):
     _suffix = ''
 
-    def __init__(self, suffix=None):
+    def __init__(self, suffix=None, tempdir=None):
         if suffix is None:
             suffix = self.__class__._suffix
         self.suffix = suffix
+
+        if tempdir is None:
+            tempdir = gettempdir()
+        self.tempdir = tempdir
 
     def __str__(self):
         return 'Renderer(suffix={suffix!r})'.format(**self.__dict__)
@@ -67,7 +71,8 @@ class JpegRenderer(Renderer):
         if image.Bands() > 3:
             # Strip out alpha channel, otherwise transparent pixels turn white.
             image = image.extract_bands(band=0, nbands=3)
-        with NamedTemporaryFile(suffix=self.suffix) as tempfile:
+        with NamedTemporaryFile(suffix=self.suffix,
+                                dir=self.tempdir) as tempfile:
             image.vips2jpeg(tempfile.name + self._options)
             return tempfile.read()
 
@@ -137,7 +142,8 @@ class PngRenderer(Renderer):
 
     def render(self, image):
         """Returns the rendered VIPS `image`."""
-        with NamedTemporaryFile(suffix=self.suffix) as rendered:
+        with NamedTemporaryFile(suffix=self.suffix,
+                                dir=self.tempdir) as rendered:
             image.vips2png(rendered.name + self._vips_options)
             filename = rendered.name
 
