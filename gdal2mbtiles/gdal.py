@@ -670,6 +670,7 @@ class VRT(object):
                     '-multi',               # Use multiple processes
                     '-overwrite',           # Overwrite outputfile
                     '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
+                    '-wo', 'NUM_THREADS=ALL_CPUS',  # Use all CPUs
                 ]
 
                 # Set the working memory so that gdalwarp doesn't stall of disk
