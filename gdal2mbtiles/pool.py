@@ -1,7 +1,6 @@
 from collections import deque
 from functools import wraps
-from multiprocessing import cpu_count, Process, Queue, TimeoutError
-from Queue import Empty as QueueEmpty
+from multiprocessing import cpu_count, Pipe, Process, TimeoutError
 from select import select
 import sys
 import traceback
@@ -44,37 +43,34 @@ class ApplyResult(object):
 
         self._pool = pool
         self._process = None
-        self._queue = Queue()
+        self._pipe = None
         self._success = None
         self._result = None
 
     @classmethod
-    def select(cls, rlist=[], wlist=[], timeout=None):
+    def select(cls, rlist=[], timeout=None):
         """
-        Like select(), returns (rready, wready) tuple of ApplyResults.
+        Like select(), returns rready of ApplyResults.
 
         rlist is an iterable of ApplyResult objects that should be ready for
-        reading. wlist is the same, but for writing.
+        reading.
 
         If timeout is None, blocks until one of the ApplyResult objects is
         ready. Otherwise, it is time in seconds.
 
         rready is a list of ApplyResult objects that are ready for
-        reading. wready is the same for writing.
+        reading.
         """
         rready, wready, xready = select(
-            [e._queue._reader for e in rlist],
-            [e._queue._writer for e in wlist],
+            [e._pipe for e in rlist],
+            [],
             [],
             timeout
         )
         if rready:
-            rdict = dict((e._queue._reader, e) for e in rlist)
+            rdict = dict((e._pipe, e) for e in rlist)
             rready = [rdict[f] for f in rready]
-        if wready:
-            wdict = dict((e._queue._writer, e) for e in rlist)
-            wready = [wdict[f] for f in wready]
-        return (rready, wready)
+        return rready
 
     def ready(self):
         """Returns True if worker has finished."""
@@ -90,11 +86,13 @@ class ApplyResult(object):
         if self.ready():
             return
 
-        block = False if timeout == 0 else True
-        try:
-            response = self._queue.get(block=block, timeout=timeout)
-        except QueueEmpty:
+        if not self._pipe.poll(timeout):  # If timeout is None, then block.
             return
+        try:
+            response = self._pipe.recv()
+        except EOFError:
+            return
+
         self._success, self._result = response
         self._process.join()
         self._ready = True
@@ -120,27 +118,28 @@ class ApplyResult(object):
 
     def _run(self):
         """Starts a worker for this result."""
-        target = self._target(target=self.func, queue=self._queue)
+        self._pipe, sender = Pipe(duplex=False)
+        target = self._target(target=self.func, pipe=sender)
         self._process = Process(target=target,
                                 args=self.args, kwargs=self.kwds)
         self._process.start()
         return self._process
 
     @staticmethod
-    def _target(target, queue):
+    def _target(target, pipe):
         """
         Decorator to wrap `target`` to return results or Exceptions in `queue`.
         """
         @wraps(target)
         def wrapped(*args, **kwargs):
             try:
-                queue.put((True, target(*args, **kwargs)))
+                pipe.send((True, target(*args, **kwargs)))
             except Exception:
                 # Exception may be unpickleable, so we have to wrap it in
                 # things that are. It will get unpacked in self.get() as a
                 # ChildException
                 exc_type, exc_value, exc_traceback = sys.exc_info()
-                queue.put((False, (exc_type, repr(exc_value), str(exc_value),
+                pipe.send((False, (exc_type, repr(exc_value), str(exc_value),
                                    traceback.format_tb(exc_traceback))))
         return wrapped
 
@@ -181,7 +180,7 @@ class Pool(object):
     def _maintain(self, timeout):
         """Cleanup any exited workers and start replacements for them."""
         # Collect dead processes
-        ready = ApplyResult.select(rlist=self._pool, timeout=timeout)[0]
+        ready = ApplyResult.select(rlist=self._pool, timeout=timeout)
         for apply_result in ready:
             apply_result._wait(timeout=0, maintain_pool=False)
             self._pool.remove(apply_result)
