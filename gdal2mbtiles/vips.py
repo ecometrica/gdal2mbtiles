@@ -21,6 +21,11 @@ class LibVips(object):
         self.libvips = cdll.LoadLibrary('libvips.so.{0}'.format(version))
         self.functions = {}
 
+    @classmethod
+    def disable_warnings(cls):
+        """Context manager to disable VIPS warnings."""
+        return tempenv('IM_WARNING', '0')
+
     def get_concurrency(self):
         """Returns the number of threads used for computations."""
         return c_int.in_dll(self.libvips, 'vips__concurrency').value
@@ -89,11 +94,6 @@ class VImage(vipsCC.VImage.VImage):
     def draw_rect(self, left, top, width, height, fill, ink):
         return super(VImage, self).draw_rect(left, top, width, height,
                                              int(fill), ink)
-
-    @classmethod
-    def disable_warnings(cls):
-        """Context manager to disable VIPS warnings."""
-        return tempenv('IM_WARNING', '0')
 
     def embed(self, fill, left, top, width, height):
         """Returns a new VImage with this VImage embedded within it."""
@@ -294,7 +294,7 @@ class TmsTiles(object):
 
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
-        with self.image.disable_warnings():
+        with LibVips.disable_warnings():
             for y in xrange(0, self.image_height, self.tile_height):
                 for x in xrange(0, self.image_width, self.tile_width):
                     out = self.image.extract_area(
@@ -318,7 +318,7 @@ class TmsTiles(object):
         If a tile duplicates another tile already known to this process, a
         symlink is created instead of rendering the same tile to PNG again.
         """
-        with self.image.disable_warnings():
+        with LibVips.disable_warnings():
             if self.image_width % self.tile_width != 0:
                 raise ValueError('image width {0!r} does not contain a whole '
                                  'number of tiles of width {1!r}'.format(
@@ -445,7 +445,7 @@ class TmsPyramid(object):
 
     def slice_downsample(self, tiles, min_resolution):
         """Downsamples the input TmsTiles down to min_resolution and slices."""
-        with VImage.disable_warnings():
+        with LibVips.disable_warnings():
             # Downsampling one zoom level at a time, using the previous
             # downsampled results.
             for res in reversed(range(min_resolution, self.resolution)):
@@ -458,7 +458,7 @@ class TmsPyramid(object):
 
     def slice_native(self):
         """Slices the input image at native resolution."""
-        with VImage.disable_warnings():
+        with LibVips.disable_warnings():
             offset = self.dataset.GetTmsExtents()
             tiles = self.TmsTiles(image=self.image,
                                   storage=self.storage,
@@ -476,7 +476,7 @@ class TmsPyramid(object):
 
     def slice_upsample(self, tiles, max_resolution):
         """Upsamples the input TmsTiles up to max_resolution and slices."""
-        with VImage.disable_warnings():
+        with LibVips.disable_warnings():
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
                 upsampled = tiles.upsample(levels=(res - self.resolution))
