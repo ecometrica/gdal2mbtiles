@@ -2,6 +2,8 @@
 
 from __future__ import absolute_import
 
+from tempfile import NamedTemporaryFile
+
 
 class Renderer(object):
     _suffix = ''
@@ -27,7 +29,7 @@ class JpegRenderer(Renderer):
     """
     _suffix = '.jpeg'
 
-    def render(self, image, filename):
+    def render(self, image):
         """
         Renders the VIPS `image` to `filename`.
 
@@ -36,29 +38,30 @@ class JpegRenderer(Renderer):
         if image.Bands() > 3:
             # Strip out alpha channel, otherwise transparent pixels turn white.
             image = image.extract_bands(band=0, nbands=3)
-        image.vips2jpeg(filename)
-        return filename
+        with NamedTemporaryFile(suffix='.jpg') as tempfile:
+            image.vips2jpeg(tempfile.name)
+            return tempfile.read()
 
 
 class PngRenderer(Renderer):
     """Render a VIPS image as a PNG to filename."""
     _suffix = '.png'
 
-    def render(self, image, filename):
+    def render(self, image):
         """
         Renders the VIPS `image` to `filename`.
 
         Returns the filename actually rendered to.
         """
-        image.vips2png(filename)
-        return filename
+        with NamedTemporaryFile(suffix='.png') as tempfile:
+            image.vips2png(tempfile.name)
+            return tempfile.read()
 
 
 class TouchRenderer(Renderer):
     """For testing only. Only creates files, doesn't actually render."""
     _suffix = ''
 
-    def render(self, image, filename):
+    def render(self, image):
         """Touches `filename` and returns its value."""
-        open(filename, mode='w').close()
-        return filename
+        return ''

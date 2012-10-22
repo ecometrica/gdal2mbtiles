@@ -5,13 +5,13 @@ from __future__ import absolute_import
 from collections import defaultdict
 from functools import partial
 import os
-from tempfile import gettempdir, NamedTemporaryFile
+from tempfile import gettempdir
 
 from .constants import TILE_SIDE
 from .mbtiles import MBTiles
 from .pool import Pool
 from .types import rgba
-from .utils import get_hasher, makedirs, rmfile
+from .utils import get_hasher, makedirs
 from .vips import VImage
 
 
@@ -109,9 +109,18 @@ class SimpleFileStorage(Storage):
             self.seen[hashed] = filepath
             self.pool.apply_async(
                 func=self.renderer.render,
-                kwds=dict(image=image,
-                          filename=os.path.join(self.outputdir, filepath))
+                kwds=dict(image=image),
+                callback=self._make_callback(
+                    outputfile=os.path.join(self.outputdir, filepath)
+                )
             )
+
+    def _make_callback(self, outputfile):
+        """Returns a callback that saves the rendered image."""
+        def callback(contents):
+            with open(outputfile, 'wb') as output:
+                output.write(contents)
+        return callback
 
     def symlink(self, src, dst):
         """Creates a relative symlink from dst to src."""
@@ -247,28 +256,18 @@ class MbtilesStorage(Storage):
             self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed)
         else:
             self.seen.add(hashed)
-            tempfile = NamedTemporaryFile(dir=self.tempdir,
-                                          suffix=self.renderer.suffix)
             self.pool.apply_async(
                 func=self.renderer.render,
-                kwds=dict(image=image,
-                          filename=tempfile.name),
-                callback=self._make_callback(x=x, y=y, z=z, hashed=hashed,
-                                             tempfile=tempfile),
+                kwds=dict(image=image),
+                callback=self._make_callback(x=x, y=y, z=z, hashed=hashed)
             )
 
-    def _make_callback(self, x, y, z, hashed, tempfile):
+    def _make_callback(self, x, y, z, hashed):
         """Returns a callback that saves the rendered image."""
-        def callback(filename):
+        def callback(contents):
             # Insert the rendered file into the database
-            with open(filename) as output:
-                self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed,
-                                    data=buffer(output.read()))
-            # Delete tempfile
-            tempfile.close()
-            # Delete the rendered file if it wasn't tempfile
-            if filename != tempfile.name:
-                rmfile(filename, ignore_missing=True)
+            self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed,
+                                data=buffer(contents))
         return callback
 
     def save_border(self, x, y, z):
