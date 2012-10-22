@@ -248,7 +248,7 @@ class TestMbtilesStorage(unittest.TestCase):
         self.tempfile = NamedTemporaryFile()
         # Use the PngRenderer because we want to know that callback
         # works properly.
-        self.renderer = PngRenderer()
+        self.renderer = PngRenderer(png8=False, optimize=False)
         self.metadata = dict(
             name='transparent',
             type=Metadata.latest().TYPES.BASELAYER,

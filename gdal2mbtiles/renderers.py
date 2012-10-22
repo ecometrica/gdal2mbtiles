@@ -2,7 +2,11 @@
 
 from __future__ import absolute_import
 
+import os
+from subprocess import check_call
 from tempfile import NamedTemporaryFile
+
+from .utils import rmfile
 
 
 class Renderer(object):
@@ -39,7 +43,9 @@ class JpegRenderer(Renderer):
         _compression = int(compression)
         if not 0 <= _compression <= 100:
             raise ValueError(
-                'compression must be between 0 and 100: {0}'.format(compression)
+                'compression must be between 0 and 100: {0!r}'.format(
+                    compression
+                )
             )
         self.compression = _compression
 
@@ -72,26 +78,58 @@ class PngRenderer(Renderer):
 
     compression: PNG compression level. Default 6.
     interlace: Use ADAM7 interlacing. Default False.
+    png8: Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs. Default False.
+          If an integer, specifies number of colours in palette.
+          If True, defaults to 256 colours.
+    optimize: Optimizes PNG using optipng. Default 2. See `optipng -h`.
     suffix: Suffix for filename. Default '.png'.
     """
     _suffix = '.png'
 
-    def __init__(self, compression=None, interlace=None, **kwargs):
+    PNGQUANT = 'pngquant'
+    OPTIPNG = 'optipng'
+
+    def __init__(self, compression=None, interlace=None, png8=None,
+                 optimize=None, **kwargs):
         if compression is None:
             compression = 6
         _compression = int(compression)
         if not 0 <= _compression <= 9:
             raise ValueError(
-                'compression must be between 0 and 9: {0}'.format(compression)
+                'compression must be between 0 and 9: {0!r}'.format(compression)
             )
         self.compression = _compression
 
         self.interlace = bool(interlace)
 
+        _png8 = png8
+        if _png8 is None:
+            _png8 = False
+        elif _png8 is True:
+            _png8 = 256
+        if _png8 is not False:
+            _png8 = int(_png8)
+            if not 2 <= _png8 <= 256:
+                raise ValueError(
+                    'png8 must be between 2 and 256: {0!r}'.format(png8)
+                )
+        self.png8 = _png8
+
+        _optimize = optimize
+        if _optimize is None:
+            _optimize = 2
+        if optimize is not False:
+            _optimize = int(_optimize)
+            if not 0 <= _optimize <= 7:
+                raise ValueError(
+                    'optimize must be between 0 and 7: {0!r}'.format(optimize)
+                )
+        self.optimize = _optimize
+
         super(PngRenderer, self).__init__(**kwargs)
 
     @property
-    def _options(self):
+    def _vips_options(self):
         return ':{compression:d},{interlace:d}'.format(
             compression=self.compression,
             interlace=self.interlace,
@@ -99,9 +137,23 @@ class PngRenderer(Renderer):
 
     def render(self, image):
         """Returns the rendered VIPS `image`."""
-        with NamedTemporaryFile(suffix=self.suffix) as tempfile:
-            image.vips2png(tempfile.name + self._options)
-            return tempfile.read()
+        with NamedTemporaryFile(suffix=self.suffix) as rendered:
+            image.vips2png(rendered.name + self._vips_options)
+            filename = rendered.name
+
+            if self.png8 is not False:
+                check_call([self.PNGQUANT, '-force', str(self.png8),
+                            filename])
+                filename = os.path.splitext(filename)[0] + '-fs8.png'
+
+            if self.optimize is not False:
+                check_call([self.OPTIPNG, '-o{0:d}'.format(self.optimize),
+                            '-quiet', filename])
+
+            with open(filename, 'rb') as result:
+                if rendered.name != filename:
+                    rmfile(filename, ignore_missing=True)
+                return result.read()
 
 
 class TouchRenderer(Renderer):
