@@ -3,7 +3,27 @@ import unittest
 from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import XY
-from gdal2mbtiles.vips import TmsTiles, VImage
+from gdal2mbtiles.vips import LibVips, TmsTiles, VImage, VIPS
+
+
+class TestLibVips(unittest.TestCase):
+    def setUp(self):
+        self.version = 15
+
+    def tearDown(self):
+        VIPS.set_concurrency(processes=0)  # Auto-detect
+
+    def test_create(self):
+        self.assertTrue(LibVips(version=self.version))
+        self.assertRaises(OSError, LibVips, version=999)
+
+    def test_concurrency(self):
+        concurrency = 42
+        vips = LibVips(version=self.version)
+        self.assertRaises(ValueError, vips.set_concurrency, processes=1.1)
+        self.assertRaises(ValueError, vips.set_concurrency, processes=-1)
+        self.assertEqual(vips.set_concurrency(processes=concurrency), None)
+        self.assertEqual(vips.get_concurrency(), concurrency)
 
 
 class TestVImage(unittest.TestCase):

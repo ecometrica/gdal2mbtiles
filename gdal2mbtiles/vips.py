@@ -2,7 +2,9 @@
 
 from __future__ import absolute_import, division
 
+from ctypes import c_int, cdll
 from math import ceil
+from multiprocessing import cpu_count
 
 import vipsCC.VImage
 
@@ -10,6 +12,37 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .types import XY
 from .utils import tempenv
+
+
+class LibVips(object):
+    """Wrapper object around C library."""
+
+    def __init__(self, version):
+        self.libvips = cdll.LoadLibrary('libvips.so.{0}'.format(version))
+        self.functions = {}
+
+    def get_concurrency(self):
+        """Returns the number of threads used for computations."""
+        return c_int.in_dll(self.libvips, 'vips__concurrency').value
+
+    def set_concurrency(self, processes):
+        """Sets the number of threads used for computations."""
+        if not isinstance(processes, (int, long)) or processes < 0:
+            raise ValueError(
+                'Must provide a positive integer for processes: {0}'.format(
+                    processes
+                )
+            )
+
+        vips_concurrency_set = self.functions.get('vips_concurrency_set', None)
+        if vips_concurrency_set is None:
+            vips_concurrency_set = self.libvips.vips_concurrency_set
+            vips_concurrency_set.argtypes = [c_int]
+            vips_concurrency_set.restype = None
+            self.functions['vips_concurrency_set'] = vips_concurrency_set
+        vips_concurrency_set(c_int(processes))
+
+VIPS = LibVips(version=15)
 
 
 class VImage(vipsCC.VImage.VImage):
@@ -22,6 +55,9 @@ class VImage(vipsCC.VImage.VImage):
     }
 
     def __init__(self, *args, **kwargs):
+        if VIPS.get_concurrency() == 0:
+            # Override auto-detection from environ and argv.
+            VIPS.set_concurrency(processes=cpu_count())
         super(VImage, self).__init__(*args, **kwargs)
 
     @classmethod
