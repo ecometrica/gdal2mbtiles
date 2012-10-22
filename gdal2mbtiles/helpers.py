@@ -12,7 +12,7 @@ from .vips import TmsPyramid
 
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None,
-                  renderer=None, hasher=None, storage=None):
+                  renderer=None, hasher=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -40,7 +40,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None,
-                  renderer=None, hasher=None, storage=None):
+                  renderer=None, hasher=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
