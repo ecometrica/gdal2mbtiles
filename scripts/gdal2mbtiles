@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+
+# Quickstart
+# ----------
+#
+# To turn any GDAL-readable file into an MBTiles file, run:
+#   $ gdal2mbtiles.py filename.tiff
+# This creates a filename.mbtiles that can be served from a TMS service like
+# Mapbox.
+#
+# You can explicitly specify an output filename:
+#   $ gdal2mbtiles.py input.tiff output.mbtiles
+#
+# You can also pipe in any GDAL-readable file:
+#   $ cat input.tiff | gdal2mbtiles.py > output.mbtiles
+
+from __future__ import absolute_import
+
+import argparse
+from contextlib import contextmanager
+import os
+from shutil import copyfileobj
+import sys
+from tempfile import NamedTemporaryFile
+
+from gdal2mbtiles.helpers import warp_mbtiles
+
+
+def parse_args(args):
+    parser = argparse.ArgumentParser(
+        description='Converts a GDAL-readable into an MBTiles file'
+    )
+    parser.add_argument('INPUT', type=argparse.FileType('rb'), nargs='?',
+                        default=sys.stdin,
+                        help='GDAL-readable file.')
+    parser.add_argument('OUTPUT', type=argparse.FileType('wb'), nargs='?',
+                        help='Output filename. Defaults to INPUT.mbtiles')
+    args = parser.parse_args(args=args)
+
+    # Guess at the OUTPUT based on the INPUT
+    if args.OUTPUT is None:
+        if args.INPUT == sys.stdin:
+            args.OUTPUT = sys.stdout
+        else:
+            # Set default output name based on input name
+            args.OUTPUT = open(
+                os.path.splitext(args.INPUT.name)[0] + '.mbtiles',
+                mode='wb'
+            )
+
+    return args
+
+
+@contextmanager
+def input_output(inputfile, outputfile):
+    tempfiles = []
+
+    infile = inputfile
+    if inputfile == sys.stdin:
+        infile = NamedTemporaryFile()
+        copyfileobj(inputfile, infile)
+        infile.seek(0)
+        tempfiles.append(infile)
+
+    outfile = outputfile
+    if outputfile == sys.stdout:
+        outfile = NamedTemporaryFile()
+        tempfiles.append(outfile)
+
+    try:
+        yield infile, outfile
+        if outputfile == sys.stdout:
+            copyfileobj(open(outfile.name, 'rb'), outputfile)
+    finally:
+        for f in tempfiles:
+            f.close()
+
+
+def main(args):
+    args = parse_args(args=args)
+    metadata = dict(
+        name='bluemarble-aligned',
+        type='baselayer',
+        version='1.0.0',
+        description='BlueMarble 2004-07 Aligned',
+        format='png',
+    )
+
+    with input_output(inputfile=args.INPUT,
+                      outputfile=args.OUTPUT) as (inputfile, outputfile):
+        warp_mbtiles(inputfile=inputfile.name, outputfile=outputfile.name,
+                     metadata=metadata)
+        return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
