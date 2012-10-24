@@ -5,10 +5,10 @@ from __future__ import (absolute_import, division, print_function,
 
 from tempfile import NamedTemporaryFile
 
-from .gdal import preprocess
+from .gdal import Dataset, preprocess
 from .renderers import PngRenderer
 from .storages import MbtilesStorage, NestedFileStorage, SimpleFileStorage
-from .vips import TmsPyramid
+from .vips import TmsPyramid, validate_resolutions
 
 
 def image_mbtiles(inputfile, outputfile, metadata,
@@ -124,6 +124,10 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
     If `max_resolution` is None, don't upsample.
     """
     with NamedTemporaryFile(suffix='.tif') as tempfile:
+        dataset = Dataset(inputfile)
+        validate_resolutions(resolution=dataset.GetNativeResolution(),
+                             min_resolution=min_resolution,
+                             max_resolution=max_resolution)
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress='LZW')
@@ -167,6 +171,10 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
     If `max_resolution` is None, don't upsample.
     """
     with NamedTemporaryFile(suffix='.tif') as tempfile:
+        dataset = Dataset(inputfile)
+        validate_resolutions(resolution=dataset.GetNativeResolution(),
+                             min_resolution=min_resolution,
+                             max_resolution=max_resolution)
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress='LZW')
@@ -203,9 +211,6 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
 
     If a tile duplicates another tile already known to this process, a symlink
     may be created instead of rendering the same tile to PNG again.
-
-    If `min_resolution` is None, don't downsample.
-    If `max_resolution` is None, don't upsample.
     """
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
