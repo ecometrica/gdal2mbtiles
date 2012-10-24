@@ -260,7 +260,7 @@ class TestMbtilesStorage(unittest.TestCase):
             format=Metadata.latest().FORMATS.PNG,
         )
         self.storage = MbtilesStorage.create(renderer=self.renderer,
-                                             filename=self.tempfile.name,
+                                             filename=':memory:',
                                              metadata=self.metadata,
                                              hasher=intmd5)
 
@@ -295,6 +295,12 @@ class TestMbtilesStorage(unittest.TestCase):
                          long('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
+        # We must create this on disk
+        self.storage = MbtilesStorage.create(renderer=self.renderer,
+                                             filename=self.tempfile.name,
+                                             metadata=self.metadata,
+                                             hasher=intmd5)
+
         # Transparent 1×1 image
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))

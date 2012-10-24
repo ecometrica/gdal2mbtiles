@@ -88,7 +88,7 @@ class TestMBTiles(unittest.TestCase):
         self.assertEqual(mbtiles3.version, self.version)
 
     def test_tiles(self):
-        mbtiles = MBTiles.create(filename=self.filename,
+        mbtiles = MBTiles.create(filename=':memory:',
                                  metadata=self.metadata,
                                  version=self.version)
         data = 'PNG image'
@@ -110,7 +110,7 @@ class TestMBTiles(unittest.TestCase):
         self.assertEqual(mbtiles.get(x=1, y=1, z=1), data)
 
     def test_out_of_order_tile(self):
-        mbtiles = MBTiles.create(filename=self.filename,
+        mbtiles = MBTiles.create(filename=':memory:',
                                  metadata=self.metadata,
                                  version=self.version)
         data = 'PNG image'
@@ -146,8 +146,7 @@ class TestMBTiles(unittest.TestCase):
 
 class TestMetadata(unittest.TestCase):
     def setUp(self):
-        self.tempfile = NamedTemporaryFile(suffix='.mbtiles')
-        self.filename = self.tempfile.name
+        self.filename = ':memory:'
         self.version = '1.0'
         self.metadata = dict(
             name='transparent',
@@ -155,13 +154,6 @@ class TestMetadata(unittest.TestCase):
             version='1.0.0',
             description='Transparent World 2012',
         )
-
-    def tearDown(self):
-        try:
-            self.tempfile.close()
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
 
     def test_simple(self):
         mbtiles = MBTiles.create(filename=self.filename,
@@ -413,22 +405,23 @@ class TestMetadata(unittest.TestCase):
                               metadata.__setitem__, 'bounds', '-1,1.1,1,1')
 
     def test_autocommit(self):
-        mbtiles = MBTiles.create(filename=self.filename,
-                                 metadata=self.metadata,
-                                 version=self.version)
+        with NamedTemporaryFile(suffix='.mbtiles') as tempfile:
+            mbtiles = MBTiles.create(filename=tempfile.name,
+                                     metadata=self.metadata,
+                                     version=self.version)
 
-        # Insert metadata
-        mbtiles.metadata['test'] = 'Tileset'
-        self.assertEqual(mbtiles.metadata['test'], 'Tileset')
+            # Insert metadata
+            mbtiles.metadata['test'] = 'Tileset'
+            self.assertEqual(mbtiles.metadata['test'], 'Tileset')
 
-        # Reopen
-        mbtiles.open()
-        self.assertEqual(mbtiles.metadata['test'], 'Tileset')
+            # Reopen
+            mbtiles.open()
+            self.assertEqual(mbtiles.metadata['test'], 'Tileset')
 
-        # Delete metadata
-        del mbtiles.metadata['test']
-        self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'test')
+            # Delete metadata
+            del mbtiles.metadata['test']
+            self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'test')
 
-        # Reopen
-        mbtiles.open()
-        self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'test')
+            # Reopen
+            mbtiles.open()
+            self.assertRaises(KeyError, mbtiles.metadata.__getitem__, 'test')
