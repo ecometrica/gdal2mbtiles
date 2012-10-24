@@ -81,7 +81,7 @@ class TestPngRenderer(unittest.TestCase):
         renderer = PngRenderer()
         contents = renderer.render(image=self.image)
         self.assertEqual(intmd5(contents),
-                         86467695395038688928059075665951437140)
+                         89446660811628514001822794642426893173)
 
     def test_png8_optimize(self):
         renderer = PngRenderer(png8=True, optimize=2)

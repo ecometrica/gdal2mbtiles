@@ -87,8 +87,12 @@ class PngRenderer(Renderer):
     png8: Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs. Default False.
           If an integer, specifies number of colours in palette.
           If True, defaults to 256 colours.
-    optimize: Optimizes PNG using optipng. Default 2. See `optipng -h`.
+    optimize: Optimizes PNG using optipng. Default False. See `optipng -h`.
     suffix: Suffix for filename. Default '.png'.
+
+    If optimize is not False, then compression is ignored and set to 0, to
+    prevent double-compression. In general, VIPS compression is faster than
+    optimizing with OptiPNG.
     """
     _suffix = '.png'
 
@@ -123,13 +127,15 @@ class PngRenderer(Renderer):
 
         _optimize = optimize
         if _optimize is None:
-            _optimize = 2
+            _optimize = False
         if optimize is not False:
             _optimize = int(_optimize)
             if not 0 <= _optimize <= 7:
                 raise ValueError(
                     'optimize must be between 0 and 7: {0!r}'.format(optimize)
                 )
+        if _optimize:
+            self.compression = 0  # Prevent double-compression
         self.optimize = _optimize
 
         super(PngRenderer, self).__init__(**kwargs)
