@@ -212,10 +212,14 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
 
     # Resampling method
     if resampling is not None:
-        try:
-            warp_cmd.extend(['-r', RESAMPLING_METHODS[resampling]])
-        except KeyError:
+        if not isinstance(resampling, basestring):
+            try:
+                resampling = RESAMPLING_METHODS[resampling]
+            except KeyError:
+                raise UnknownResamplingMethodError(resampling)
+        elif resampling not in RESAMPLING_METHODS.values():
             raise UnknownResamplingMethodError(resampling)
+        warp_cmd.extend(['-r', resampling])
 
     # Compute the target extents
     src_spatial_ref = dataset.GetSpatialReference()

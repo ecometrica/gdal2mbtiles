@@ -146,15 +146,23 @@ class TestWarp(unittest.TestCase):
                             for t in root.findall('.//SourceDataset')))
 
     def test_resampling(self):
-        # Cubic
+        # By integer
         root = warp(self.inputfile, resampling=GRA_Cubic).get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         self.assertTrue(all(t.text == 'Cubic'
                             for t in root.findall('.//ResampleAlg')))
 
+        # By string
+        root = warp(self.inputfile, resampling='bilinear').get_root()
+        self.assertEqual(root.tag, 'VRTDataset')
+        self.assertTrue(all(t.text == 'Bilinear'
+                            for t in root.findall('.//ResampleAlg')))
+
         # Invalid
         self.assertRaises(UnknownResamplingMethodError,
                           warp, self.inputfile, resampling=-1)
+        self.assertRaises(UnknownResamplingMethodError,
+                          warp, self.inputfile, resampling='montecarlo')
 
     def test_spatial_ref(self):
         root = warp(self.inputfile).get_root()
