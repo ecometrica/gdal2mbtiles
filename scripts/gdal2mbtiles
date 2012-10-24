@@ -73,6 +73,14 @@ def parse_args(args):
                        help=('Resampling algorithm for warping. '
                              'Defaults to "near" (nearest-neighbour)'))
 
+    group = parser.add_argument_group(title='Rendering agurments')
+    group.add_argument('--min-resolution', type=int, default=None,
+                       help=('Minimum resolution to render and slice. '
+                             'Defaults to None (do not downsample)'))
+    group.add_argument('--max-resolution', type=int, default=None,
+                       help=('Maximum resolution to render and slice. '
+                             'Defaults to None (do not upsample)'))
+
     args = parser.parse_args(args=args)
 
     # Guess at the OUTPUT based on the INPUT
@@ -138,7 +146,10 @@ def main(args):
                      # MBTiles
                      metadata=metadata,
                      # GDAL
-                     spatial_ref=spatial_ref, resampling=args.resampling)
+                     spatial_ref=spatial_ref, resampling=args.resampling,
+                     # Rendering
+                     min_resolution=args.min_resolution,
+                     max_resolution=args.max_resolution)
         return 0
 
 

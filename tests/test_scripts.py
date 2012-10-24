@@ -100,3 +100,12 @@ class TestGdal2mbtilesScript(unittest.TestCase):
             self.assertRaises(CalledProcessError,
                               check_call, command, env=self.environ,
                               stderr=null)
+
+    def test_render(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as output:
+            # Valid
+            command = [sys.executable, self.script,
+                       '--min-resolution', '1',
+                       '--max-resolution', '3',
+                       self.inputfile, output.name]
+            check_call(command, env=self.environ)
