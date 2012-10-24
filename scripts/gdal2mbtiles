@@ -35,26 +35,31 @@ def parse_args(args):
     parser = argparse.ArgumentParser(
         description='Converts a GDAL-readable into an MBTiles file'
     )
-    parser.add_argument('INPUT', type=argparse.FileType('rb'), nargs='?',
-                        default=sys.stdin,
-                        help='GDAL-readable file.')
-    parser.add_argument('OUTPUT', type=argparse.FileType('wb'), nargs='?',
-                        help='Output filename. Defaults to INPUT.mbtiles')
-    parser.add_argument('--name', default=None,
-                        help=('Human-readable name of the tileset. '
-                              'Defaults to INPUT'))
-    parser.add_argument('--description', default="",
-                        help='Description of the layer. Defaults to ""')
-    parser.add_argument('--layer-type',
-                        default=LatestMetadata.TYPES.OVERLAY,
-                        choices=LatestMetadata.TYPES,
-                        help='Type of layer. Defaults to "overlay"')
-    parser.add_argument('--version', default='1.0.0',
-                        help='Version of the tileset. Defaults to "1.0.0"')
-    parser.add_argument('--format',
-                        default=LatestMetadata.FORMATS.PNG,
-                        choices=LatestMetadata.FORMATS,
-                        help='Tile image format. Defaults to "png"')
+
+    group = parser.add_argument_group(title='Positional arguments')
+    group.add_argument('INPUT', type=argparse.FileType('rb'), nargs='?',
+                       default=sys.stdin,
+                       help='GDAL-readable file.')
+    group.add_argument('OUTPUT', type=argparse.FileType('wb'), nargs='?',
+                       help='Output filename. Defaults to INPUT.mbtiles')
+
+    group = parser.add_argument_group(title='MBTiles metadata arguments')
+    group.add_argument('--name', default=None,
+                       help=('Human-readable name of the tileset. '
+                             'Defaults to INPUT'))
+    group.add_argument('--description', default="",
+                       help='Description of the layer. Defaults to ""')
+    group.add_argument('--layer-type',
+                       default=LatestMetadata.TYPES.OVERLAY,
+                       choices=LatestMetadata.TYPES,
+                       help='Type of layer. Defaults to "overlay"')
+    group.add_argument('--version', default='1.0.0',
+                       help='Version of the tileset. Defaults to "1.0.0"')
+    group.add_argument('--format',
+                       default=LatestMetadata.FORMATS.PNG,
+                       choices=LatestMetadata.FORMATS,
+                       help='Tile image format. Defaults to "png"')
+
     args = parser.parse_args(args=args)
 
     # Guess at the OUTPUT based on the INPUT
