@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import os
-from subprocess import check_call
+from subprocess import CalledProcessError, check_call
 import sys
 from tempfile import NamedTemporaryFile
 import unittest
@@ -31,6 +31,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
         self.environ['PYTHONPATH'] = pythonpath
 
         self.inputfile = os.path.join(__dir__, 'upsampling.tif')
+        self.rgbfile = os.path.join(__dir__, 'bluemarble.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
@@ -72,3 +73,30 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                                       format='jpg',
                                       type='baselayer',
                                       version='2.0.1'))
+
+    def test_warp(self):
+        null = open('/dev/null', 'rw')
+
+        with NamedTemporaryFile(suffix='.mbtiles') as output:
+            # Valid
+            command = [sys.executable, self.script,
+                       '--spatial-reference', '4326',
+                       '--resampling', 'bilinear',
+                       self.rgbfile, output.name]
+            check_call(command, env=self.environ)
+
+            # Invalid spatial reference
+            command = [sys.executable, self.script,
+                       '--spatial-reference', '9999',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            # Invalid resampling
+            command = [sys.executable, self.script,
+                       '--resampling', 'montecarlo',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)

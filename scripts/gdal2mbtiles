@@ -26,6 +26,7 @@ from shutil import copyfileobj
 import sys
 from tempfile import NamedTemporaryFile
 
+from gdal2mbtiles.gdal import RESAMPLING_METHODS, SpatialReference
 from gdal2mbtiles.mbtiles import Metadata
 
 
@@ -59,6 +60,18 @@ def parse_args(args):
                        default=LatestMetadata.FORMATS.PNG,
                        choices=LatestMetadata.FORMATS,
                        help='Tile image format. Defaults to "png"')
+
+    group = parser.add_argument_group(title='GDAL warp arguments')
+    # group.add_argument('--colourize-band', default=1,
+    #                    help='Raster band to colourize. Defaults to 1')
+    group.add_argument('--spatial-reference', type=int, default=3785,
+                       help=('Destination EPSG spatial reference. '
+                             'Defaults to 3785'))
+    group.add_argument('--resampling',
+                       default='near',
+                       choices = RESAMPLING_METHODS.values(),
+                       help=('Resampling algorithm for warping. '
+                             'Defaults to "near" (nearest-neighbour)'))
 
     args = parser.parse_args(args=args)
 
@@ -120,8 +133,12 @@ def main(args):
             type=args.layer_type,
             version=args.version,
         )
+        spatial_ref = SpatialReference.FromEPSG(args.spatial_reference)
         warp_mbtiles(inputfile=inputfile.name, outputfile=outputfile.name,
-                     metadata=metadata)
+                     # MBTiles
+                     metadata=metadata,
+                     # GDAL
+                     spatial_ref=spatial_ref, resampling=args.resampling)
         return 0
 
 
