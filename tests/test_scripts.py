@@ -102,10 +102,53 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                               stderr=null)
 
     def test_render(self):
+        null = open('/dev/null', 'rw')
+
         with NamedTemporaryFile(suffix='.mbtiles') as output:
             # Valid
             command = [sys.executable, self.script,
                        '--min-resolution', '1',
                        '--max-resolution', '3',
-                       self.inputfile, output.name]
+                       self.rgbfile, output.name]
             check_call(command, env=self.environ)
+            with MBTiles(output.name) as mbtiles:
+                cursor = mbtiles._conn.execute(
+                    """
+                    SELECT zoom_level, COUNT(*) FROM tiles
+                    GROUP BY zoom_level
+                    """
+                )
+                self.assertEqual(
+                    dict(cursor.fetchall()),
+                    {1: 4,   # 2×2 at resolution 1
+                     2: 16,  # 4×4 at resolution 2
+                     3: 64}  # 8×8 at resolution 3
+                )
+
+            # Min resolution greater than input resolution
+            command = [sys.executable, self.script,
+                       '--min-resolution', '3',
+                       self.inputfile, output.name]
+            self.assertRaises(
+                CalledProcessError,
+                check_call, command, env=self.environ, stderr=null
+            )
+
+            # Min resolution greater than max resolution
+            command = [sys.executable, self.script,
+                       '--min-resolution', '2',
+                       '--max-resolution', '1',
+                       self.inputfile, output.name]
+            self.assertRaises(
+                CalledProcessError,
+                check_call, command, env=self.environ, stderr=null
+            )
+
+            # Max resolution less than input resolution
+            command = [sys.executable, self.script,
+                       '--max-resolution', '0',
+                       self.rgbfile, output.name]
+            self.assertRaises(
+                CalledProcessError,
+                check_call, command, env=self.environ, stderr=null
+            )

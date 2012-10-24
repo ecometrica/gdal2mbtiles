@@ -460,6 +460,7 @@ class TmsPyramid(object):
 
     def slice_downsample(self, tiles, min_resolution):
         """Downsamples the input TmsTiles down to min_resolution and slices."""
+        self._validate_resolutions(min_resolution=min_resolution)
         with LibVips.disable_warnings():
             # Downsampling one zoom level at a time, using the previous
             # downsampled results.
@@ -491,6 +492,7 @@ class TmsPyramid(object):
 
     def slice_upsample(self, tiles, max_resolution):
         """Upsamples the input TmsTiles up to max_resolution and slices."""
+        self._validate_resolutions(max_resolution=max_resolution)
         with LibVips.disable_warnings():
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
@@ -503,6 +505,9 @@ class TmsPyramid(object):
 
     def slice(self):
         """Slices the input image into the pyramid of PNG tiles."""
+        self._validate_resolutions(min_resolution=self.min_resolution,
+                                  max_resolution=self.max_resolution)
+
         tiles = self.slice_native()
         if self.min_resolution is not None:
             self.slice_downsample(tiles=tiles,
@@ -511,3 +516,19 @@ class TmsPyramid(object):
             self.slice_upsample(tiles=tiles,
                                 max_resolution=self.max_resolution)
         self.storage.waitall()
+
+    def _validate_resolutions(self, min_resolution=None, max_resolution=None):
+        if min_resolution is not None and \
+           not 0 <= min_resolution < self.resolution:
+            raise ValueError(
+                'min_resolution {0!r} must be between 0 and {1}'.format(
+                    min_resolution, self.resolution
+                )
+            )
+
+        if max_resolution is not None and max_resolution < self.resolution:
+            raise ValueError(
+                'max_resolution {0!r} must be greater than {1}'.format(
+                    max_resolution, self.resolution
+                )
+            )
