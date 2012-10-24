@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
 import os
 from subprocess import check_call
@@ -60,7 +61,7 @@ class JpegRenderer(Renderer):
         super(JpegRenderer, self).__init__(**kwargs)
 
     @property
-    def _options(self):
+    def _vips_options(self):
         return ':{compression:d},{profile}'.format(
             compression=self.compression,
             profile=self.profile,
@@ -73,7 +74,7 @@ class JpegRenderer(Renderer):
             image = image.extract_bands(band=0, nbands=3)
         with NamedTemporaryFile(suffix=self.suffix,
                                 dir=self.tempdir) as tempfile:
-            image.vips2jpeg(tempfile.name + self._options)
+            image.vips2jpeg(tempfile.name + self._vips_options)
             return tempfile.read()
 
 

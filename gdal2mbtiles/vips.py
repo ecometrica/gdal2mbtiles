@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import, division
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
 from ctypes import c_int, cdll
 from math import ceil
@@ -63,6 +64,10 @@ class VImage(vipsCC.VImage.VImage):
         if VIPS.get_concurrency() == 0:
             # Override auto-detection from environ and argv.
             VIPS.set_concurrency(processes=cpu_count())
+        if args and isinstance(args[0], unicode):
+            # args[0] is a Unicode filename
+            args = list(args)
+            args[0] = args[0].encode('utf-8')
         super(VImage, self).__init__(*args, **kwargs)
 
     @classmethod
@@ -75,7 +80,7 @@ class VImage(vipsCC.VImage.VImage):
         xres, yres = 2.835, 2.835  # Arbitrary 600 dpi
         xo, yo = 0, 0
 
-        image = cls("", "p")       # Working buffer
+        image = cls(b"", b"p")          # Working buffer
         image.initdesc(width, height, bands, bandfmt, coding, _type,
                        xres, yres, xo, yo)
 
@@ -256,6 +261,16 @@ class VImage(vipsCC.VImage.VImage):
 
         # Resize
         return self.from_vimage(self.embed(_type, x, y, width, height))
+
+    def vips2jpeg(self, out):
+        if isinstance(out, unicode):
+            out = out.encode('utf-8')
+        return super(VImage, self).vips2jpeg(out)
+
+    def vips2png(self, out):
+        if isinstance(out, unicode):
+            out = out.encode('utf-8')
+        return super(VImage, self).vips2png(out)
 
 
 class TmsTiles(object):

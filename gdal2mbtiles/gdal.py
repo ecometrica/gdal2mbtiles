@@ -1,4 +1,7 @@
-from __future__ import absolute_import, division
+# -*- coding: utf-8 -*-
+
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
 from collections import OrderedDict
 import errno
@@ -332,6 +335,9 @@ class Dataset(gdal.Dataset):
         """
         # Open the input file and read some metadata
         open(inputfile, 'r').close()  # HACK: GDAL gives a useless exception
+
+        if isinstance(inputfile, unicode):
+            inputfile = inputfile.encode('utf-8')
         try:
             # Since this is a SWIG object, clone the ``this`` pointer
             self.this = gdal.Open(inputfile, mode).this
@@ -567,9 +573,9 @@ class SpatialReference(osr.SpatialReference):
             return
 
         if self.IsGeographic() == 1:
-            cstype = 'GEOGCS'
+            cstype = b'GEOGCS'
         else:
-            cstype = 'PROJCS'
+            cstype = b'PROJCS'
         return '{0}:{1}'.format(self.GetAuthorityName(cstype),
                                 self.GetAuthorityCode(cstype))
 

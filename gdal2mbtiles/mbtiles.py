@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
+
 from distutils.version import LooseVersion
 import errno
 import os
@@ -437,7 +442,7 @@ class MBTiles(object):
         """
         # tile_id must be a 64-bit signed integer, but hashing functions
         # produce unsigned integers.
-        hashed = unpack('q', pack('Q', hashed & 0xffffffffffffffff))[0]
+        hashed = unpack(b'q', pack(b'Q', hashed & 0xffffffffffffffff))[0]
 
         with self._conn:
             if data is not None:
