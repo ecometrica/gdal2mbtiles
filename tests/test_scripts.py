@@ -30,7 +30,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
         pythonpath = os.path.pathsep.join([self.repo_dir] + pythonpath)
         self.environ['PYTHONPATH'] = pythonpath
 
-        self.inputfile = os.path.join(__dir__, 'bluemarble.tif')
+        self.inputfile = os.path.join(__dir__, 'upsampling.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
@@ -39,7 +39,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
             with MBTiles(output.name) as mbtiles:
                 # 4×4 at resolution 2
                 cursor = mbtiles._conn.execute('SELECT COUNT(*) FROM tiles')
-                self.assertEqual(cursor.fetchone(), (16,))
+                self.assertEqual(cursor.fetchone(), (1,))
 
     def test_metadata(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
