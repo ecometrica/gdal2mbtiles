@@ -295,9 +295,11 @@ class MBTiles(object):
     def __exit__(self, type, value, traceback):
         self.close()
 
-    def close(self):
+    def close(self, remove_journal=True):
         """Closes the file."""
         if self._conn is not None:
+            if remove_journal:
+                self._conn.execute('PRAGMA journal_mode = DELETE')
             self._conn.close()
             self._conn = None
 
@@ -328,7 +330,11 @@ class MBTiles(object):
                           for k, v in options.iteritems())
             )
         except sqlite3.DatabaseError:
+            self.close(remove_journal=False)
             raise InvalidFileError("Invalid MBTiles file")
+        except Exception:
+            self.close(remove_journal=False)
+            raise
         return self._conn
 
     @classmethod
