@@ -97,7 +97,7 @@ def image_slice(inputfile, outputdir, hasher=None, renderer=None):
 
 
 def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
-                 spatial_ref=None, resampling=None, compress='LZW',
+                 spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, renderer=None,
                  hasher=None):
     """
@@ -115,7 +115,6 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
                 nearest neighbour as of GDAL 1.9.1.
-    compress: Compression algorithm. Defaults to LZW.
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
@@ -127,7 +126,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
-                   resampling=resampling, compress=compress)
+                   resampling=resampling, compress='LZW')
         return image_mbtiles(inputfile=tempfile.name, outputfile=outputfile,
                              metadata=metadata,
                              min_resolution=min_resolution,
@@ -136,7 +135,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
 
 
 def warp_pyramid(inputfile, outputdir, colours=None, band=None,
-                 spatial_ref=None, resampling=None, compress='LZW',
+                 spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, renderer=None,
                  hasher=None):
     """
@@ -154,7 +153,6 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
                 nearest neighbour as of GDAL 1.9.1.
-    compress: Compression algorithm. Defaults to LZW.
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
@@ -171,7 +169,7 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
-                   resampling=resampling, compress=compress)
+                   resampling=resampling, compress='LZW')
         return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution, renderer=renderer,
@@ -179,7 +177,7 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
 
 
 def warp_slice(inputfile, outputdir, colours=None, band=None,
-               spatial_ref=None, resampling=None, compress='LZW',
+               spatial_ref=None, resampling=None,
                renderer=None, hasher=None):
     """
     Warps a GDAL-readable inputfile into a directory of PNG tiles.
@@ -196,7 +194,6 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
                 nearest neighbour as of GDAL 1.9.1.
-    compress: Compression algorithm. Defaults to LZW.
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
@@ -213,6 +210,6 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
                    colours=colours, band=band, spatial_ref=spatial_ref,
-                   resampling=resampling, compress=compress)
+                   resampling=resampling, compress='LZW')
         return image_slice(inputfile=tempfile.name, outputdir=outputdir,
                            renderer=renderer, hasher=hasher)
