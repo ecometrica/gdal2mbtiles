@@ -26,10 +26,12 @@ from shutil import copyfileobj
 import sys
 from tempfile import NamedTemporaryFile
 
-from gdal2mbtiles.helpers import warp_mbtiles
+from gdal2mbtiles.mbtiles import Metadata
 
 
 def parse_args(args):
+    LatestMetadata = Metadata.latest()
+
     parser = argparse.ArgumentParser(
         description='Converts a GDAL-readable into an MBTiles file'
     )
@@ -38,6 +40,21 @@ def parse_args(args):
                         help='GDAL-readable file.')
     parser.add_argument('OUTPUT', type=argparse.FileType('wb'), nargs='?',
                         help='Output filename. Defaults to INPUT.mbtiles')
+    parser.add_argument('--name', default=None,
+                        help=('Human-readable name of the tileset. '
+                              'Defaults to INPUT'))
+    parser.add_argument('--description', default="",
+                        help='Description of the layer. Defaults to ""')
+    parser.add_argument('--layer-type',
+                        default=LatestMetadata.TYPES.OVERLAY,
+                        choices=LatestMetadata.TYPES,
+                        help='Type of layer. Defaults to "overlay"')
+    parser.add_argument('--version', default='1.0.0',
+                        help='Version of the tileset. Defaults to "1.0.0"')
+    parser.add_argument('--format',
+                        default=LatestMetadata.FORMATS.PNG,
+                        choices=LatestMetadata.FORMATS,
+                        help='Tile image format. Defaults to "png"')
     args = parser.parse_args(args=args)
 
     # Guess at the OUTPUT based on the INPUT
@@ -50,6 +67,9 @@ def parse_args(args):
                 os.path.splitext(args.INPUT.name)[0] + '.mbtiles',
                 mode='wb'
             )
+
+    if args.name is None:
+        args.name = os.path.basename(args.INPUT.name)
 
     return args
 
@@ -81,16 +101,20 @@ def input_output(inputfile, outputfile):
 
 def main(args):
     args = parse_args(args=args)
-    metadata = dict(
-        name='bluemarble-aligned',
-        type='baselayer',
-        version='1.0.0',
-        description='BlueMarble 2004-07 Aligned',
-        format='png',
-    )
+
+    # HACK: Import here, so that VIPS doesn't parse sys.argv!!!
+    # In vimagemodule.cxx, SWIG_init actually does argument parsing
+    from gdal2mbtiles.helpers import warp_mbtiles
 
     with input_output(inputfile=args.INPUT,
                       outputfile=args.OUTPUT) as (inputfile, outputfile):
+        metadata = dict(
+            description=args.description,
+            format=args.format,
+            name=args.name,
+            type=args.layer_type,
+            version=args.version,
+        )
         warp_mbtiles(inputfile=inputfile.name, outputfile=outputfile.name,
                      metadata=metadata)
         return 0

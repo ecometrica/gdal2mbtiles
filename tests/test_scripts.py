@@ -30,12 +30,45 @@ class TestGdal2mbtilesScript(unittest.TestCase):
         pythonpath = os.path.pathsep.join([self.repo_dir] + pythonpath)
         self.environ['PYTHONPATH'] = pythonpath
 
+        self.inputfile = os.path.join(__dir__, 'bluemarble.tif')
+
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
-            inputfile = os.path.join(__dir__, 'bluemarble.tif')
-            check_call([sys.executable, self.script, inputfile, output.name],
-                       env=self.environ)
+            command = [sys.executable, self.script, self.inputfile, output.name]
+            check_call(command, env=self.environ)
             with MBTiles(output.name) as mbtiles:
                 # 4×4 at resolution 2
                 cursor = mbtiles._conn.execute('SELECT COUNT(*) FROM tiles')
                 self.assertEqual(cursor.fetchone(), (16,))
+
+    def test_metadata(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as output:
+            command = [sys.executable, self.script, self.inputfile, output.name]
+            check_call(command, env=self.environ)
+            with MBTiles(output.name) as mbtiles:
+                # Default metadata
+                cursor = mbtiles._conn.execute('SELECT * FROM metadata')
+                self.assertEqual(dict(cursor.fetchall()),
+                                 dict(name=os.path.basename(self.inputfile),
+                                      description='',
+                                      format='png',
+                                      type='overlay',
+                                      version='1.0.0'))
+
+            command = [sys.executable, self.script,
+                       '--name', 'test',
+                       '--description', 'Unit test',
+                       '--format', 'jpg',
+                       '--layer-type', 'baselayer',
+                       '--version', '2.0.1',
+                       self.inputfile, output.name]
+            check_call(command, env=self.environ)
+            with MBTiles(output.name) as mbtiles:
+                # Default metadata
+                cursor = mbtiles._conn.execute('SELECT * FROM metadata')
+                self.assertEqual(dict(cursor.fetchall()),
+                                 dict(name='test',
+                                      description='Unit test',
+                                      format='jpg',
+                                      type='baselayer',
+                                      version='2.0.1'))
