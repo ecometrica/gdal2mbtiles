@@ -3,11 +3,12 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from ctypes import c_int, cdll
+from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
 from math import ceil
 from multiprocessing import cpu_count
 
+from vipsCC.VError import VError
 import vipsCC.VImage
 
 from .constants import TILE_SIDE
@@ -30,6 +31,85 @@ class LibVips(object):
     def disable_warnings(cls):
         """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
+
+    @property
+    def vips_interpolate_bilinear_static(self):
+        """Returns VIPS's Bilinear interpolator"""
+        function = self.functions.get('vips_interpolate_bilinear_static',
+                                      None)
+
+        if function is None:
+            function = self.libvips.vips_interpolate_bilinear_static
+            function.argtypes = []
+            function.restype = c_void_p
+            self.functions['vips_interpolate_bilinear_static'] = function
+        return function()
+
+    @property
+    def vips_interpolate_nearest_static(self):
+        """Returns VIPS's Nearest Neighbour interpolator"""
+        function = self.functions.get('vips_interpolate_nearest_static', None)
+
+        if function is None:
+            function = self.libvips.vips_interpolate_nearest_static
+            function.argtypes = []
+            function.restype = c_void_p
+            self.functions['vips_interpolate_nearest_static'] = function
+        return function()
+
+    def im_affinei(self, input, output, interpolate, a, b, c, d, dx, dy,
+                   ox, oy, ow, oh):
+        """
+        This operator performs an affine transform on the image `input` using
+        `interpolate`.
+
+        The transform is:
+          X = `a` * x + `b` * y + `dx`
+          Y = `c` * x + `d` * y + `dy`
+
+          x and y are the coordinates in input image.
+          X and Y are the coordinates in output image.
+          (0,0) is the upper left corner.
+
+        The section of the output space defined by `ox`, `oy`, `ow`, `oh` is
+        written to `out`.
+
+        input: input VipsImage
+        output: output VipsImage
+        interpolate: interpolation method
+        a: transformation matrix
+        b: transformation matrix
+        c: transformation matrix
+        d: transformation matrix
+        dx: output offset
+        dy: output offset
+        ox: output region
+        oy: output region
+        ow: output region
+        oh: output region
+        """
+        im_affinei = self.functions.get('im_affinei', None)
+        if im_affinei is None:
+            def errcheck(result, func, args):
+                if result != 0:
+                    raise VError()
+                return result
+
+            im_affinei = self.libvips.im_affinei
+            im_affinei.argtypes = [c_void_p, c_void_p, c_void_p,
+                                   c_double, c_double, c_double, c_double,
+                                   c_double, c_double,
+                                   c_int, c_int, c_int, c_int]
+            im_affinei.errcheck = errcheck
+            im_affinei.restype = c_int
+            self.functions['im_affinei'] = im_affinei
+
+        return im_affinei(c_void_p(long(input)), c_void_p(long(output)),
+                          c_void_p(long(interpolate)),
+                          c_double(a), c_double(b), c_double(c), c_double(d),
+                          c_double(dx), c_double(dy),
+                          c_int(ox), c_int(oy),
+                          c_int(ow), c_int(oh))
 
     def get_concurrency(self):
         """Returns the number of threads used for computations."""
@@ -131,12 +211,46 @@ class VImage(vipsCC.VImage.VImage):
             super(VImage, self).extract_bands(band, nbands)
         )
 
-    def _scale(self, xscale, yscale):
+    def affine(self, a, b, c, d, dx, dy, ox, oy, ow, oh,
+              interpolate=None):
+        """
+        Returns a new VImage that is affine transformed from this image.
+        Uses `interpolate` as the interpolation method.
+
+        interpolate: interpolation method (near, bilinear). Default: bilinear
+
+        For other parameters, see LibVips.im_affinei()
+        """
+        if interpolate is None or interpolate == 'bilinear':
+            interpolate = VIPS.vips_interpolate_bilinear_static
+        elif interpolate == 'near':
+            interpolate = VIPS.vips_interpolate_nearest_static
+        else:
+            raise ValueError(
+                'interpolate must be near or bilinear, not {0!r}'.format(
+                    interpolate
+                )
+            )
+
+        # Link output to self, because its buffer is related to self.image()
+        # We don't want self to get destructed in C++ when Python garbage
+        # collects self if it falls out of scope.
+        output = VImage()
+        output.__inputref = self
+
+        VIPS.im_affinei(self.image(), output.image(), interpolate,
+                        a, b, c, d, dx, dy, ox, oy, ow, oh)
+
+        return output
+
+
+    def _scale(self, xscale, yscale, interpolate):
         """
         Returns a new VImage that has been scaled by `xscale` and `yscale`.
 
         xscale: floating point scaling value for image
         yscale: floating point scaling value for image
+        interpolate: intepolation method (near, bilinear)
         """
         # Shrink by aligning the corners of the input and output images.
         #
@@ -170,17 +284,21 @@ class VImage(vipsCC.VImage.VImage):
         #      [     0, yscale]]
         a, b, c, d = xscale, 0, 0, yscale
 
-        # Align the corners with the constant term of X and Y
-        offset_x = (a - 1) / 2
-        offset_y = (d - 1) / 2
+        if interpolate == 'near':
+            # We don't offset when using Nearest Neighbour
+            offset_x = offset_y = 0
+        else:
+            # Align the corners with the constant term of X and Y
+            offset_x = (a - 1) / 2
+            offset_y = (d - 1) / 2
 
         # No translation, so top-left corners match.
         output_x, output_y = 0, 0
 
-        return self.from_vimage(
-            self.affine(a, b, c, d, offset_x, offset_y,
-                        output_x, output_y, output_width, output_height)
-        )
+        return self.affine(a=a, b=b, c=c, d=d, dx=offset_x, dy=offset_y,
+                           ox=output_x, oy=output_y,
+                           ow=output_width, oh=output_height,
+                           interpolate=interpolate)
 
     def shrink(self, xscale, yscale):
         """
@@ -197,7 +315,8 @@ class VImage(vipsCC.VImage.VImage):
             raise ValueError(
                 'yscale {0!r} be between 0.0 and 1.0'.format(yscale)
             )
-        return self._scale(xscale=xscale, yscale=yscale)
+        return self._scale(xscale=xscale, yscale=yscale,
+                           interpolate='bilinear')
 
     def stretch(self, xscale, yscale):
         """
@@ -214,23 +333,7 @@ class VImage(vipsCC.VImage.VImage):
             raise ValueError(
                 'yscale {0!r} cannot be less than 1.0'.format(yscale)
             )
-
-        # We need to extend the image past its border so that interpolation
-        # does not cause black borders due to missing data.
-        border = XY(1, 1)               # Add a pixel border for interpolation
-        extended = self.embed(fill='extend', left=border.x, top=border.y,
-                              width=self.Xsize() + border.x * 2,
-                              height=self.Ysize() + border.y * 2)
-
-        # Now we can safely call _scale() without worrying about black borders.
-        stretched = extended._scale(xscale=xscale, yscale=yscale)
-
-        # Crop to the final extents, taking away the extra border we
-        # introduced.
-        return stretched.extract_area(left=int(border.x * xscale),
-                                      top=int(border.y * yscale),
-                                      width=int(self.Xsize() * xscale),
-                                      height=int(self.Ysize() * yscale))
+        return self._scale(xscale=xscale, yscale=yscale, interpolate='near')
 
     def tms_align(self, tile_width, tile_height, offset):
         """

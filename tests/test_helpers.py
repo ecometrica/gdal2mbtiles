@@ -423,7 +423,6 @@ class TestImageSlice(unittest.TestCase):
         self.inputfile = os.path.join(__dir__, 'bluemarble.tif')
         self.alignedfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
         self.spanningfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
-        self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
