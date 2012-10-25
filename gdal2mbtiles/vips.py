@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 from ctypes import c_int, cdll
+from ctypes.util import find_library
 from math import ceil
 from multiprocessing import cpu_count
 
@@ -18,8 +19,11 @@ from .utils import tempenv
 class LibVips(object):
     """Wrapper object around C library."""
 
-    def __init__(self, version):
-        self.libvips = cdll.LoadLibrary('libvips.so.{0}'.format(version))
+    def __init__(self, version=None):
+        library = find_library('vips')
+        if version is not None or library is None:
+            library = 'libvips.so.{0:d}'.format(version)
+        self.libvips = cdll.LoadLibrary(library)
         self.functions = {}
 
     @classmethod
@@ -48,7 +52,7 @@ class LibVips(object):
             self.functions['vips_concurrency_set'] = vips_concurrency_set
         vips_concurrency_set(c_int(processes))
 
-VIPS = LibVips(version=15)
+VIPS = LibVips()
 
 
 class VImage(vipsCC.VImage.VImage):

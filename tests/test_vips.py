@@ -12,19 +12,16 @@ from gdal2mbtiles.vips import LibVips, TmsTiles, VImage, VIPS
 
 
 class TestLibVips(unittest.TestCase):
-    def setUp(self):
-        self.version = 15
-
     def tearDown(self):
         VIPS.set_concurrency(processes=0)  # Auto-detect
 
     def test_create(self):
-        self.assertTrue(LibVips(version=self.version))
+        self.assertTrue(LibVips())
         self.assertRaises(OSError, LibVips, version=999)
 
     def test_concurrency(self):
         concurrency = 42
-        vips = LibVips(version=self.version)
+        vips = LibVips()
         self.assertRaises(ValueError, vips.set_concurrency, processes=1.1)
         self.assertRaises(ValueError, vips.set_concurrency, processes=-1)
         self.assertEqual(vips.set_concurrency(processes=concurrency), None)
