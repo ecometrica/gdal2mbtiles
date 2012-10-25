@@ -88,9 +88,10 @@ class Metadata(object, DictMixin):
         return value[0]
 
     def __setitem__(self, i, y):
-        validator = getattr(self, '_validate_' + i, None)
-        if validator is not None:
-            validator(y)
+        cleaner = getattr(self, '_clean_' + i, None)
+        if cleaner is not None:
+            y = cleaner(y)
+
         return self._setitem(i, y)
 
     def _setitem(self, i, y):
@@ -183,7 +184,7 @@ class Metadata_1_0(Metadata):
     TYPES = enum(OVERLAY='overlay',
                  BASELAYER='baselayer')
 
-    def _validate_type(self, value):
+    def _clean_type(self, value):
         if value not in self.TYPES:
             raise MetadataValueError(
                 "type {value!r} must be one of: {types}".format(
@@ -191,6 +192,7 @@ class Metadata_1_0(Metadata):
                     types=', '.join(sorted(self.TYPES))
                 )
             )
+        return value
 
 
 class Metadata_1_1(Metadata_1_0):
@@ -218,7 +220,7 @@ class Metadata_1_1(Metadata_1_0):
     FORMATS = enum(PNG='png',
                    JPG='jpg')
 
-    def _validate_format(self, value):
+    def _clean_format(self, value):
         if value not in self.FORMATS:
             raise MetadataValueError(
                 "format {value!r} must be one of: {formats}".format(
@@ -226,16 +228,31 @@ class Metadata_1_1(Metadata_1_0):
                     formats=', '.join(sorted(self.FORMATS))
                 )
             )
+        return value
 
-    def _validate_bounds(self, value):
-        try:
+    def _clean_bounds(self, value, places=5):
+        if isinstance(value, basestring):
             left, bottom, right, top = [float(b) for b in value.split(',')]
+        else:
+            left, bottom, right, top = value
+
+        # Preventing ridiculous values due to floating point
+        left = round(left, places)
+        bottom = round(bottom, places)
+        right = round(right, places)
+        top = round(top, places)
+
+        try:
             if left >= right or bottom >= top or \
                left < -180.0 or right > 180.0 or \
                bottom < -90.0 or top > 90.0:
                 raise ValueError()
         except ValueError:
             raise MetadataValueError("Invalid bounds: {0!r}".format(value))
+
+        return '{left!r},{bottom!r},{right!r},{top!r}'.format(
+            left=left, bottom=bottom, right=right, top=top
+        )
 
 
 class Metadata_1_2(Metadata_1_1):

@@ -46,15 +46,20 @@ class TestGdal2mbtilesScript(unittest.TestCase):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
             command = [sys.executable, self.script, self.inputfile, output.name]
             check_call(command, env=self.environ)
+
+            # Dataset (upsampling.tif) bounds in EPSG:4326
+            dataset_bounds = '-180.0,-90.0,180.0,90.0'
+
             with MBTiles(output.name) as mbtiles:
                 # Default metadata
                 cursor = mbtiles._conn.execute('SELECT * FROM metadata')
-                self.assertEqual(dict(cursor.fetchall()),
-                                 dict(name=os.path.basename(self.inputfile),
-                                      description='',
-                                      format='png',
-                                      type='overlay',
-                                      version='1.0.0'))
+                self.assertTrue(dict(cursor.fetchall()),
+                                dict(name=os.path.basename(self.inputfile),
+                                     description='',
+                                     format='png',
+                                     type='overlay',
+                                     version='1.0.0',
+                                     bounds=dataset_bounds))
 
             command = [sys.executable, self.script,
                        '--name', 'test',
@@ -72,7 +77,8 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                                       description='Unit test',
                                       format='jpg',
                                       type='baselayer',
-                                      version='2.0.1'))
+                                      version='2.0.1',
+                                      bounds=dataset_bounds))
 
     def test_warp(self):
         null = open('/dev/null', 'rw')

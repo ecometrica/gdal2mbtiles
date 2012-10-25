@@ -44,6 +44,10 @@ class TestImageMbtiles(unittest.TestCase):
                         [(2, x, y) for x in range(0, 4) for y in range(0, 4)] +
                         [(3, x, y) for x in range(0, 8) for y in range(0, 8)])
                 )
+                self.assertEqual(
+                    storage.mbtiles.metadata['bounds'],
+                    '-90.0,-90.0,0.0,0.0'
+                )
 
 
 class TestImagePyramid(unittest.TestCase):
@@ -510,6 +514,10 @@ class TestWarpMbtiles(unittest.TestCase):
                         [(1, x, y) for x in range(0, 2) for y in range(0, 2)] +
                         [(2, x, y) for x in range(0, 4) for y in range(0, 4)] +
                         [(3, x, y) for x in range(0, 8) for y in range(0, 8)])
+                )
+                self.assertEqual(
+                    storage.mbtiles.metadata['bounds'],
+                    '-180.0,-90.0,0.0,0.0'
                 )
 
 

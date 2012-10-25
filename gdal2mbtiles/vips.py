@@ -524,6 +524,11 @@ class TmsPyramid(object):
                                 max_resolution=self.max_resolution)
         self.storage.waitall()
 
+        # Post-import hook needs to be called in case the storage has to
+        # update some metadata
+        self.storage.post_import(pyramid=self)
+
+
 def validate_resolutions(resolution, min_resolution=None,
                          max_resolution=None):
     if min_resolution is not None and \

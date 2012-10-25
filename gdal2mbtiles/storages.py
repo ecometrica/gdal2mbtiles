@@ -8,6 +8,7 @@ from functools import partial
 import os
 
 from .constants import TILE_SIDE
+from .gdal import SpatialReference
 from .mbtiles import MBTiles
 from .pool import Pool
 from .types import rgba
@@ -50,6 +51,10 @@ class Storage(object):
     def filepath(self, x, y, z, hashed):
         """Returns the filepath."""
         raise NotImplementedError()
+
+    def post_import(self, pyramid):
+        """Runs after `pyramid` has finished importing into this storage."""
+        pass
 
     def save(self, x, y, z, image):
         """Saves `image` at coordinates `x`, `y`, and `z`."""
@@ -230,18 +235,26 @@ class MbtilesStorage(Storage):
         """
 
         bounds = metadata.get('bounds', None)
-        if bounds is not None and not isinstance(bounds, basestring):
-            metadata['bounds'] = (
-                '{ll.x!r},{ll.y!r},{ur.x!r},{ur.y!r}'.format(
-                    ll=bounds.lower_left,
-                    ur=bounds.upper_right
-                )
-            )
+        if bounds is not None:
+            metadata['bounds'] = bounds.lower_left + bounds.upper_right
         mbtiles = MBTiles.create(filename=filename, metadata=metadata,
                                  version=version)
         return cls(renderer=renderer,
                    filename=mbtiles,
                    **kwargs)
+
+    def post_import(self, pyramid):
+        """Insert the dataset extents into the metadata."""
+        # The MBTiles spec says that the bounds must be in EPSG:4326
+        transform = pyramid.dataset.GetCoordinateTransformation(
+            dst_ref=SpatialReference.FromEPSG(4326)
+        )
+
+        lower_left, upper_right = pyramid.dataset.GetTiledExtents(
+            transform=transform
+        )
+
+        self.mbtiles.metadata['bounds'] = lower_left + upper_right
 
     def save(self, x, y, z, image):
         """Saves `image` at coordinates `x`, `y`, and `z`."""
