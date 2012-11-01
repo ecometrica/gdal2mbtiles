@@ -60,11 +60,10 @@ def preprocess(inputfile, outputfile, colours=None, band=None, spatial_ref=None,
     ]
     if colours is not None:
         # Colourization should wrap the other functions
-        functions = (
-            [(lambda f: colourize(inputfile=f, colours=colours, band=band))] +
-            functions +
-            [(lambda f: expand_colour_bands(inputfile=f))]
-        )
+        functions.extend([
+            (lambda f: colourize(inputfile=f, colours=colours, band=band)),
+            (lambda f: expand_colour_bands(inputfile=f)),
+        ])
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
 
