@@ -105,11 +105,9 @@ class LibVips(object):
             self.functions['im_affinei'] = im_affinei
 
         return im_affinei(c_void_p(long(input)), c_void_p(long(output)),
-                          c_void_p(long(interpolate)),
-                          c_double(a), c_double(b), c_double(c), c_double(d),
-                          c_double(dx), c_double(dy),
-                          c_int(ox), c_int(oy),
-                          c_int(ow), c_int(oh))
+                          interpolate,
+                          a, b, c, d, dx, dy,
+                          ox, oy, ow, oh)
 
     def get_concurrency(self):
         """Returns the number of threads used for computations."""
@@ -130,7 +128,7 @@ class LibVips(object):
             vips_concurrency_set.argtypes = [c_int]
             vips_concurrency_set.restype = None
             self.functions['vips_concurrency_set'] = vips_concurrency_set
-        vips_concurrency_set(c_int(processes))
+        vips_concurrency_set(processes)
 
 VIPS = LibVips()
 
@@ -242,7 +240,6 @@ class VImage(vipsCC.VImage.VImage):
                         a, b, c, d, dx, dy, ox, oy, ow, oh)
 
         return output
-
 
     def _scale(self, xscale, yscale, interpolate):
         """
