@@ -59,9 +59,10 @@ def preprocess(inputfile, outputfile, colors=None, band=None, spatial_ref=None,
                         resampling=resampling)),
     ]
     if colors is not None:
-        # Colorization should wrap the other functions
+        # Apply a color palette to inputfile AFTER warping, so we don't have
+        # to warp four bands, just one.
         functions.extend([
-            (lambda f: colorize(inputfile=f, colors=colors, band=band)),
+            (lambda f: palettize(inputfile=f, colors=colors, band=band)),
             (lambda f: expand_color_bands(inputfile=f)),
         ])
     return pipeline(inputfile=inputfile, outputfile=outputfile,
@@ -92,9 +93,9 @@ def pipeline(inputfile, outputfile, functions, **kwargs):
             f.close()
 
 
-def colorize(inputfile, colors, band=None):
+def palettize(inputfile, colors, band=None):
     """
-    Takes an GDAL-readable inputfile and generates the VRT to colorize it.
+    Takes an GDAL-readable inputfile and generates the VRT to palettize it.
 
     You can also specify a ComplexSource Look Up Table (LUT) that allows you to
     interpolate colors between source values.

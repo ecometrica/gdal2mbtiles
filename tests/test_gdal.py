@@ -17,7 +17,7 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (Dataset, colorize, expand_color_bands, warp,
+from gdal2mbtiles.gdal import (Dataset, palettize, expand_color_bands, warp,
                                preprocess, SpatialReference, VRT)
 from gdal2mbtiles.types import Extents, rgba, XY
 
@@ -38,15 +38,15 @@ class TestCase(unittest.TestCase):
                                places=places)
 
 
-class TestColorize(unittest.TestCase):
+class TestPalettize(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'srtm.tif')
 
     def test_simple(self):
-        vrt = colorize(inputfile=self.inputfile,
-                       colors={0: rgba(0, 0, 0, 255),
-                               1: rgba(255, 255, 255, 255)})
+        vrt = palettize(inputfile=self.inputfile,
+                        colors={0: rgba(0, 0, 0, 255),
+                                1: rgba(255, 255, 255, 255)})
         root = vrt.get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         color_table = root.find('VRTRasterBand').find('ColorTable')
@@ -63,14 +63,14 @@ class TestColorize(unittest.TestCase):
 
     def test_invalid(self):
         self.assertRaises(GdalError,
-                          colorize,
+                          palettize,
                           inputfile='/dev/null',
                           colors={0: rgba(0, 0, 0, 255),
                                   1: rgba(255, 255, 255, 255)})
 
     def test_missing_band(self):
         self.assertRaises(VrtError,
-                          colorize,
+                          palettize,
                           inputfile=self.inputfile,
                           colors={0: rgba(0, 0, 0, 255),
                                   1: rgba(255, 255, 255, 255)},
@@ -78,12 +78,12 @@ class TestColorize(unittest.TestCase):
 
     def test_invalid_colors(self):
         self.assertRaises(AttributeError,
-                          colorize,
+                          palettize,
                           inputfile=self.inputfile,
                           colors={0: 'red',
                                   1: 'green'})
         self.assertRaises(TypeError,
-                          colorize,
+                          palettize,
                           inputfile=self.inputfile,
                           colors=None)
 
@@ -91,7 +91,7 @@ class TestColorize(unittest.TestCase):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
         in_band = 1
 
-        vrt = colorize(inputfile=inputfile,
+        vrt = palettize(inputfile=inputfile,
                        colors={0: rgba(0, 0, 0, 255),
                                1: rgba(255, 255, 255, 255)},
                        band=in_band)
@@ -109,9 +109,9 @@ class TestExpandColorBands(unittest.TestCase):
                                       'srtm.tif')
 
     def test_simple(self):
-        vrt = colorize(inputfile=self.inputfile,
-                       colors={0: rgba(0, 0, 0, 255),
-                               1: rgba(255, 255, 255, 255)})
+        vrt = palettize(inputfile=self.inputfile,
+                        colors={0: rgba(0, 0, 0, 255),
+                                1: rgba(255, 255, 255, 255)})
         with vrt.get_tempfile(suffix='.vrt') as paletted:
             vrt = expand_color_bands(inputfile=paletted.name)
             root = vrt.get_root()

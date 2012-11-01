@@ -110,7 +110,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
             colors={0: rgba(0, 0, 0, 255),
                     10: rgba(255, 255, 255, 255)}
             Defaults to no colorization.
-    band: Select band to colorize and expand to RGBA. Defaults to 1.
+    band: Select band to palettize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
@@ -152,7 +152,7 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
             colors={0: rgba(0, 0, 0, 255),
                     10: rgba(255, 255, 255, 255)}
             Defaults to no colorization.
-    band: Select band to colorize and expand to RGBA. Defaults to 1.
+    band: Select band to palettize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
@@ -197,7 +197,7 @@ def warp_slice(inputfile, outputdir, colors=None, band=None,
             colors={0: rgba(0, 0, 0, 255),
                     10: rgba(255, 255, 255, 255)}
             Defaults to no colorization.
-    band: Select band to colorize and expand to RGBA. Defaults to 1.
+    band: Select band to palettize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
