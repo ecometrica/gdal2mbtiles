@@ -54,17 +54,26 @@ def check_output_gdal(*popenargs, **kwargs):
 
 def preprocess(inputfile, outputfile, colors=None, band=None, spatial_ref=None,
                resampling=None, compress=None, **kwargs):
-    functions = [
-        (lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
-                        resampling=resampling)),
-    ]
+    functions = []
+
+    # Extract desired band to apply colors
     if colors is not None:
-        # Apply a color palette to inputfile AFTER warping, so we don't have
-        # to warp four bands, just one.
+        if band is None:
+            band = 1
+        functions.append(lambda f: extract_color_band(inputfile=f, band=band))
+
+    # Warp
+    functions.append(lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
+                                    resampling=resampling)),
+
+    # Apply colors to inputfile AFTER warping, so we don't have to warp four
+    # bands, just one.
+    if colors is not None:
         functions.extend([
-            (lambda f: palettize(inputfile=f, colors=colors, band=band)),
+            (lambda f: palettize(inputfile=f, colors=colors, band=1)),
             (lambda f: expand_color_bands(inputfile=f)),
         ])
+
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
 
@@ -176,6 +185,34 @@ def expand_color_bands(inputfile):
         '-of', 'VRT',           # Output to VRT
         '-expand', 'rgba',      # RGBA bands
         '-ot', 'Byte',          # 8-bit bands (so that GIMP can open)
+        inputfile,
+        '/dev/stdout'
+    ]
+    try:
+        return VRT(check_output_gdal([str(e) for e in command]))
+    except CalledGdalError as e:
+        if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
+                       "file format."):
+            # HACK: WTF?!?
+            return VRT(e.output)
+        raise
+
+
+def extract_color_band(inputfile, band):
+    """
+    Takes an inputfile (probably a VRT) and generates a single-band VRT.
+    """
+    dataset = Dataset(inputfile)
+    if not 1 <= band <= dataset.RasterCount:
+        raise ValueError(
+            "band must be between 1 and {0}".format(dataset.RasterCount)
+        )
+
+    command = [
+        GDALTRANSLATE,
+        '-q',                   # Quiet
+        '-of', 'VRT',           # Output to VRT
+        '-b', band,             # Single band
         inputfile,
         '/dev/stdout'
     ]

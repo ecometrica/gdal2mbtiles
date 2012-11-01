@@ -17,7 +17,8 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (Dataset, palettize, expand_color_bands, warp,
+from gdal2mbtiles.gdal import (Dataset, palettize, expand_color_bands,
+                               extract_color_band, warp,
                                preprocess, SpatialReference, VRT)
 from gdal2mbtiles.types import Extents, rgba, XY
 
@@ -127,6 +128,32 @@ class TestExpandColorBands(unittest.TestCase):
         self.assertRaises(GdalError,
                           expand_color_bands,
                           inputfile='/dev/null')
+
+
+class TestExtractColorBand(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__,
+                                      'bluemarble.tif')
+
+    def test_simple(self):
+        # Grab the green band
+        vrt = extract_color_band(inputfile=self.inputfile,
+                                 band=2)
+        root = vrt.get_root()
+        # There is just one band.
+        self.assertEqual(len(root.findall('.//VRTRasterBand')), 1)
+        self.assertEqual(root.find('.//VRTRasterBand/ColorInterp').text,
+                         'Green')
+
+    def test_invalid(self):
+        self.assertRaises(GdalError,
+                          extract_color_band,
+                          inputfile='/dev/null', band=1)
+
+        # Non-existant band
+        self.assertRaises(ValueError,
+                          extract_color_band,
+                          inputfile=self.inputfile, band=10)
 
 
 class TestWarp(unittest.TestCase):
