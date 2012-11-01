@@ -62,8 +62,8 @@ def parse_args(args):
                        help='Tile image format. Defaults to "png"')
 
     group = parser.add_argument_group(title='GDAL warp arguments')
-    # group.add_argument('--colourize-band', default=1,
-    #                    help='Raster band to colourize. Defaults to 1')
+    # group.add_argument('--colorize-band', default=1,
+    #                    help='Raster band to colorize. Defaults to 1')
     group.add_argument('--spatial-reference', type=int, default=3785,
                        help=('Destination EPSG spatial reference. '
                              'Defaults to 3785'))

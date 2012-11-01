@@ -85,8 +85,8 @@ class PngRenderer(Renderer):
     compression: PNG compression level. Default 6.
     interlace: Use ADAM7 interlacing. Default False.
     png8: Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs. Default False.
-          If an integer, specifies number of colours in palette.
-          If True, defaults to 256 colours.
+          If an integer, specifies number of colors in palette.
+          If True, defaults to 256 colors.
     optimize: Optimizes PNG using optipng. Default False. See `optipng -h`.
     suffix: Suffix for filename. Default '.png'.
 

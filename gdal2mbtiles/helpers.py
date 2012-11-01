@@ -96,7 +96,7 @@ def image_slice(inputfile, outputdir, hasher=None, renderer=None):
     pyramid.slice()
 
 
-def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
+def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, renderer=None,
                  hasher=None):
@@ -106,11 +106,11 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
     inputfile: Filename
     outputfile: The output .mbtiles file.
 
-    colours: Colour palette applied to single band files.
-             colours={0: rgba(0, 0, 0, 255),
-                      10: rgba(255, 255, 255, 255)}
-             Defaults to no colourization.
-    band: Select band to colourize and expand to RGBA. Defaults to 1.
+    colors: Color palette applied to single band files.
+            colors={0: rgba(0, 0, 0, 255),
+                    10: rgba(255, 255, 255, 255)}
+            Defaults to no colorization.
+    band: Select band to colorize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
@@ -129,7 +129,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution)
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
-                   colours=colours, band=band, spatial_ref=spatial_ref,
+                   colors=colors, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress='LZW')
         return image_mbtiles(inputfile=tempfile.name, outputfile=outputfile,
                              metadata=metadata,
@@ -138,7 +138,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colours=None, band=None,
                              hasher=hasher)
 
 
-def warp_pyramid(inputfile, outputdir, colours=None, band=None,
+def warp_pyramid(inputfile, outputdir, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, renderer=None,
                  hasher=None):
@@ -148,11 +148,11 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
 
-    colours: Colour palette applied to single band files.
-             colours={0: rgba(0, 0, 0, 255),
-                      10: rgba(255, 255, 255, 255)}
-             Defaults to no colourization.
-    band: Select band to colourize and expand to RGBA. Defaults to 1.
+    colors: Color palette applied to single band files.
+            colors={0: rgba(0, 0, 0, 255),
+                    10: rgba(255, 255, 255, 255)}
+            Defaults to no colorization.
+    band: Select band to colorize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
@@ -176,7 +176,7 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution)
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
-                   colours=colours, band=band, spatial_ref=spatial_ref,
+                   colors=colors, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress='LZW')
         return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
                              min_resolution=min_resolution,
@@ -184,7 +184,7 @@ def warp_pyramid(inputfile, outputdir, colours=None, band=None,
                              hasher=hasher)
 
 
-def warp_slice(inputfile, outputdir, colours=None, band=None,
+def warp_slice(inputfile, outputdir, colors=None, band=None,
                spatial_ref=None, resampling=None,
                renderer=None, hasher=None):
     """
@@ -193,11 +193,11 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
 
-    colours: Colour palette applied to single band files.
-             colours={0: rgba(0, 0, 0, 255),
-                      10: rgba(255, 255, 255, 255)}
-             Defaults to no colourization.
-    band: Select band to colourize and expand to RGBA. Defaults to 1.
+    colors: Color palette applied to single band files.
+            colors={0: rgba(0, 0, 0, 255),
+                    10: rgba(255, 255, 255, 255)}
+            Defaults to no colorization.
+    band: Select band to colorize and expand to RGBA. Defaults to 1.
     spatial_ref: Destination gdal.SpatialReference. Defaults to EPSG:3857,
                  Web Mercator
     resampling: Resampling algorithm. Defaults to GDAL's default,
@@ -214,7 +214,7 @@ def warp_slice(inputfile, outputdir, colours=None, band=None,
     """
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         preprocess(inputfile=inputfile, outputfile=tempfile.name,
-                   colours=colours, band=band, spatial_ref=spatial_ref,
+                   colors=colors, band=band, spatial_ref=spatial_ref,
                    resampling=resampling, compress='LZW')
         return image_slice(inputfile=tempfile.name, outputdir=outputdir,
                            renderer=renderer, hasher=hasher)

@@ -17,7 +17,7 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (Dataset, colourize, expand_colour_bands, warp,
+from gdal2mbtiles.gdal import (Dataset, colorize, expand_color_bands, warp,
                                preprocess, SpatialReference, VRT)
 from gdal2mbtiles.types import Extents, rgba, XY
 
@@ -38,15 +38,15 @@ class TestCase(unittest.TestCase):
                                places=places)
 
 
-class TestColourize(unittest.TestCase):
+class TestColorize(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'srtm.tif')
 
     def test_simple(self):
-        vrt = colourize(inputfile=self.inputfile,
-                        colours={0: rgba(0, 0, 0, 255),
-                                 1: rgba(255, 255, 255, 255)})
+        vrt = colorize(inputfile=self.inputfile,
+                       colors={0: rgba(0, 0, 0, 255),
+                               1: rgba(255, 255, 255, 255)})
         root = vrt.get_root()
         self.assertEqual(root.tag, 'VRTDataset')
         color_table = root.find('VRTRasterBand').find('ColorTable')
@@ -63,38 +63,38 @@ class TestColourize(unittest.TestCase):
 
     def test_invalid(self):
         self.assertRaises(GdalError,
-                          colourize,
+                          colorize,
                           inputfile='/dev/null',
-                          colours={0: rgba(0, 0, 0, 255),
-                                   1: rgba(255, 255, 255, 255)})
+                          colors={0: rgba(0, 0, 0, 255),
+                                  1: rgba(255, 255, 255, 255)})
 
     def test_missing_band(self):
         self.assertRaises(VrtError,
-                          colourize,
+                          colorize,
                           inputfile=self.inputfile,
-                          colours={0: rgba(0, 0, 0, 255),
-                                   1: rgba(255, 255, 255, 255)},
+                          colors={0: rgba(0, 0, 0, 255),
+                                  1: rgba(255, 255, 255, 255)},
                           band=2)
 
-    def test_invalid_colours(self):
+    def test_invalid_colors(self):
         self.assertRaises(AttributeError,
-                          colourize,
+                          colorize,
                           inputfile=self.inputfile,
-                          colours={0: 'red',
-                                   1: 'green'})
+                          colors={0: 'red',
+                                  1: 'green'})
         self.assertRaises(TypeError,
-                          colourize,
+                          colorize,
                           inputfile=self.inputfile,
-                          colours=None)
+                          colors=None)
 
     def test_nodata(self):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
         in_band = 1
 
-        vrt = colourize(inputfile=inputfile,
-                        colours={0: rgba(0, 0, 0, 255),
-                                 1: rgba(255, 255, 255, 255)},
-                        band=in_band)
+        vrt = colorize(inputfile=inputfile,
+                       colors={0: rgba(0, 0, 0, 255),
+                               1: rgba(255, 255, 255, 255)},
+                       band=in_band)
         with vrt.get_tempfile(suffix='.vrt') as outputfile:
             # No Data value must be the same as the input file's
             in_data = Dataset(inputfile)
@@ -103,29 +103,29 @@ class TestColourize(unittest.TestCase):
                              out_data.GetRasterBand(1).GetNoDataValue())
 
 
-class TestExpandColourBands(unittest.TestCase):
+class TestExpandColorBands(unittest.TestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'srtm.tif')
 
     def test_simple(self):
-        vrt = colourize(inputfile=self.inputfile,
-                        colours={0: rgba(0, 0, 0, 255),
-                                 1: rgba(255, 255, 255, 255)})
+        vrt = colorize(inputfile=self.inputfile,
+                       colors={0: rgba(0, 0, 0, 255),
+                               1: rgba(255, 255, 255, 255)})
         with vrt.get_tempfile(suffix='.vrt') as paletted:
-            vrt = expand_colour_bands(inputfile=paletted.name)
+            vrt = expand_color_bands(inputfile=paletted.name)
             root = vrt.get_root()
-            # There are four colours, RGBA.
+            # There are four colors, RGBA.
             self.assertEqual(len(root.findall('.//VRTRasterBand')), 4)
 
-    def test_no_colour_table(self):
-        # srtm.tif has no colour table
+    def test_no_color_table(self):
+        # srtm.tif has no color table
         self.assertRaises(CalledGdalError,
-                          expand_colour_bands, inputfile=self.inputfile)
+                          expand_color_bands, inputfile=self.inputfile)
 
     def test_invalid(self):
         self.assertRaises(GdalError,
-                          expand_colour_bands,
+                          expand_color_bands,
                           inputfile='/dev/null')
 
 
@@ -222,8 +222,8 @@ class TestPreprocess(unittest.TestCase):
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colours={0: rgba(0, 0, 0, 255),
-                                1: rgba(255, 255, 255, 255)})
+                       colors={0: rgba(0, 0, 0, 255),
+                               1: rgba(255, 255, 255, 255)})
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
@@ -244,8 +244,8 @@ class TestPreprocess(unittest.TestCase):
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colours={0: rgba(0, 0, 0, 255),
-                                1: rgba(255, 255, 255, 255)})
+                       colors={0: rgba(0, 0, 0, 255),
+                               1: rgba(255, 255, 255, 255)})
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
@@ -340,7 +340,7 @@ class TestVrt(TestCase):
             out_data = Dataset(outputfile)
 
             # gdalwarp outputs rgba(0, 0, 0, 0) as transparent, so the
-            # upper-left corner should have this colour.
+            # upper-left corner should have this color.
             self.assertEqual(out_data.ReadAsArray(0, 0, 1, 1).tolist(),
                              [[[0]], [[0]], [[0]], [[0]]])
 

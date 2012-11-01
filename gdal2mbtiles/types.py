@@ -25,13 +25,13 @@ _rgba = namedtuple(typename='_rgba',
 
 
 class rgba(_rgba):
-    """Represents an RGBA colour."""
+    """Represents an RGBA color."""
     def __new__(cls, r, g, b, a=255):
         return super(rgba, cls).__new__(cls, r, g, b, a)
 
     @classmethod
     def webcolor(cls, color):
-        """Returns an RGBA colour from its HTML/CSS representation."""
+        """Returns an RGBA color from its HTML/CSS representation."""
         if color.startswith('#'):
             return cls(*webcolors.hex_to_rgb(color))
         return cls(*webcolors.name_to_rgb(color))

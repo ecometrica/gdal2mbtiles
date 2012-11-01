@@ -52,17 +52,17 @@ def check_output_gdal(*popenargs, **kwargs):
     return stdoutdata
 
 
-def preprocess(inputfile, outputfile, colours=None, band=None, spatial_ref=None,
+def preprocess(inputfile, outputfile, colors=None, band=None, spatial_ref=None,
                resampling=None, compress=None, **kwargs):
     functions = [
         (lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
                         resampling=resampling)),
     ]
-    if colours is not None:
-        # Colourization should wrap the other functions
+    if colors is not None:
+        # Colorization should wrap the other functions
         functions.extend([
-            (lambda f: colourize(inputfile=f, colours=colours, band=band)),
-            (lambda f: expand_colour_bands(inputfile=f)),
+            (lambda f: colorize(inputfile=f, colors=colors, band=band)),
+            (lambda f: expand_color_bands(inputfile=f)),
         ])
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
@@ -92,20 +92,20 @@ def pipeline(inputfile, outputfile, functions, **kwargs):
             f.close()
 
 
-def colourize(inputfile, colours, band=None):
+def colorize(inputfile, colors, band=None):
     """
-    Takes an GDAL-readable inputfile and generates the VRT to colourize it.
+    Takes an GDAL-readable inputfile and generates the VRT to colorize it.
 
     You can also specify a ComplexSource Look Up Table (LUT) that allows you to
-    interpolate colours between source values.
-        colours = {0: rgba(0, 0, 0, 255),
+    interpolate colors between source values.
+        colors = {0: rgba(0, 0, 0, 255),
                    10: rgba(255, 255, 255, 255)}
-    This means that at value 5, the colour represented would be
+    This means that at value 5, the color represented would be
     rgba(128, 128, 128, 255).
     """
-    if not hasattr(colours, 'items'):
+    if not hasattr(colors, 'items'):
         raise TypeError(
-            'colours must be a dict, not a {}'.format(type(colours))
+            'colors must be a dict, not a {}'.format(type(colors))
         )
     if band is None:
         band = 1
@@ -135,19 +135,19 @@ def colourize(inputfile, colours, band=None):
     if rasterband is None:
         raise VrtError('Cannot locate VRTRasterBand %d' % band)
 
-    # Sort the colours by value
-    colours = OrderedDict(sorted(colours.items(), key=itemgetter(0)))
+    # Sort the colors by value
+    colors = OrderedDict(sorted(colors.items(), key=itemgetter(0)))
 
-    # Set up the colour palette
+    # Set up the color palette
     rasterband.set('band', '1')   # Destination band should always be 1
     rasterband.find('ColorInterp').text = 'Palette'
     colortable = SubElement(rasterband, 'ColorTable')
     colortable.extend(
         Element('Entry', c1=str(c.r), c2=str(c.g), c3=str(c.b), c4=str(c.a))
-        for c in colours.values()
+        for c in colors.values()
     )
 
-    # Define the colour lookup table
+    # Define the color lookup table
     source = rasterband.find('ComplexSource')
     if source is None:
         source = rasterband.find('SimpleSource')
@@ -157,13 +157,13 @@ def colourize(inputfile, colours, band=None):
     if lut is None:
         lut = SubElement(source, 'LUT')
     lut.text = ',\n'.join('%s:%d' % (band_value, i)
-                          for i, band_value in enumerate(colours.keys()))
+                          for i, band_value in enumerate(colors.keys()))
 
     vrt.update_content(root=root)
     return vrt
 
 
-def expand_colour_bands(inputfile):
+def expand_color_bands(inputfile):
     """
     Takes a paletted inputfile (probably a VRT) and generates a RGBA VRT.
     """
