@@ -3,12 +3,15 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from collections import OrderedDict
 from math import log
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
 import unittest
 from xml.etree import ElementTree
+
+import numpy
 
 from osgeo import osr
 from osgeo.gdalconst import GRA_Cubic
@@ -17,8 +20,8 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (Dataset, palettize, expand_color_bands,
-                               extract_color_band, warp,
+from gdal2mbtiles.gdal import (ColorBase, ColorPalette, Dataset, palettize,
+                               expand_color_bands, extract_color_band, warp,
                                preprocess, SpatialReference, VRT)
 from gdal2mbtiles.types import Extents, rgba, XY
 
@@ -60,7 +63,7 @@ class TestPalettize(unittest.TestCase):
         )
         lut = root.find('VRTRasterBand').find('ComplexSource').find('LUT')
         self.assertEqual(lut.text,
-                         '0:0,\n1:1')
+                         '-32768:0,\n1:1')
 
     def test_invalid(self):
         self.assertRaises(GdalError,
@@ -93,9 +96,9 @@ class TestPalettize(unittest.TestCase):
         in_band = 1
 
         vrt = palettize(inputfile=inputfile,
-                       colors={0: rgba(0, 0, 0, 255),
-                               1: rgba(255, 255, 255, 255)},
-                       band=in_band)
+                        colors={0: rgba(0, 0, 0, 255),
+                                1: rgba(255, 255, 255, 255)},
+                        band=in_band)
         with vrt.get_tempfile(suffix='.vrt') as outputfile:
             # No Data value must be the same as the input file's
             in_data = Dataset(inputfile)
@@ -398,6 +401,275 @@ class TestVrt(TestCase):
         self.assertRaises(OSError,
                           vrt.render,
                           outputfile='/dev/invalid')
+
+
+class TestColors(TestCase):
+    def setUp(self):
+        self.transparent = rgba(0, 0, 0, 0)
+        self.black = rgba(0, 0, 0, 255)
+        self.red = rgba(255, 0, 0, 255)
+        self.green = rgba(0, 255, 0, 255)
+        self.blue = rgba(0, 0, 255, 255)
+        self.white = rgba(255, 255, 255, 255)
+
+        self.dataset = Dataset(os.path.join(__dir__, 'paletted.tif'))
+        self.band = self.dataset.GetRasterBand(1)
+        self.nodata_dataset = Dataset(os.path.join(__dir__,
+                                                   'paletted-nodata.tif'))
+        self.nodata_band = self.nodata_dataset.GetRasterBand(1)
+
+    def test_insert_exact(self):
+        # Empty
+        colors = ColorBase()
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-numpy.inf, self.red]])
+
+        # At minimum
+        colors = ColorBase([(0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=self.band.MinimumValue,
+                             new_color=self.red)
+        self.assertEqual(
+            sorted_colors,
+            [[-numpy.inf, self.red],
+             [-3.4028234663852886e+38, self.black]]
+        )
+
+        # Before smallest color
+        colors = ColorBase([(0, self.black),
+                            (2, self.white)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=self.band.MinimumValue,
+                             new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-numpy.inf, self.red],
+                          [-3.4028234663852886e+38, self.black],
+                          [2, self.white]])
+
+        # Between colors
+        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+                            (-1, self.black),
+                            (1, self.white)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-numpy.inf, self.transparent],
+                          [-1, self.black],
+                          [0, self.red],
+                          [1.4012984643248171e-45, self.black],
+                          [1, self.white]])
+
+        # Replacing a color
+        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+                            (0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-numpy.inf, self.transparent],
+                          [0, self.red],
+                          [1.4012984643248171e-45, self.black]])
+
+        # After largest color
+        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+                            (-1, self.black)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-numpy.inf, self.transparent],
+                          [-1, self.black],
+                          [0, self.red],
+                          [1.4012984643248171e-45, self.black]])
+
+        # At maximum
+        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+                            (0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.band)
+        colors._insert_exact(band=self.band, colors=sorted_colors,
+                             band_value=numpy.inf,
+                             new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[self.band.MinimumValue, self.transparent],
+                          [0, self.black],
+                          [numpy.inf, self.red]])
+
+    def test_palette(self):
+        # No colours.
+        colors = ColorPalette()
+        self.assertEqual(colors, {})
+        self.assertRaises(ValueError, colors.quantize, band=self.band)
+
+        # Red throughout.
+        colors = ColorPalette([(0, self.red)])
+        self.assertEqual(colors,
+                         {0: self.red})
+        self.assertEqual(colors.quantize(band=self.band),
+                         {-numpy.inf: self.red})
+
+        # Red when x < 0,
+        # Green when 0 <= x
+        colors = ColorPalette([(-1, self.red),
+                               (0, self.green)])
+        self.assertEqual(colors,
+                         {-1: self.red,
+                          0: self.green})
+        self.assertEqual(colors.quantize(band=self.band),
+                         {-numpy.inf: self.red,
+                          0: self.green})
+
+        # Black when x < -1,
+        # Red when -1 <= x < 0
+        # Green when 0 <= x < 1
+        # White when 1 <= x
+        # Nodata at 10
+        colors = ColorPalette([(-numpy.inf, self.black),
+                               (-1, self.red),
+                               (0, self.green),
+                               (1, self.white)])
+        self.assertEqual(colors,
+                         {-numpy.inf: self.black,
+                          -1: self.red,
+                          0: self.green,
+                          1: self.white})
+        self.assertEqual(
+            colors.quantize(band=self.nodata_band),
+            OrderedDict([
+                (-numpy.inf, self.black),
+                (-1, self.red),
+                (0, self.green),
+                (1, self.white),
+                (10, self.transparent),
+                (self.nodata_band.IncrementValue(10), self.white),
+            ])
+        )
+
+    def test_sorted_list(self):
+        colors = ColorBase([[0, None],
+                            [-1, None],
+                            [1, None],
+                            [-numpy.inf, None]])
+        self.assertEqual(colors._sorted_list(band=self.band),
+                         [[-numpy.inf, None],
+                          [-1, None],
+                          [0, None],
+                          [1, None]])
+
+
+class TestBand(TestCase):
+    def setUp(self):
+        # 32-bit floating point
+        self.float32file = os.path.join(__dir__, 'paletted.tif')
+        self.nodatafile = os.path.join(__dir__, 'paletted-nodata.tif')
+
+        # 16-bit signed integer
+        self.int16file = os.path.join(__dir__, 'srtm.tif')
+
+        # 8-bit unsigned integer
+        self.uint8file = os.path.join(__dir__, 'bluemarble.tif')
+
+    def test_delete_dataset(self):
+        dataset = Dataset(self.float32file)
+        band = dataset.GetRasterBand(1)
+
+        # Delete the dataset
+        del dataset
+        # Band should still be valid
+        self.assertEqual(band.GetNoDataValue(), None)
+
+    def test_get_nodata_value(self):
+        band = Dataset(self.float32file).GetRasterBand(1)
+        self.assertEqual(band.GetNoDataValue(), None)
+
+        # No data
+        band = Dataset(self.nodatafile).GetRasterBand(1)
+        self.assertEqual(band.GetNoDataValue(), 10)
+
+    def test_numpy_data_type(self):
+        self.assertEqual(
+            Dataset(self.float32file).GetRasterBand(1).NumPyDataType,
+            numpy.float32
+        )
+        self.assertEqual(
+            Dataset(self.int16file).GetRasterBand(1).NumPyDataType,
+            numpy.int16
+        )
+        self.assertEqual(
+            Dataset(self.uint8file).GetRasterBand(1).NumPyDataType,
+            numpy.uint8
+        )
+
+    def test_minimum_value(self):
+        self.assertEqual(
+            Dataset(self.float32file).GetRasterBand(1).MinimumValue,
+            float('-inf')
+        )
+        self.assertEqual(
+            Dataset(self.int16file).GetRasterBand(1).MinimumValue,
+            -(1 << 15)
+        )
+        self.assertEqual(
+            Dataset(self.uint8file).GetRasterBand(1).MinimumValue,
+            0
+        )
+
+    def test_increment_value(self):
+        # 8-bit unsigned integer
+        uint8band = Dataset(self.uint8file).GetRasterBand(1)
+        self.assertEqual(uint8band.IncrementValue(42), 43)
+        # Minimum value
+        self.assertEqual(uint8band.IncrementValue(0), 1)
+        # Maximum values
+        self.assertEqual(uint8band.IncrementValue(2 ** 8 - 2), (2 ** 8 - 1))
+        self.assertEqual(uint8band.IncrementValue(2 ** 8 - 1), (2 ** 8 - 1))
+        # How do you increment a fractional value?
+        self.assertRaises(TypeError, uint8band.IncrementValue, 1.5)
+        # How do you increment a number that is out of range?
+        self.assertRaises(ValueError, uint8band.IncrementValue, -1)
+        self.assertRaises(ValueError, uint8band.IncrementValue, (2 ** 8))
+
+        # 16-bit signed integer
+        int16band = Dataset(self.int16file).GetRasterBand(1)
+        self.assertEqual(int16band.IncrementValue(0), 1)
+        # Minimum value
+        self.assertEqual(int16band.IncrementValue(-2 ** 15), (-2 ** 15 + 1))
+        # Maximum values
+        self.assertEqual(int16band.IncrementValue(2 ** 15 - 2), (2 ** 15 - 1))
+        self.assertEqual(int16band.IncrementValue(2 ** 15 - 1), (2 ** 15 - 1))
+        # How do you increment a fractional value?
+        self.assertRaises(TypeError, int16band.IncrementValue, 1.5)
+        # How do you increment a number that is out of range?
+        self.assertRaises(ValueError, int16band.IncrementValue, (-2 ** 15 - 1))
+        self.assertRaises(ValueError, int16band.IncrementValue, (2 ** 15))
+
+        # 32-bit floating point
+        float32band = Dataset(self.float32file).GetRasterBand(1)
+        self.assertEqual(float32band.IncrementValue(0),
+                         1.4012984643248171e-45)
+        self.assertEqual(float32band.IncrementValue(0.0),
+                         1.4012984643248171e-45)
+        # Minimum values
+        self.assertEqual(float32band.IncrementValue(-numpy.inf),
+                         -3.4028234663852886e+38)
+        self.assertEqual(float32band.IncrementValue(-1.0e+100),
+                         -3.4028234663852886e+38)
+        self.assertEqual(float32band.IncrementValue(-3.4028234663852886e+38),
+                         -3.4028232635611926e+38)
+        # Maximum values
+        self.assertEqual(float32band.IncrementValue(3.4028232635611926e+38),
+                         3.4028234663852886e+38)
+        self.assertEqual(float32band.IncrementValue(3.4028234663852886e+38),
+                         numpy.inf)
+        self.assertEqual(float32band.IncrementValue(1.0e+100),
+                         numpy.inf)
+        self.assertEqual(float32band.IncrementValue(numpy.inf),
+                         numpy.inf)
 
 
 class TestDataset(TestCase):

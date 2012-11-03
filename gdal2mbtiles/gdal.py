@@ -3,6 +3,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from bisect import bisect
 from collections import OrderedDict
 import errno
 from math import pi
@@ -15,7 +16,9 @@ from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 
-from osgeo import gdal, osr
+import numpy
+
+from osgeo import gdal, gdalconst, osr
 from osgeo.gdalconst import (GA_ReadOnly, GRA_Bilinear, GRA_Cubic,
                              GRA_CubicSpline, GRA_Lanczos,
                              GRA_NearestNeighbour)
@@ -28,7 +31,7 @@ from .constants import (EPSG_WEB_MERCATOR, GDALBUILDVRT, GDALTRANSLATE,
                         GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError, VrtError)
-from .types import Extents, GdalFormat, XY
+from .types import Extents, GdalFormat, rgba, XY
 
 
 RESAMPLING_METHODS = {
@@ -69,10 +72,11 @@ def preprocess(inputfile, outputfile, colors=None, band=None, spatial_ref=None,
     # Apply colors to inputfile AFTER warping, so we don't have to warp four
     # bands, just one.
     if colors is not None:
-        functions.extend([
-            (lambda f: palettize(inputfile=f, colors=colors, band=1)),
-            (lambda f: expand_color_bands(inputfile=f)),
-        ])
+        if not isinstance(colors, ColorBase):
+            # TODO: Default to ColorPalette for now, but switch over to
+            # ColorGradient, as that seems to be a more sensible default.
+            colors = ColorPalette(**colors)
+        functions.extend(colors.pipeline(band=1))
 
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
@@ -102,6 +106,10 @@ def pipeline(inputfile, outputfile, functions, **kwargs):
             f.close()
 
 
+def colorize(inputfile, colors, band=None):
+    raise NotImplementedError()
+
+
 def palettize(inputfile, colors, band=None):
     """
     Takes an GDAL-readable inputfile and generates the VRT to palettize it.
@@ -113,14 +121,13 @@ def palettize(inputfile, colors, band=None):
     This means that at value 5, the color represented would be
     rgba(128, 128, 128, 255).
     """
-    if not hasattr(colors, 'items'):
-        raise TypeError(
-            'colors must be a dict, not a {}'.format(type(colors))
-        )
+    if not isinstance(colors, ColorBase):
+        # ColorPalette is a better default than ColorExact
+        colors = ColorPalette(**colors)
     if band is None:
         band = 1
 
-    Dataset(inputfile)
+    dataset = Dataset(inputfile)
     command = [
         GDALBUILDVRT,
         '-q',                   # Quiet
@@ -145,8 +152,8 @@ def palettize(inputfile, colors, band=None):
     if rasterband is None:
         raise VrtError('Cannot locate VRTRasterBand %d' % band)
 
-    # Sort the colors by value
-    colors = OrderedDict(sorted(colors.items(), key=itemgetter(0)))
+    # Turn colors into a format suitable for the VRT.
+    colors = colors.quantize(band=dataset.GetRasterBand(band))
 
     # Set up the color palette
     rasterband.set('band', '1')   # Destination band should always be 1
@@ -354,7 +361,287 @@ def resampling_methods(cmd=GDALWARP):
 resampling_methods._cache = None
 
 
+# Utility classes to express color lookup tables
+
+class ColorBase(dict):
+    """
+    """
+
+    def pipeline(self, band):
+        """Returns a list of functions that can be passed to pipeline()"""
+        raise NotImplementedError()
+
+    def quantize(self, band):
+        """Returns an OrderedDict of {band_value: color} for colorization"""
+        raise NotImplementedError()
+
+    def _insert_exact(self, band, colors, band_value, new_color):
+        """Insert [band_value, new_color] into `colors` as an exact color"""
+        if not colors:
+            colors.append([band.MinimumValue, new_color])
+            return
+
+        # (band_value, None) > (band_value, rgba(...)) means that index is the
+        # insertion point for the new_color.
+        if numpy.isneginf(band_value):
+            index = 0
+        else:
+            index = bisect(colors, [band_value, None])
+
+        if index == 0 or \
+           (index < len(colors) and colors[index][0] == band_value):
+            # Save the old_color
+            old_color = colors[index][1]
+            # Replace an existing color entry with the new_color
+            colors[index][1] = new_color
+        else:
+            # Save the old_color
+            old_color = colors[index - 1][1]
+            # Insert the new_color
+            colors.insert(index, [band_value, new_color])
+
+        if old_color is not None:
+            # Now we need to propagate the old_color after the nodata value
+            # Make sure that we don't clobber another color by accident.
+            after_value = band.IncrementValue(band_value)
+            if not numpy.isposinf(after_value):
+                index += 1
+                if index > len(colors):
+                    colors.append([after_value, old_color])
+                elif index == len(colors) or colors[index][0] > after_value:
+                    colors.insert(index, [after_value, old_color])
+
+    def _sorted_list(self, band):
+        """Returns this object as a sorted list of [band_value, color] lists"""
+        result = sorted([[k, v] for k, v in self.items()],
+                        key=itemgetter(0))
+
+        # Force the first band value into the minimum for the band, so we
+        # can always assume that the left-most value is a replacement.
+        if result:
+            result[0][0] = band.MinimumValue
+
+        return result
+
+
+class ColorExact(ColorBase):
+    """
+    Given the following ColorExact, sorted by key:
+    {-2: red,
+      0: green,
+      2: blue}
+
+    The color line looks like this, with colors at the exact values:
+
+                red    green    blue
+                 |       |       |
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    All other values are transparent.
+    """
+    def pipeline(self, band):
+        """Returns a list of functions that can be passed to pipeline()"""
+        return [
+            (lambda f: palettize(inputfile=f, colors=self, band=band)),
+            (lambda f: expand_color_bands(inputfile=f)),
+        ]
+
+    def quantize(self, band):
+        """Returns an OrderedDict of {band_value: color} for colorization"""
+        if not self:
+            raise ValueError("No colors to quantize")
+
+        # The first band value must be transparent
+        colors = [[band.MinimumValue, rgba(0, 0, 0, 0)]]
+
+        nodata = band.GetNoDataValue()
+
+        # Insert an exact color for each item in this lookup table
+        for band_value, color in self.iteritems():
+            if nodata is not None and nodata == band_value:
+                # nodata values are always transparent
+                continue
+            self._insert_exact(band=band, colors=colors,
+                               band_value=band_value, new_color=color)
+
+        return OrderedDict(colors)
+
+
+class ColorPalette(ColorBase):
+    """
+    Given the following ColorPalette, sorted by key:
+    {-3: transparent,
+     -2: red,
+      0: green,
+      2: blue}
+
+    The color line looks like this, with solid blocks of color:
+
+           trans | red   | green | blue
+             <-- |-->    |-->    |-->
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    The value of the lowest key is irrelevant. In this case, it could be -4 or
+    -inf.
+    """
+    def pipeline(self, band):
+        """Returns a list of functions that can be passed to pipeline()"""
+        return [
+            (lambda f: palettize(inputfile=f, colors=self, band=band)),
+            (lambda f: expand_color_bands(inputfile=f)),
+        ]
+
+    def quantize(self, band):
+        """Returns an OrderedDict of {band_value: color} for colorization"""
+        if not self:
+            raise ValueError("No colors to quantize")
+
+        colors = self._sorted_list(band=band)
+
+        nodata = band.GetNoDataValue()
+        if nodata is not None:
+            # We need to insert an exact transparent color at the nodata value
+            self._insert_exact(band=band, colors=colors,
+                               band_value=nodata, new_color=rgba(0, 0, 0, 0))
+
+        return OrderedDict(colors)
+
+
+class ColorGradient(ColorBase):
+    """
+    Given the following ColorGradient, sorted by key:
+    {-3: transparent,
+     -2: red,
+      0: green,
+      2: blue}
+
+    The color line looks like this, with a linear gradient between each color:
+
+           trans | red   | green | blue
+             <-- |==-->  |==-->  |==-->
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    The value of the lowest key is irrelevant. In this case, it could be -4 or
+    -inf.
+    """
+    def pipeline(self, band):
+        """Returns a list of functions that can be passed to pipeline()"""
+        return [
+            (lambda f: colorize(inputfile=f, colors=self, band=band)),
+        ]
+
+    def quantize(self, band):
+        """Returns an OrderedDict of {band_value: color} for colorization"""
+        if not self:
+            raise ValueError("No colors to quantize")
+        return OrderedDict(self._sorted_list(band=band))
+
+
 # Utility classes that wrap GDAL because its SWIG bindings are not Pythonic.
+
+class Band(gdal.Band):
+    """
+    Wrapper class for gdal.Band
+
+    band: gdal.Band object retrieved from gdal.Dataset
+    dataset: gdal.Dataset object that is the parent of `band`
+    """
+
+    def __init__(self, band, dataset):
+        # Since this is a SWIG object, clone the ``this`` pointer
+        self.this = band.this
+        # gdal.Dataset deletes all of its data structures when it is deleted.
+        self._dataset = dataset
+
+    def GetMetadataItem(self, name, domain=''):
+        """Wrapper around gdal.Band.GetMetadataItem()"""
+        return super(Band, self).GetMetadataItem(bytes(name), bytes(domain))
+
+    def GetNoDataValue(self):
+        """Returns gdal.Band.GetNoDataValue() as a NumPy type"""
+        result = super(Band, self).GetNoDataValue()
+        if result is not None:
+            return self.NumPyDataType(result)
+
+    @property
+    def NumPyDataType(self):
+        """Returns the NumPy type associated with gdal.Band.DataType"""
+        datatype = self.DataType
+        if datatype == gdalconst.GDT_Byte:
+            pixeltype = self.GetMetadataItem('PIXELTYPE', 'IMAGE_STRUCTURE')
+            if pixeltype == 'SIGNEDBYTE':
+                return numpy.int8
+            return numpy.uint8
+        elif datatype == gdalconst.GDT_UInt16:
+            return numpy.uint16
+        elif datatype == gdalconst.GDT_UInt32:
+            return numpy.uint32
+        elif datatype == gdalconst.GDT_Int16:
+            return numpy.int16
+        elif datatype == gdalconst.GDT_Int32:
+            return numpy.int16
+        elif datatype == gdalconst.GDT_Float32:
+            return numpy.float32
+        elif datatype == gdalconst.GDT_Float64:
+            return numpy.float64
+        else:
+            raise ValueError(
+                "Cannot handle DataType: {0}".format(
+                    gdal.GetDataTypeName(datatype)
+                )
+            )
+
+    @property
+    def MinimumValue(self):
+        """Returns the minimum value that can be stored in this band"""
+        datatype = self.NumPyDataType
+        if issubclass(datatype, numpy.integer):
+            return numpy.iinfo(datatype).min
+        elif issubclass(datatype, numpy.floating):
+            return -numpy.inf
+        else:
+            raise TypeError("Cannot handle DataType: {0}".format(datatype))
+
+    def IncrementValue(self, value):
+        """Returns the next `value` expressible in this band"""
+        datatype = self.NumPyDataType
+        if issubclass(datatype, numpy.integer):
+            if not isinstance(value, (int, long, numpy.integer)):
+                raise TypeError(
+                    'value {0!r} must be compatible with {1}'.format(
+                        value, datatype.__name__
+                    )
+                )
+            iinfo = numpy.iinfo(datatype)
+            minint, maxint = iinfo.min, iinfo.max
+            if not minint <= value <= maxint:
+                raise ValueError(
+                    'value {0!r} must be between {1} and {2}'.format(
+                        value, minint, maxint
+                    )
+                )
+            if value == maxint:
+                return maxint
+            return value + 1
+
+        elif issubclass(datatype, numpy.floating):
+            if not isinstance(value, (int, long, numpy.integer,
+                                      float, numpy.floating)):
+                raise TypeError(
+                    "value {0!r} must be compatible with {1}".format(
+                        value, datatype.__name__
+                    )
+                )
+            if value == numpy.finfo(datatype).max:
+                return numpy.inf
+            return numpy.nextafter(datatype(value), datatype(numpy.inf))
+
+        else:
+            raise TypeError("Cannot handle DataType: {0}".format(datatype))
+
 
 class CoordinateTransformation(osr.CoordinateTransformation):
     def __init__(self, src_ref, dst_ref):
@@ -384,6 +671,10 @@ class Dataset(gdal.Dataset):
             self.this = gdal.Open(inputfile, mode).this
         except RuntimeError as e:
             raise GdalError(e.message)
+
+    def GetRasterBand(self, i):
+        return Band(band=super(Dataset, self).GetRasterBand(i),
+                    dataset=self)
 
     def GetSpatialReference(self):
         return SpatialReference(self.GetProjection())
