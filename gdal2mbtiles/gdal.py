@@ -400,16 +400,15 @@ class ColorBase(dict):
             # Insert the new_color
             colors.insert(index, [band_value, new_color])
 
-        if old_color is not None:
-            # Now we need to propagate the old_color after the nodata value
-            # Make sure that we don't clobber another color by accident.
-            after_value = band.IncrementValue(band_value)
-            if not numpy.isposinf(after_value):
-                index += 1
-                if index > len(colors):
-                    colors.append([after_value, old_color])
-                elif index == len(colors) or colors[index][0] > after_value:
-                    colors.insert(index, [after_value, old_color])
+        # Now we need to propagate the old_color after the nodata value
+        # Make sure that we don't clobber another color by accident.
+        after_value = band.IncrementValue(band_value)
+        if not numpy.isposinf(after_value):
+            index += 1
+            if index > len(colors):
+                colors.append([after_value, old_color])
+            elif index == len(colors) or colors[index][0] > after_value:
+                colors.insert(index, [after_value, old_color])
 
     def _sorted_list(self, band):
         """Returns this object as a sorted list of [band_value, color] lists"""
