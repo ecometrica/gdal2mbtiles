@@ -501,7 +501,7 @@ class TestColors(TestCase):
                           [numpy.inf, self.red]])
 
     def test_palette(self):
-        # No colours.
+        # No colors.
         colors = ColorPalette()
         self.assertEqual(colors, {})
         self.assertRaises(ValueError, colors.quantize, band=self.band)
