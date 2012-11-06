@@ -486,6 +486,20 @@ class TestColors(TestCase):
                           [0, self.red],
                           [1, self.black]])
 
+        # Just before maximum
+        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
+                            (0, self.black),
+                            (self.int_band.MaximumValue, self.white)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=(self.int_band.MaximumValue - 1),
+                             new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[self.int_band.MinimumValue, self.transparent],
+                          [0, self.black],
+                          [32766, self.red],
+                          [32767, self.white]])
+
         # At maximum
         colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
                             (0, self.black)])

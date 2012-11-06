@@ -403,7 +403,7 @@ class ColorBase(dict):
         # Now we need to propagate the old_color after the nodata value
         # Make sure that we don't clobber another color by accident.
         after_value = band.IncrementValue(band_value)
-        if not numpy.isposinf(after_value):
+        if not numpy.isposinf(after_value) and after_value != band_value:
             index += 1
             if index > len(colors):
                 colors.append([after_value, old_color])
@@ -601,6 +601,17 @@ class Band(gdal.Band):
             return numpy.iinfo(datatype).min
         elif issubclass(datatype, numpy.floating):
             return -numpy.inf
+        else:
+            raise TypeError("Cannot handle DataType: {0}".format(datatype))
+
+    @property
+    def MaximumValue(self):
+        """Returns the minimum value that can be stored in this band"""
+        datatype = self.NumPyDataType
+        if issubclass(datatype, numpy.integer):
+            return numpy.iinfo(datatype).max
+        elif issubclass(datatype, numpy.floating):
+            return numpy.inf
         else:
             raise TypeError("Cannot handle DataType: {0}".format(datatype))
 
