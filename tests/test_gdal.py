@@ -424,7 +424,9 @@ class TestColors(TestCase):
         colors._insert_exact(band=self.int_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
-                         [[-32768, self.red]])
+                         [[-32768, self.transparent],
+                          [0, self.red],
+                          [1, self.transparent]])
 
         # At minimum
         colors = ColorBase([(0, self.black)])
@@ -519,7 +521,9 @@ class TestColors(TestCase):
         colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.red]])
+                         [[-numpy.inf, self.transparent],
+                          [0, self.red],
+                          [1.4012984643248171e-45, self.transparent]])
 
         # At minimum
         colors = ColorBase([(0, self.black)])

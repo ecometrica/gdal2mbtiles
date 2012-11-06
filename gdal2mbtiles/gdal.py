@@ -378,8 +378,10 @@ class ColorBase(dict):
     def _insert_exact(self, band, colors, band_value, new_color):
         """Insert [band_value, new_color] into `colors` as an exact color"""
         if not colors:
-            colors.append([band.MinimumValue, new_color])
-            return
+            colors.append([band.MinimumValue, rgba(r=0, g=0, b=0, a=0)])
+            return self._insert_exact(band=band, colors=colors,
+                                      band_value=band_value,
+                                      new_color=new_color)
 
         # (band_value, None) > (band_value, rgba(...)) means that index is the
         # insertion point for the new_color.
@@ -451,9 +453,7 @@ class ColorExact(ColorBase):
         if not self:
             raise ValueError("No colors to quantize")
 
-        # The first band value must be transparent
-        colors = [[band.MinimumValue, rgba(0, 0, 0, 0)]]
-
+        colors = []
         nodata = band.GetNoDataValue()
 
         # Insert an exact color for each item in this lookup table
