@@ -414,9 +414,89 @@ class TestColors(TestCase):
 
         self.float_dataset = Dataset(os.path.join(__dir__, 'paletted.tif'))
         self.float_band = self.float_dataset.GetRasterBand(1)
-        self.nodata_dataset = Dataset(os.path.join(__dir__,
-                                                   'paletted-nodata.tif'))
-        self.nodata_band = self.nodata_dataset.GetRasterBand(1)
+        self.int_dataset = Dataset(os.path.join(__dir__, 'srtm.tif'))
+        self.int_band = self.int_dataset.GetRasterBand(1)
+
+    def test_insert_exact_int(self):
+        # Empty
+        colors = ColorBase()
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-32768, self.red]])
+
+        # At minimum
+        colors = ColorBase([(0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=self.int_band.MinimumValue,
+                             new_color=self.red)
+        self.assertEqual(
+            sorted_colors,
+            [[-32768, self.red],
+             [-32767, self.black]]
+        )
+
+        # Before smallest color
+        colors = ColorBase([(0, self.black),
+                            (2, self.white)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=self.int_band.MinimumValue,
+                             new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-32768, self.red],
+                          [-32767, self.black],
+                          [2, self.white]])
+
+        # Between colors
+        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
+                            (-1, self.black),
+                            (1, self.white)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-32768, self.transparent],
+                          [-1, self.black],
+                          [0, self.red],
+                          [1, self.white]])
+
+        # Replacing a color
+        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
+                            (0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-32768, self.transparent],
+                          [0, self.red],
+                          [1, self.black]])
+
+        # After largest color
+        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
+                            (-1, self.black)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=0, new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[-32768, self.transparent],
+                          [-1, self.black],
+                          [0, self.red],
+                          [1, self.black]])
+
+        # At maximum
+        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
+                            (0, self.black)])
+        sorted_colors = colors._sorted_list(band=self.int_band)
+        colors._insert_exact(band=self.int_band, colors=sorted_colors,
+                             band_value=self.int_band.MaximumValue,
+                             new_color=self.red)
+        self.assertEqual(sorted_colors,
+                         [[self.int_band.MinimumValue, self.transparent],
+                          [0, self.black],
+                          [32767, self.red]])
 
     def test_insert_exact_float(self):
         # Empty
@@ -529,7 +609,9 @@ class TestColors(TestCase):
         # Green when 0 <= x < 1
         # White when 1 <= x
         # Nodata at 10
-        colors = ColorPalette([(-numpy.inf, self.black),
+        nodata_dataset = Dataset(os.path.join(__dir__, 'paletted.nodata.tif'))
+        nodata_band = nodata_dataset.GetRasterBand(1)
+        colors = ColorPalette([(nodata_band.MinimumValue, self.black),
                                (-1, self.red),
                                (0, self.green),
                                (1, self.white)])
@@ -539,14 +621,66 @@ class TestColors(TestCase):
                           0: self.green,
                           1: self.white})
         self.assertEqual(
-            colors.quantize(band=self.nodata_band),
+            colors.quantize(band=nodata_band),
             OrderedDict([
                 (-numpy.inf, self.black),
                 (-1, self.red),
                 (0, self.green),
                 (1, self.white),
                 (10, self.transparent),
-                (self.nodata_band.IncrementValue(10), self.white),
+                (nodata_band.IncrementValue(10), self.white),
+            ])
+        )
+
+    def test_palette_int(self):
+        # No colors.
+        colors = ColorPalette()
+        self.assertEqual(colors, {})
+        self.assertRaises(ValueError, colors.quantize, band=self.int_band)
+
+        # Red throughout.
+        colors = ColorPalette([(0, self.red)])
+        self.assertEqual(colors,
+                         {0: self.red})
+        self.assertEqual(colors.quantize(band=self.int_band),
+                         {-32768: self.red})
+
+        # Red when x < 0,
+        # Green when 0 <= x
+        colors = ColorPalette([(-1, self.red),
+                               (0, self.green)])
+        self.assertEqual(colors,
+                         {-1: self.red,
+                          0: self.green})
+        self.assertEqual(colors.quantize(band=self.int_band),
+                         {-32768: self.red,
+                          0: self.green})
+
+        # Black when x < -1,
+        # Red when -1 <= x < 0
+        # Green when 0 <= x < 1
+        # White when 1 <= x
+        # Nodata at 10
+        nodata_dataset = Dataset(os.path.join(__dir__, 'srtm.nodata.tif'))
+        nodata_band = nodata_dataset.GetRasterBand(1)
+        colors = ColorPalette([(nodata_band.MinimumValue, self.black),
+                               (-1, self.red),
+                               (0, self.green),
+                               (1, self.white)])
+        self.assertEqual(colors,
+                         {-32768: self.black,
+                          -1: self.red,
+                          0: self.green,
+                          1: self.white})
+        self.assertEqual(
+            colors.quantize(band=nodata_band),
+            OrderedDict([
+                (-32768, self.black),
+                (-1, self.red),
+                (0, self.green),
+                (1, self.white),
+                (10000, self.transparent),
+                (10001, self.white),
             ])
         )
 
@@ -561,12 +695,23 @@ class TestColors(TestCase):
                           [0, None],
                           [1, None]])
 
+    def test_sorted_list_int(self):
+        colors = ColorBase([[0, None],
+                            [-1, None],
+                            [1, None],
+                            [-numpy.inf, None]])
+        self.assertEqual(colors._sorted_list(band=self.int_band),
+                         [[-32768, None],
+                          [-1, None],
+                          [0, None],
+                          [1, None]])
+
 
 class TestBand(TestCase):
     def setUp(self):
         # 32-bit floating point
         self.float32file = os.path.join(__dir__, 'paletted.tif')
-        self.nodatafile = os.path.join(__dir__, 'paletted-nodata.tif')
+        self.nodatafile = os.path.join(__dir__, 'paletted.nodata.tif')
 
         # 16-bit signed integer
         self.int16file = os.path.join(__dir__, 'srtm.tif')
