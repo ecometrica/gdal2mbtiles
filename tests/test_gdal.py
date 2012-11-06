@@ -20,9 +20,10 @@ from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
                                      UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (ColorBase, ColorPalette, Dataset, palettize,
-                               expand_color_bands, extract_color_band, warp,
-                               preprocess, SpatialReference, VRT)
+from gdal2mbtiles.gdal import (ColorBase, ColorPalette, Dataset,
+                               expand_color_bands, extract_color_band,
+                               palettize, preprocess, SpatialReference, warp,
+                               VRT)
 from gdal2mbtiles.types import Extents, rgba, XY
 
 
