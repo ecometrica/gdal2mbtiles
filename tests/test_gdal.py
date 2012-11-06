@@ -412,26 +412,26 @@ class TestColors(TestCase):
         self.blue = rgba(0, 0, 255, 255)
         self.white = rgba(255, 255, 255, 255)
 
-        self.dataset = Dataset(os.path.join(__dir__, 'paletted.tif'))
-        self.band = self.dataset.GetRasterBand(1)
+        self.float_dataset = Dataset(os.path.join(__dir__, 'paletted.tif'))
+        self.float_band = self.float_dataset.GetRasterBand(1)
         self.nodata_dataset = Dataset(os.path.join(__dir__,
                                                    'paletted-nodata.tif'))
         self.nodata_band = self.nodata_dataset.GetRasterBand(1)
 
-    def test_insert_exact(self):
+    def test_insert_exact_float(self):
         # Empty
         colors = ColorBase()
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
                          [[-numpy.inf, self.red]])
 
         # At minimum
         colors = ColorBase([(0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
-                             band_value=self.band.MinimumValue,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
+                             band_value=self.float_band.MinimumValue,
                              new_color=self.red)
         self.assertEqual(
             sorted_colors,
@@ -442,9 +442,9 @@ class TestColors(TestCase):
         # Before smallest color
         colors = ColorBase([(0, self.black),
                             (2, self.white)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
-                             band_value=self.band.MinimumValue,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
+                             band_value=self.float_band.MinimumValue,
                              new_color=self.red)
         self.assertEqual(sorted_colors,
                          [[-numpy.inf, self.red],
@@ -452,11 +452,11 @@ class TestColors(TestCase):
                           [2, self.white]])
 
         # Between colors
-        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
                             (-1, self.black),
                             (1, self.white)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
                          [[-numpy.inf, self.transparent],
@@ -466,10 +466,10 @@ class TestColors(TestCase):
                           [1, self.white]])
 
         # Replacing a color
-        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
                             (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
                          [[-numpy.inf, self.transparent],
@@ -477,10 +477,10 @@ class TestColors(TestCase):
                           [1.4012984643248171e-45, self.black]])
 
         # After largest color
-        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
                             (-1, self.black)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=0, new_color=self.red)
         self.assertEqual(sorted_colors,
                          [[-numpy.inf, self.transparent],
@@ -489,28 +489,28 @@ class TestColors(TestCase):
                           [1.4012984643248171e-45, self.black]])
 
         # At maximum
-        colors = ColorBase([(self.band.MinimumValue, self.transparent),
+        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
                             (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.band)
-        colors._insert_exact(band=self.band, colors=sorted_colors,
+        sorted_colors = colors._sorted_list(band=self.float_band)
+        colors._insert_exact(band=self.float_band, colors=sorted_colors,
                              band_value=numpy.inf,
                              new_color=self.red)
         self.assertEqual(sorted_colors,
-                         [[self.band.MinimumValue, self.transparent],
+                         [[self.float_band.MinimumValue, self.transparent],
                           [0, self.black],
                           [numpy.inf, self.red]])
 
-    def test_palette(self):
+    def test_palette_float(self):
         # No colors.
         colors = ColorPalette()
         self.assertEqual(colors, {})
-        self.assertRaises(ValueError, colors.quantize, band=self.band)
+        self.assertRaises(ValueError, colors.quantize, band=self.float_band)
 
         # Red throughout.
         colors = ColorPalette([(0, self.red)])
         self.assertEqual(colors,
                          {0: self.red})
-        self.assertEqual(colors.quantize(band=self.band),
+        self.assertEqual(colors.quantize(band=self.float_band),
                          {-numpy.inf: self.red})
 
         # Red when x < 0,
@@ -520,7 +520,7 @@ class TestColors(TestCase):
         self.assertEqual(colors,
                          {-1: self.red,
                           0: self.green})
-        self.assertEqual(colors.quantize(band=self.band),
+        self.assertEqual(colors.quantize(band=self.float_band),
                          {-numpy.inf: self.red,
                           0: self.green})
 
@@ -550,12 +550,12 @@ class TestColors(TestCase):
             ])
         )
 
-    def test_sorted_list(self):
+    def test_sorted_list_float(self):
         colors = ColorBase([[0, None],
                             [-1, None],
                             [1, None],
                             [-numpy.inf, None]])
-        self.assertEqual(colors._sorted_list(band=self.band),
+        self.assertEqual(colors._sorted_list(band=self.float_band),
                          [[-numpy.inf, None],
                           [-1, None],
                           [0, None],
