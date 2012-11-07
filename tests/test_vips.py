@@ -239,7 +239,7 @@ class TestColors(unittest.TestCase):
         self.blue = rgba(0, 0, 255, 255)
         self.white = rgba(255, 255, 255, 255)
 
-    def test_exact(self):
+    def test_exact_0(self):
         # Empty
         colors = ColorExact()
         self.assertEqual(colors._numexpr_clauses(band='r'),
@@ -261,6 +261,7 @@ class TestColors(unittest.TestCase):
         self.assertEqual(colors._as_numexpr(band='a', nodata=0),
                          '0')
 
+    def test_exact_1(self):
         # One color
         colors = ColorExact({0: self.red})
         self.assertEqual(colors._numexpr_clauses(band='r'),
@@ -278,6 +279,7 @@ class TestColors(unittest.TestCase):
                              false=ColorExact.BACKGROUND.a
                          ))
 
+    def test_exact_2(self):
         # Two colors
         colors = ColorExact({0: self.red,
                              2: self.green})
@@ -326,7 +328,7 @@ class TestColors(unittest.TestCase):
                              false=ColorExact.BACKGROUND.a
                          ))
 
-    def test_palette(self):
+    def test_palette_0(self):
         # Empty
         colors = ColorPalette()
         self.assertEqual(colors._numexpr_clauses(band='r'),
@@ -348,6 +350,7 @@ class TestColors(unittest.TestCase):
         self.assertEqual(colors._as_numexpr(band='a', nodata=0),
                          '0')
 
+    def test_palette_1(self):
         # One color
         colors = ColorPalette({0: self.red})
         self.assertEqual(colors._numexpr_clauses(band='r'),
@@ -365,6 +368,7 @@ class TestColors(unittest.TestCase):
                              false=ColorPalette.BACKGROUND.a
                          ))
 
+    def test_palette_2(self):
         # Two colors
         colors = ColorPalette({0: self.red,
                                2: self.green})
