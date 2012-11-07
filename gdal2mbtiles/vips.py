@@ -5,15 +5,19 @@ from __future__ import (absolute_import, division, print_function,
 
 from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
+from itertools import groupby
 from math import ceil
 from multiprocessing import cpu_count
+from operator import itemgetter
+
+import numexpr
 
 from vipsCC.VError import VError
 import vipsCC.VImage
 
 from .constants import TILE_SIDE
 from .gdal import Dataset
-from .types import XY
+from .types import rgba, XY
 from .utils import tempenv
 
 
@@ -181,6 +185,11 @@ class VImage(vipsCC.VImage.VImage):
         """Initializes the descriptor for this VImage."""
         super(VImage, self).initdesc(width, height, bands, bandfmt, coding,
                                      type, xres, yres, xoffset, yoffset)
+
+    def bandjoin(self, other):
+        return self.from_vimage(
+            super(VImage, self).bandjoin(other)
+        )
 
     def draw_rect(self, left, top, width, height, fill, ink):
         return super(VImage, self).draw_rect(left, top, width, height,
@@ -649,3 +658,118 @@ def validate_resolutions(resolution, min_resolution=None,
                 max_resolution, resolution
             )
         )
+
+
+# Utility classes for coloring
+
+class ColorBase(dict):
+    """Base class for ColorExact, ColorPalette, and ColorGradient."""
+
+    # Background is transparent
+    BACKGROUND = rgba(r=0, g=0, b=0, a=0)
+
+    def _numexpr_clauses(self, band, nodata=None):
+        raise NotImplementedError()
+
+    def _as_numexpr(self, band, nodata=None):
+        clauses = self._numexpr_clauses(band=band, nodata=nodata)
+
+        result = str(getattr(self.BACKGROUND, band))  # Set default background
+        for expression, true_value in clauses:
+            result = 'where({expression}, {true}, {false})'.format(
+                expression=expression, true=true_value, false=result
+            )
+        return result
+
+    def colorize(self, image, nodata=None):
+        context = dict(n=image)
+        r, g, b, a = [numexpr.evaluate(self._as_numexpr(band='r',
+                                                        datatype=image.dtype,
+                                                        nodata=nodata),
+                                       local_dict=context, global_dict={})
+                      for b in 'rgba']
+        rgba = r.bandjoin(g).bandjoin(b).bandjoin(a)
+
+        self.initdesc(width=image.Xsize(), height=image.Ysize(),
+                      bands=4,                  # RGBA
+                      bandfmt=VImage.FMTUCHAR,  # 8-bit unsigned
+                      coding=VImage.NOCODING,   # No coding and no compression
+                      type=VImage.sRGB,
+                      xres=image.Xres(), yres=image.Yres(),
+                      xoffset=image.Xoffset(), yoffset=image.Yoffset())
+        return rgba
+
+
+class ColorExact(ColorBase):
+    """
+    Given the following ColorExact, sorted by key:
+    {-2: red,
+      0: green,
+      2: blue}
+
+    The color line looks like this, with colors at the exact values:
+
+                red    green    blue
+                 |       |       |
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    All other values are transparent.
+    """
+
+    def _numexpr_clauses(self, band, nodata=None):
+        # Extract band-specific colors
+        background = getattr(self.BACKGROUND, band)
+        colors = sorted([(band_value, getattr(color, band))
+                         for band_value, color in self.iteritems()])
+
+        return [('n == {0}'.format(band_value),  # Expression
+                 color)                          # True value
+                for band_value, color in colors
+                if band_value != nodata and color != background]
+
+
+class ColorPalette(ColorBase):
+    """
+    Given the following ColorPalette, sorted by key:
+    {-2: red,
+      0: green,
+      2: blue}
+
+    The color line looks like this, with solid blocks of color:
+
+           trans | red   | green | blue
+             <-- |-->    |-->    |-->
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    All values less than the smallest become transparent.
+    """
+
+    def _numexpr_clauses(self, band, nodata=None):
+        # Extract band-specific colors
+        colors = sorted([(band_value, getattr(color, band))
+                         for band_value, color in sorted(self.items())])
+        if not colors:
+            return []
+
+        # Remove duplicate colors
+        background = getattr(self.BACKGROUND, band)
+        colors = [
+            next(g)             # First in the group: smallest expression
+            for k, g
+            in groupby(colors, key=itemgetter(1))  # Group by band color
+        ]
+        if background == colors[0][1]:
+            # First color is also the background, so just drop it
+            del colors[0]
+
+        result = [('n >= {0}'.format(band_value),  # Expression
+                   color)                          # True value
+                  for band_value, color in colors]
+
+        if nodata is not None and band == 'a':
+            result.append(('n == {0}'.format(nodata),  # Expression
+                           background))                # True value
+
+        return result
