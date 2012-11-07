@@ -681,7 +681,36 @@ class ColorBase(dict):
             )
         return result
 
+    def _background(self, band):
+        """Returns the background color for `band`"""
+        return getattr(self.BACKGROUND, band)
+
+    def _colors(self, band, duplicates=True):
+        """Returns a list of (band_value, color) for `band`"""
+        colors = sorted([(band_value, getattr(color, band))
+                         for band_value, color in self.iteritems()])
+
+        if not colors:
+            return []
+
+        if not duplicates:
+            # Remove duplicate colors
+            colors = [
+                next(g)             # First in the group: smallest expression
+                for k, g
+                in groupby(self._colors(band=band),
+                           key=itemgetter(1))  # Group by band color
+            ]
+
+            background = self._background(band=band)
+            if background == colors[0][1]:
+                # First color is also the background, so just drop it
+                del colors[0]
+
+        return colors
+
     def colorize(self, image, nodata=None):
+        """Returns a new RGBA VImage that has been colorized"""
         context = dict(n=image)
         r, g, b, a = [numexpr.evaluate(self._as_numexpr(band='r',
                                                         datatype=image.dtype,
@@ -718,10 +747,8 @@ class ColorExact(ColorBase):
     """
 
     def _numexpr_clauses(self, band, nodata=None):
-        # Extract band-specific colors
-        background = getattr(self.BACKGROUND, band)
-        colors = sorted([(band_value, getattr(color, band))
-                         for band_value, color in self.iteritems()])
+        colors = self._colors(band=band, duplicates=True)
+        background = self._background(band=band)
 
         return [('n == {0}'.format(band_value),  # Expression
                  color)                          # True value
@@ -747,30 +774,16 @@ class ColorPalette(ColorBase):
     """
 
     def _numexpr_clauses(self, band, nodata=None):
-        # Extract band-specific colors
-        colors = sorted([(band_value, getattr(color, band))
-                         for band_value, color in sorted(self.items())])
-        if not colors:
-            return []
-
-        # Remove duplicate colors
-        background = getattr(self.BACKGROUND, band)
-        colors = [
-            next(g)             # First in the group: smallest expression
-            for k, g
-            in groupby(colors, key=itemgetter(1))  # Group by band color
-        ]
-        if background == colors[0][1]:
-            # First color is also the background, so just drop it
-            del colors[0]
+        colors = self._colors(band=band, duplicates=False)
 
         result = [('n >= {0}'.format(band_value),  # Expression
                    color)                          # True value
                   for band_value, color in colors]
 
-        if nodata is not None and band == 'a' and nodata >= colors[0][0]:
-            result.append(('n == {0}'.format(nodata),  # Expression
-                           background))                # True value
+        if nodata is not None and band == 'a' and colors and \
+           nodata >= colors[0][0]:
+            result.append(('n == {0}'.format(nodata),     # Expression
+                           self._background(band=band)))  # True value
 
         return result
 
@@ -818,29 +831,15 @@ class ColorGradient(ColorBase):
         yield (prev_value, 0, prev_color)  # Horizontal line: y = b
 
     def _numexpr_clauses(self, band, nodata=None):
-        # Extract band-specific colors
-        colors = sorted([(band_value, getattr(color, band))
-                         for band_value, color in sorted(self.items())])
-        if not colors:
-            return []
-
-        # Remove duplicate colors
-        background = getattr(self.BACKGROUND, band)
-        colors = [
-            next(g)             # First in the group: smallest expression
-            for k, g
-            in groupby(colors, key=itemgetter(1))  # Group by band color
-        ]
-        if background == colors[0][1]:
-            # First color is also the background, so just drop it
-            del colors[0]
+        colors = self._colors(band=band, duplicates=False)
 
         result = [('n >= {0}'.format(band_value),     # Expression
                    b if m == 0 else '{m} * n + {b}'.format(m=m, b=b))
                   for band_value, m, b in self._linear_gradient(colors)]
 
-        if nodata is not None and band == 'a' and nodata >= colors[0][0]:
-            result.append(('n == {0}'.format(nodata),  # Expression
-                           background))                # True value
+        if nodata is not None and band == 'a' and colors and \
+           nodata >= colors[0][0]:
+            result.append(('n == {0}'.format(nodata),     # Expression
+                           self._background(band=band)))  # True value
 
         return result
