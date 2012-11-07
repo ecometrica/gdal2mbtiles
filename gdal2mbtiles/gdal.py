@@ -581,7 +581,7 @@ class Band(gdal.Band):
         elif datatype == gdalconst.GDT_Int16:
             return numpy.int16
         elif datatype == gdalconst.GDT_Int32:
-            return numpy.int16
+            return numpy.int32
         elif datatype == gdalconst.GDT_Float32:
             return numpy.float32
         elif datatype == gdalconst.GDT_Float64:
