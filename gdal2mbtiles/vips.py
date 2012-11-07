@@ -155,16 +155,14 @@ class VImage(vipsCC.VImage.VImage):
     @classmethod
     def new_rgba(cls, width, height, ink=None):
         """Creates a new transparent RGBA image sized width × height."""
-        bands = 4                  # RGBA
-        bandfmt = cls.FMTUCHAR     # 8-bit unsigned
-        coding = cls.NOCODING      # No coding and no compression
-        _type = cls.sRGB
-        xres, yres = 2.835, 2.835  # Arbitrary 600 dpi
-        xo, yo = 0, 0
-
         image = cls(b"", b"p")          # Working buffer
-        image.initdesc(width, height, bands, bandfmt, coding, _type,
-                       xres, yres, xo, yo)
+        image.initdesc(width=width, height=height,
+                       bands=4,                 # RGBA
+                       bandfmt=cls.FMTUCHAR,    # 8-bit unsigned
+                       coding=cls.NOCODING,     # No coding and no compression
+                       type=cls.sRGB,
+                       xres=2.835, yres=2.835,  # Arbitrary 600 dpi
+                       xoffset=0, yoffset=0)
 
         if ink is not None:
             image.draw_rect(left=0, top=0, width=width, height=height,
@@ -177,6 +175,12 @@ class VImage(vipsCC.VImage.VImage):
         new = cls()
         new.__dict__.update(other.__dict__)
         return new
+
+    def initdesc(self, width, height, bands, bandfmt, coding, type, xres,
+                 yres, xoffset, yoffset):
+        """Initializes the descriptor for this VImage."""
+        super(VImage, self).initdesc(width, height, bands, bandfmt, coding,
+                                     type, xres, yres, xoffset, yoffset)
 
     def draw_rect(self, left, top, width, height, fill, ink):
         return super(VImage, self).draw_rect(left, top, width, height,
