@@ -773,3 +773,74 @@ class ColorPalette(ColorBase):
                            background))                # True value
 
         return result
+
+
+class ColorGradient(ColorBase):
+    """
+    Given the following ColorGradient, sorted by key:
+    {-2: red,
+      0: green,
+      2: blue,
+      4: trans}
+
+    The color line looks like this, with a linear gradient between each color:
+
+           trans | red   | green | blue  | trans
+             <-- |==-->  |==-->  |==-->  |-->
+      ---o---o---o---o---o---o---o---o---o---o---
+    ... -4  -3  -2  -1   0   1   2   3   4   5...
+
+    All values less than the smallest become transparent.
+    """
+
+    def _linear_gradient(self, colors):
+        """
+        Returns a list of (band_value, m, b) for y = m * x + b.
+
+        Where y is the new color, and x is the band_value to transform.
+
+        You may note that this is the slope-representation for a line, since we
+        are doing linear gradients.
+
+        """
+        if not colors:
+            return
+
+        prev_value, prev_color = colors[0]
+        for value, color in colors[1:]:
+            # Solve for (color = m * value + b) with two points
+            m = (prev_value - value) / (prev_color - color)
+            b = prev_color - m * prev_value
+            yield (prev_value, m, b)
+            prev_value, prev_color = value, color
+
+        # Last color is constant
+        yield (prev_value, 0, prev_color)  # Horizontal line: y = b
+
+    def _numexpr_clauses(self, band, nodata=None):
+        # Extract band-specific colors
+        colors = sorted([(band_value, getattr(color, band))
+                         for band_value, color in sorted(self.items())])
+        if not colors:
+            return []
+
+        # Remove duplicate colors
+        background = getattr(self.BACKGROUND, band)
+        colors = [
+            next(g)             # First in the group: smallest expression
+            for k, g
+            in groupby(colors, key=itemgetter(1))  # Group by band color
+        ]
+        if background == colors[0][1]:
+            # First color is also the background, so just drop it
+            del colors[0]
+
+        result = [('n >= {0}'.format(band_value),     # Expression
+                   b if m == 0 else '{m} * n + {b}'.format(m=m, b=b))
+                  for band_value, m, b in self._linear_gradient(colors)]
+
+        if nodata is not None and band == 'a' and nodata >= colors[0][0]:
+            result.append(('n == {0}'.format(nodata),  # Expression
+                           background))                # True value
+
+        return result

@@ -8,7 +8,7 @@ import unittest
 from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import rgba, XY
-from gdal2mbtiles.vips import (ColorExact, ColorPalette,
+from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
                                LibVips, TmsTiles, VImage, VIPS)
 
 
@@ -499,4 +499,259 @@ class TestColors(unittest.TestCase):
             'where(n == 0, {false}, where(n >= 0, {red}, {false}))'.format(
                 red=self.red.a,
                 false=ColorPalette.BACKGROUND.a
+            ))
+
+    def test_gradient_0(self):
+        # Empty
+        colors = ColorGradient()
+        self.assertEqual(colors._numexpr_clauses(band='r'),
+                         [])
+        self.assertEqual(colors._numexpr_clauses(band='a'),
+                         [])
+        self.assertEqual(colors._as_numexpr(band='r'),
+                         '0')
+        self.assertEqual(colors._as_numexpr(band='a'),
+                         '0')
+
+        # Empty, with nodata - no-op
+        self.assertEqual(colors._numexpr_clauses(band='r', nodata=0),
+                         [])
+        self.assertEqual(colors._numexpr_clauses(band='a', nodata=0),
+                         [])
+        self.assertEqual(colors._as_numexpr(band='r', nodata=0),
+                         '0')
+        self.assertEqual(colors._as_numexpr(band='a', nodata=0),
+                         '0')
+
+    def test_gradient_1(self):
+        # One color
+        colors = ColorGradient({0: self.red})
+        self.assertEqual(colors._numexpr_clauses(band='r'),
+                         [('n >= 0', self.red.r)])
+        self.assertEqual(colors._numexpr_clauses(band='a'),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(colors._as_numexpr(band='r'),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.r,
+                             false=ColorGradient.BACKGROUND.r
+                         ))
+        self.assertEqual(colors._as_numexpr(band='a'),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.a,
+                             false=ColorGradient.BACKGROUND.a
+                         ))
+
+        # One color, with nodata value before it
+        colors = ColorGradient({0: self.red})
+        self.assertEqual(colors._numexpr_clauses(band='r',
+                                                 nodata=float('-inf')),
+                         [('n >= 0', self.red.r)])
+        self.assertEqual(colors._numexpr_clauses(band='a',
+                                                 nodata=float('-inf')),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(colors._as_numexpr(band='r', nodata=float('-inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.r,
+                             false=ColorGradient.BACKGROUND.r
+                         ))
+        self.assertEqual(colors._as_numexpr(band='a', nodata=float('-inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.a,
+                             false=ColorGradient.BACKGROUND.a
+                         ))
+
+        # One color, with nodata value after it
+        colors = ColorGradient({0: self.red})
+        self.assertEqual(colors._numexpr_clauses(band='r',
+                                                 nodata=float('inf')),
+                         [('n >= 0', self.red.r)])
+        self.assertEqual(colors._numexpr_clauses(band='a',
+                                                 nodata=float('inf')),
+                         [('n >= 0', self.red.a),
+                          ('n == inf', ColorGradient.BACKGROUND.a)])
+        self.assertEqual(colors._as_numexpr(band='r', nodata=float('inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.r,
+                             false=ColorGradient.BACKGROUND.r
+                         ))
+        self.assertEqual(
+            colors._as_numexpr(band='a', nodata=float('inf')),
+            'where(n == inf, {false}, where(n >= 0, {true}, {false}))'.format(
+                true=self.red.a,
+                false=ColorGradient.BACKGROUND.a
+            ))
+
+    def test_gradient_2(self):
+        # Two colors
+        colors = ColorGradient({0: self.red,
+                                255: self.green})
+        self.assertEqual(
+            colors._numexpr_clauses(band='r'),
+            [('n >= 0', '-1.0 * n + {0}'.format(float(self.red.r))),
+             ('n >= 255', self.green.r)]
+        )
+        self.assertEqual(colors._numexpr_clauses(band='g'),
+                         [('n >= 255', self.green.g)])
+        self.assertEqual(colors._numexpr_clauses(band='a'),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(
+            colors._as_numexpr(band='r'),
+            'where(n >= 255, {green}, '
+            'where(n >= 0, -1.0 * n + {red}, {false}))'.format(
+                red=float(self.red.r),
+                green=self.green.r,
+                false=ColorGradient.BACKGROUND.r
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='g'),
+            'where(n >= 255, {green}, {false})'.format(
+                green=self.green.g,
+                false=ColorGradient.BACKGROUND.g
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='a'),
+            'where(n >= 0, {red}, {false})'.format(
+                red=self.red.a,
+                false=ColorGradient.BACKGROUND.a
+            ))
+
+        # Two colors, with a nodata value in between them
+        colors = ColorGradient({0: self.red,
+                                255: self.green})
+        self.assertEqual(
+            colors._numexpr_clauses(band='r', nodata=1),
+            [('n >= 0', '-1.0 * n + {0}'.format(float(self.red.r))),
+             ('n >= 255', self.green.r)]
+        )
+        self.assertEqual(colors._numexpr_clauses(band='g', nodata=1),
+                         [('n >= 255', self.green.g)])
+        self.assertEqual(colors._numexpr_clauses(band='a', nodata=1),
+                         [('n >= 0', self.red.a),
+                          ('n == 1', ColorGradient.BACKGROUND.a)])
+        self.assertEqual(
+            colors._as_numexpr(band='r', nodata=1),
+            'where(n >= 255, {green}, '
+            'where(n >= 0, -1.0 * n + {red}, {false}))'.format(
+                red=float(self.red.r),
+                green=self.green.r,
+                false=ColorGradient.BACKGROUND.r
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='g', nodata=1),
+            'where(n >= 255, {green}, {false})'.format(
+                green=self.green.g,
+                false=ColorGradient.BACKGROUND.g
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='a', nodata=1),
+            'where(n == 1, {false}, where(n >= 0, {red}, {false}))'.format(
+                red=self.red.a,
+                false=ColorGradient.BACKGROUND.a
+            ))
+
+        # Two colors, with nodata value replacing one of them
+        colors = ColorGradient({0: self.red,
+                                255: self.green})
+        self.assertEqual(
+            colors._numexpr_clauses(band='r', nodata=0),
+            [('n >= 0', '-1.0 * n + {0}'.format(float(self.red.r))),
+             ('n >= 255', self.green.r)]
+         )
+        self.assertEqual(colors._numexpr_clauses(band='g', nodata=0),
+                         [('n >= 255', self.green.g)])
+        self.assertEqual(colors._numexpr_clauses(band='a', nodata=0),
+                         [('n >= 0', self.red.a),
+                          ('n == 0', ColorGradient.BACKGROUND.a)])
+        self.assertEqual(
+            colors._as_numexpr(band='r', nodata=0),
+            'where(n >= 255, {green}, '
+            'where(n >= 0, -1.0 * n + {red}, {false}))'.format(
+                red=float(self.red.r),
+                green=self.green.r,
+                false=ColorGradient.BACKGROUND.r
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='g', nodata=0),
+            'where(n >= 255, {green}, {false})'.format(
+                green=self.green.g,
+                false=ColorGradient.BACKGROUND.g
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='a', nodata=0),
+            'where(n == 0, {false}, where(n >= 0, {red}, {false}))'.format(
+                red=self.red.a,
+                false=ColorGradient.BACKGROUND.a
+            ))
+
+    def test_gradient_3(self):
+        # Three colors - one gradient split in half
+        dark_red = rgba(127, 0, 0, 255)
+        colors = ColorGradient({0: self.red,
+                                128: dark_red,
+                                255: self.black})
+        self.assertEqual(
+            colors._numexpr_clauses(band='r'),
+            [('n >= 0', '-1.0 * n + {0}'.format(float(self.red.r))),
+             ('n >= 128', '-1.0 * n + {0}'.format(float(self.red.r))),
+             ('n >= 255', self.black.r)]
+        )
+        self.assertEqual(colors._numexpr_clauses(band='g'),
+                         [])
+        self.assertEqual(colors._numexpr_clauses(band='a'),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(
+            colors._as_numexpr(band='r'),
+            'where(n >= 255, {black}, '
+            'where(n >= 128, -1.0 * n + {red}, '
+            'where(n >= 0, -1.0 * n + {red}, {false})))'.format(
+                black=self.black.r,
+                red=float(self.red.r),
+                false=ColorGradient.BACKGROUND.r
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='g'),
+            '{false}'.format(
+                false=ColorGradient.BACKGROUND.g
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='a'),
+            'where(n >= 0, {red}, {false})'.format(
+                red=self.red.a,
+                false=ColorGradient.BACKGROUND.a
+            ))
+
+        # Three colors - one gradient split in half
+        dark_red = rgba(127, 0, 0, 255)
+        colors = ColorGradient({0: self.red,
+                                64: dark_red,
+                                255: self.black})
+        self.assertEqual(
+            colors._numexpr_clauses(band='r'),
+            [('n >= 0', '-0.5 * n + {0}'.format(float(self.red.r))),
+             ('n >= 64', '-1.50393700787 * n + 223.251968504'),
+             ('n >= 255', self.black.r)]
+        )
+        self.assertEqual(colors._numexpr_clauses(band='g'),
+                         [])
+        self.assertEqual(colors._numexpr_clauses(band='a'),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(
+            colors._as_numexpr(band='r'),
+            'where(n >= 255, {black}, '
+            'where(n >= 64, -1.50393700787 * n + 223.251968504, '
+            'where(n >= 0, -0.5 * n + {red}, {false})))'.format(
+                black=self.black.r,
+                red=float(self.red.r),
+                false=ColorGradient.BACKGROUND.r
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='g'),
+            '{false}'.format(
+                false=ColorGradient.BACKGROUND.g
+            ))
+        self.assertEqual(
+            colors._as_numexpr(band='a'),
+            'where(n >= 0, {red}, {false})'.format(
+                red=self.red.a,
+                false=ColorGradient.BACKGROUND.a
             ))
