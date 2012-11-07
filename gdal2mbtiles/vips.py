@@ -768,7 +768,7 @@ class ColorPalette(ColorBase):
                    color)                          # True value
                   for band_value, color in colors]
 
-        if nodata is not None and band == 'a':
+        if nodata is not None and band == 'a' and nodata >= colors[0][0]:
             result.append(('n == {0}'.format(nodata),  # Expression
                            background))                # True value
 

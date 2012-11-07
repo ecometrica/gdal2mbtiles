@@ -368,6 +368,46 @@ class TestColors(unittest.TestCase):
                              false=ColorPalette.BACKGROUND.a
                          ))
 
+        # One color, with nodata value before it
+        colors = ColorPalette({0: self.red})
+        self.assertEqual(colors._numexpr_clauses(band='r',
+                                                 nodata=float('-inf')),
+                         [('n >= 0', self.red.r)])
+        self.assertEqual(colors._numexpr_clauses(band='a',
+                                                 nodata=float('-inf')),
+                         [('n >= 0', self.red.a)])
+        self.assertEqual(colors._as_numexpr(band='r', nodata=float('-inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.r,
+                             false=ColorPalette.BACKGROUND.r
+                         ))
+        self.assertEqual(colors._as_numexpr(band='a', nodata=float('-inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.a,
+                             false=ColorPalette.BACKGROUND.a
+                         ))
+
+        # One color, with nodata value after it
+        colors = ColorPalette({0: self.red})
+        self.assertEqual(colors._numexpr_clauses(band='r',
+                                                 nodata=float('inf')),
+                         [('n >= 0', self.red.r)])
+        self.assertEqual(colors._numexpr_clauses(band='a',
+                                                 nodata=float('inf')),
+                         [('n >= 0', self.red.a),
+                          ('n == inf', ColorPalette.BACKGROUND.a)])
+        self.assertEqual(colors._as_numexpr(band='r', nodata=float('inf')),
+                         'where(n >= 0, {true}, {false})'.format(
+                             true=self.red.r,
+                             false=ColorPalette.BACKGROUND.r
+                         ))
+        self.assertEqual(
+            colors._as_numexpr(band='a', nodata=float('inf')),
+            'where(n == inf, {false}, where(n >= 0, {true}, {false}))'.format(
+                true=self.red.a,
+                false=ColorPalette.BACKGROUND.a
+            ))
+
     def test_palette_2(self):
         # Two colors
         colors = ColorPalette({0: self.red,
