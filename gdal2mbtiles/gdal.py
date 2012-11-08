@@ -3,18 +3,14 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from bisect import bisect
-from collections import OrderedDict
 import errno
 from math import pi
 from itertools import count
-from operator import itemgetter
 import os
 import re
 from subprocess import CalledProcessError, check_output, Popen, PIPE
 from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree
-from xml.etree.ElementTree import Element, SubElement
 
 import numpy
 
@@ -27,11 +23,11 @@ gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
 
 
-from .constants import (EPSG_WEB_MERCATOR, GDALBUILDVRT, GDALTRANSLATE,
+from .constants import (EPSG_WEB_MERCATOR, GDALTRANSLATE,
                         GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
-                         UnknownResamplingMethodError, VrtError)
-from .types import Extents, GdalFormat, rgba, XY
+                         UnknownResamplingMethodError)
+from .types import Extents, GdalFormat, XY
 
 
 RESAMPLING_METHODS = {
@@ -55,28 +51,17 @@ def check_output_gdal(*popenargs, **kwargs):
     return stdoutdata
 
 
-def preprocess(inputfile, outputfile, colors=None, band=None, spatial_ref=None,
+def preprocess(inputfile, outputfile, band=None, spatial_ref=None,
                resampling=None, compress=None, **kwargs):
     functions = []
 
-    # Extract desired band to apply colors
-    if colors is not None:
-        if band is None:
-            band = 1
+    # Extract desired band to reduce the amount of warping
+    if band is not None:
         functions.append(lambda f: extract_color_band(inputfile=f, band=band))
 
     # Warp
     functions.append(lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
                                     resampling=resampling)),
-
-    # Apply colors to inputfile AFTER warping, so we don't have to warp four
-    # bands, just one.
-    if colors is not None:
-        if not isinstance(colors, ColorBase):
-            # TODO: Default to ColorPalette for now, but switch over to
-            # ColorGradient, as that seems to be a more sensible default.
-            colors = ColorPalette(**colors)
-        functions.extend(colors.pipeline(band=1))
 
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
@@ -104,105 +89,6 @@ def pipeline(inputfile, outputfile, functions, **kwargs):
     finally:
         for f in tmpfiles:
             f.close()
-
-
-def colorize(inputfile, colors, band=None):
-    raise NotImplementedError()
-
-
-def palettize(inputfile, colors, band=None):
-    """
-    Takes an GDAL-readable inputfile and generates the VRT to palettize it.
-
-    You can also specify a ComplexSource Look Up Table (LUT) that allows you to
-    interpolate colors between source values.
-        colors = {0: rgba(0, 0, 0, 255),
-                   10: rgba(255, 255, 255, 255)}
-    This means that at value 5, the color represented would be
-    rgba(128, 128, 128, 255).
-    """
-    if not isinstance(colors, ColorBase):
-        # ColorPalette is a better default than ColorExact
-        colors = ColorPalette(**colors)
-    if band is None:
-        band = 1
-
-    dataset = Dataset(inputfile)
-    command = [
-        GDALBUILDVRT,
-        '-q',                   # Quiet
-        '/dev/stdout',
-        inputfile
-    ]
-    vrt = VRT(check_output_gdal([str(e) for e in command]))
-
-    # Assert that it is actually a VRT file
-    root = vrt.get_root()
-    if root.tag != 'VRTDataset':
-        raise VrtError('Not a VRTDataset: %s' %
-                       vrt[:80])
-
-    rasterband = None
-    # Remove VRTRasterBands that do not map to the requested band
-    for rb in root.findall(".//VRTRasterBand"):
-        if rb.get('band') == str(band):
-            rasterband = rb
-        else:
-            root.remove(rb)
-    if rasterband is None:
-        raise VrtError('Cannot locate VRTRasterBand %d' % band)
-
-    # Turn colors into a format suitable for the VRT.
-    colors = colors.quantize(band=dataset.GetRasterBand(band))
-
-    # Set up the color palette
-    rasterband.set('band', '1')   # Destination band should always be 1
-    rasterband.find('ColorInterp').text = 'Palette'
-    colortable = SubElement(rasterband, 'ColorTable')
-    colortable.extend(
-        Element('Entry', c1=str(c.r), c2=str(c.g), c3=str(c.b), c4=str(c.a))
-        for c in colors.values()
-    )
-
-    # Define the color lookup table
-    source = rasterband.find('ComplexSource')
-    if source is None:
-        source = rasterband.find('SimpleSource')
-        source.tag = 'ComplexSource'
-
-    lut = source.find('LUT')
-    if lut is None:
-        lut = SubElement(source, 'LUT')
-    lut.text = ',\n'.join('%s:%d' % (band_value, i)
-                          for i, band_value in enumerate(colors.keys()))
-
-    vrt.update_content(root=root)
-    return vrt
-
-
-def expand_color_bands(inputfile):
-    """
-    Takes a paletted inputfile (probably a VRT) and generates a RGBA VRT.
-    """
-    Dataset(inputfile)
-
-    command = [
-        GDALTRANSLATE,
-        '-q',                   # Quiet
-        '-of', 'VRT',           # Output to VRT
-        '-expand', 'rgba',      # RGBA bands
-        '-ot', 'Byte',          # 8-bit bands (so that GIMP can open)
-        inputfile,
-        '/dev/stdout'
-    ]
-    try:
-        return VRT(check_output_gdal([str(e) for e in command]))
-    except CalledGdalError as e:
-        if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
-                       "file format."):
-            # HACK: WTF?!?
-            return VRT(e.output)
-        raise
 
 
 def extract_color_band(inputfile, band):
@@ -359,184 +245,6 @@ def resampling_methods(cmd=GDALWARP):
 
     return resampling_methods._cache
 resampling_methods._cache = None
-
-
-# Utility classes to express color lookup tables
-
-class ColorBase(dict):
-    """
-    """
-
-    def pipeline(self, band):
-        """Returns a list of functions that can be passed to pipeline()"""
-        raise NotImplementedError()
-
-    def quantize(self, band):
-        """Returns an OrderedDict of {band_value: color} for colorization"""
-        raise NotImplementedError()
-
-    def _insert_exact(self, band, colors, band_value, new_color):
-        """Insert [band_value, new_color] into `colors` as an exact color"""
-        if not colors:
-            colors.append([band.MinimumValue, rgba(r=0, g=0, b=0, a=0)])
-            return self._insert_exact(band=band, colors=colors,
-                                      band_value=band_value,
-                                      new_color=new_color)
-
-        # (band_value, None) > (band_value, rgba(...)) means that index is the
-        # insertion point for the new_color.
-        if numpy.isneginf(band_value):
-            index = 0
-        else:
-            index = bisect(colors, [band_value, None])
-
-        if index == 0 or \
-           (index < len(colors) and colors[index][0] == band_value):
-            # Save the old_color
-            old_color = colors[index][1]
-            # Replace an existing color entry with the new_color
-            colors[index][1] = new_color
-        else:
-            # Save the old_color
-            old_color = colors[index - 1][1]
-            # Insert the new_color
-            colors.insert(index, [band_value, new_color])
-
-        # Now we need to propagate the old_color after the nodata value
-        # Make sure that we don't clobber another color by accident.
-        after_value = band.IncrementValue(band_value)
-        if not numpy.isposinf(after_value) and after_value != band_value:
-            index += 1
-            if index > len(colors):
-                colors.append([after_value, old_color])
-            elif index == len(colors) or colors[index][0] > after_value:
-                colors.insert(index, [after_value, old_color])
-
-    def _sorted_list(self, band):
-        """Returns this object as a sorted list of [band_value, color] lists"""
-        result = sorted([[k, v] for k, v in self.items()],
-                        key=itemgetter(0))
-
-        # Force the first band value into the minimum for the band, so we
-        # can always assume that the left-most value is a replacement.
-        if result:
-            result[0][0] = band.MinimumValue
-
-        return result
-
-
-class ColorExact(ColorBase):
-    """
-    Given the following ColorExact, sorted by key:
-    {-2: red,
-      0: green,
-      2: blue}
-
-    The color line looks like this, with colors at the exact values:
-
-                red    green    blue
-                 |       |       |
-      ---o---o---o---o---o---o---o---o---o---o---
-    ... -4  -3  -2  -1   0   1   2   3   4   5...
-
-    All other values are transparent.
-    """
-    def pipeline(self, band):
-        """Returns a list of functions that can be passed to pipeline()"""
-        return [
-            (lambda f: palettize(inputfile=f, colors=self, band=band)),
-            (lambda f: expand_color_bands(inputfile=f)),
-        ]
-
-    def quantize(self, band):
-        """Returns an OrderedDict of {band_value: color} for colorization"""
-        if not self:
-            raise ValueError("No colors to quantize")
-
-        colors = []
-        nodata = band.GetNoDataValue()
-
-        # Insert an exact color for each item in this lookup table
-        for band_value, color in self.iteritems():
-            if nodata is not None and nodata == band_value:
-                # nodata values are always transparent
-                continue
-            self._insert_exact(band=band, colors=colors,
-                               band_value=band_value, new_color=color)
-
-        return OrderedDict(colors)
-
-
-class ColorPalette(ColorBase):
-    """
-    Given the following ColorPalette, sorted by key:
-    {-3: transparent,
-     -2: red,
-      0: green,
-      2: blue}
-
-    The color line looks like this, with solid blocks of color:
-
-           trans | red   | green | blue
-             <-- |-->    |-->    |-->
-      ---o---o---o---o---o---o---o---o---o---o---
-    ... -4  -3  -2  -1   0   1   2   3   4   5...
-
-    The value of the lowest key is irrelevant. In this case, it could be -4 or
-    -inf.
-    """
-    def pipeline(self, band):
-        """Returns a list of functions that can be passed to pipeline()"""
-        return [
-            (lambda f: palettize(inputfile=f, colors=self, band=band)),
-            (lambda f: expand_color_bands(inputfile=f)),
-        ]
-
-    def quantize(self, band):
-        """Returns an OrderedDict of {band_value: color} for colorization"""
-        if not self:
-            raise ValueError("No colors to quantize")
-
-        colors = self._sorted_list(band=band)
-
-        nodata = band.GetNoDataValue()
-        if nodata is not None:
-            # We need to insert an exact transparent color at the nodata value
-            self._insert_exact(band=band, colors=colors,
-                               band_value=nodata, new_color=rgba(0, 0, 0, 0))
-
-        return OrderedDict(colors)
-
-
-class ColorGradient(ColorBase):
-    """
-    Given the following ColorGradient, sorted by key:
-    {-3: transparent,
-     -2: red,
-      0: green,
-      2: blue}
-
-    The color line looks like this, with a linear gradient between each color:
-
-           trans | red   | green | blue
-             <-- |==-->  |==-->  |==-->
-      ---o---o---o---o---o---o---o---o---o---o---
-    ... -4  -3  -2  -1   0   1   2   3   4   5...
-
-    The value of the lowest key is irrelevant. In this case, it could be -4 or
-    -inf.
-    """
-    def pipeline(self, band):
-        """Returns a list of functions that can be passed to pipeline()"""
-        return [
-            (lambda f: colorize(inputfile=f, colors=self, band=band)),
-        ]
-
-    def quantize(self, band):
-        """Returns an OrderedDict of {band_value: color} for colorization"""
-        if not self:
-            raise ValueError("No colors to quantize")
-        return OrderedDict(self._sorted_list(band=band))
 
 
 # Utility classes that wrap GDAL because its SWIG bindings are not Pythonic.
@@ -989,9 +697,6 @@ class VRT(object):
 
     def get_root(self):
         return ElementTree.fromstring(self.content)
-
-    def update_content(self, root):
-        self.content = ElementTree.tostring(root)
 
     def get_tempfile(self, **kwargs):
         kwargs.setdefault('suffix', '.vrt')

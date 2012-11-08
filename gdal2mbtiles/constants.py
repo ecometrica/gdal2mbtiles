@@ -11,7 +11,6 @@ EPSG_WEB_MERCATOR = 3785
 TILE_SIDE = 256                 # in pixels
 
 # Command-line programs
-GDALBUILDVRT = 'gdalbuildvrt'
 GDALINFO = 'gdalinfo'
 GDALTRANSLATE = 'gdal_translate'
 GDALWARP = 'gdalwarp'

@@ -655,6 +655,10 @@ class TmsPyramid(object):
         self._image = None
         self._resolution = None
 
+    def colorize(self, colors):
+        """Replaces this image with a colorized version."""
+        self._image = colors.colorize(self.image)
+
     @property
     def dataset(self):
         if self._dataset is None:

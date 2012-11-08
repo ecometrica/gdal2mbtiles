@@ -3,13 +3,11 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from collections import OrderedDict
 from math import log
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
 import unittest
-from xml.etree import ElementTree
 
 import numpy
 
@@ -19,12 +17,10 @@ from osgeo.gdalconst import GRA_Cubic
 from gdal2mbtiles.constants import EPSG_WEB_MERCATOR, GDALINFO, TILE_SIDE
 from gdal2mbtiles.exceptions import (GdalError, CalledGdalError,
                                      UnalignedInputError,
-                                     UnknownResamplingMethodError, VrtError)
-from gdal2mbtiles.gdal import (ColorBase, ColorPalette, Dataset,
-                               expand_color_bands, extract_color_band,
-                               palettize, preprocess, SpatialReference, warp,
-                               VRT)
-from gdal2mbtiles.types import Extents, rgba, XY
+                                     UnknownResamplingMethodError)
+from gdal2mbtiles.gdal import (Dataset, extract_color_band, preprocess,
+                               SpatialReference, warp, VRT)
+from gdal2mbtiles.types import Extents, XY
 
 
 __dir__ = os.path.dirname(__file__)
@@ -41,97 +37,6 @@ class TestCase(unittest.TestCase):
                                places=places)
         self.assertAlmostEqual(first.upper_right.y, second.upper_right.y,
                                places=places)
-
-
-class TestPalettize(unittest.TestCase):
-    def setUp(self):
-        self.inputfile = os.path.join(__dir__,
-                                      'srtm.tif')
-
-    def test_simple(self):
-        vrt = palettize(inputfile=self.inputfile,
-                        colors={0: rgba(0, 0, 0, 255),
-                                1: rgba(255, 255, 255, 255)})
-        root = vrt.get_root()
-        self.assertEqual(root.tag, 'VRTDataset')
-        color_table = root.find('VRTRasterBand').find('ColorTable')
-        self.assertEqual(
-            ElementTree.tostring(color_table),
-            ('<ColorTable>'
-             '<Entry c1="0" c2="0" c3="0" c4="255" />'
-             '<Entry c1="255" c2="255" c3="255" c4="255" />'
-             '</ColorTable>')
-        )
-        lut = root.find('VRTRasterBand').find('ComplexSource').find('LUT')
-        self.assertEqual(lut.text,
-                         '-32768:0,\n1:1')
-
-    def test_invalid(self):
-        self.assertRaises(GdalError,
-                          palettize,
-                          inputfile='/dev/null',
-                          colors={0: rgba(0, 0, 0, 255),
-                                  1: rgba(255, 255, 255, 255)})
-
-    def test_missing_band(self):
-        self.assertRaises(VrtError,
-                          palettize,
-                          inputfile=self.inputfile,
-                          colors={0: rgba(0, 0, 0, 255),
-                                  1: rgba(255, 255, 255, 255)},
-                          band=2)
-
-    def test_invalid_colors(self):
-        self.assertRaises(AttributeError,
-                          palettize,
-                          inputfile=self.inputfile,
-                          colors={0: 'red',
-                                  1: 'green'})
-        self.assertRaises(TypeError,
-                          palettize,
-                          inputfile=self.inputfile,
-                          colors=None)
-
-    def test_nodata(self):
-        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
-        in_band = 1
-
-        vrt = palettize(inputfile=inputfile,
-                        colors={0: rgba(0, 0, 0, 255),
-                                1: rgba(255, 255, 255, 255)},
-                        band=in_band)
-        with vrt.get_tempfile(suffix='.vrt') as outputfile:
-            # No Data value must be the same as the input file's
-            in_data = Dataset(inputfile)
-            out_data = Dataset(outputfile.name)
-            self.assertEqual(in_data.GetRasterBand(in_band).GetNoDataValue(),
-                             out_data.GetRasterBand(1).GetNoDataValue())
-
-
-class TestExpandColorBands(unittest.TestCase):
-    def setUp(self):
-        self.inputfile = os.path.join(__dir__,
-                                      'srtm.tif')
-
-    def test_simple(self):
-        vrt = palettize(inputfile=self.inputfile,
-                        colors={0: rgba(0, 0, 0, 255),
-                                1: rgba(255, 255, 255, 255)})
-        with vrt.get_tempfile(suffix='.vrt') as paletted:
-            vrt = expand_color_bands(inputfile=paletted.name)
-            root = vrt.get_root()
-            # There are four colors, RGBA.
-            self.assertEqual(len(root.findall('.//VRTRasterBand')), 4)
-
-    def test_no_color_table(self):
-        # srtm.tif has no color table
-        self.assertRaises(CalledGdalError,
-                          expand_color_bands, inputfile=self.inputfile)
-
-    def test_invalid(self):
-        self.assertRaises(GdalError,
-                          expand_color_bands,
-                          inputfile='/dev/null')
 
 
 class TestExtractColorBand(unittest.TestCase):
@@ -252,9 +157,7 @@ class TestPreprocess(unittest.TestCase):
         inputfile = os.path.join(__dir__, 'srtm.tif')
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
-            preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colors={0: rgba(0, 0, 0, 255),
-                               1: rgba(255, 255, 255, 255)})
+            preprocess(inputfile=inputfile, outputfile=outputfile.name)
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
@@ -274,9 +177,7 @@ class TestPreprocess(unittest.TestCase):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
-            preprocess(inputfile=inputfile, outputfile=outputfile.name,
-                       colors={0: rgba(0, 0, 0, 255),
-                               1: rgba(255, 255, 255, 255)})
+            preprocess(inputfile=inputfile, outputfile=outputfile.name)
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
@@ -300,14 +201,6 @@ class TestVrt(TestCase):
     def test_get_root(self):
         self.assertEqual(VRT(self.empty).get_root().tag,
                          'VRTDataset')
-
-    def test_update_content(self):
-        vrt = VRT(self.empty)
-        root = vrt.get_root()
-        root.tag = 'Ecometrica'
-        vrt.update_content(root=root)
-        self.assertEqual(str(vrt),
-                         '<Ecometrica> </Ecometrica>')
 
     def test_get_tempfile(self):
         vrt = VRT(self.empty)
@@ -402,328 +295,6 @@ class TestVrt(TestCase):
         self.assertRaises(OSError,
                           vrt.render,
                           outputfile='/dev/invalid')
-
-
-class TestColors(TestCase):
-    def setUp(self):
-        self.transparent = rgba(0, 0, 0, 0)
-        self.black = rgba(0, 0, 0, 255)
-        self.red = rgba(255, 0, 0, 255)
-        self.green = rgba(0, 255, 0, 255)
-        self.blue = rgba(0, 0, 255, 255)
-        self.white = rgba(255, 255, 255, 255)
-
-        self.float_dataset = Dataset(os.path.join(__dir__, 'paletted.tif'))
-        self.float_band = self.float_dataset.GetRasterBand(1)
-        self.int_dataset = Dataset(os.path.join(__dir__, 'srtm.tif'))
-        self.int_band = self.int_dataset.GetRasterBand(1)
-
-    def test_insert_exact_int(self):
-        # Empty
-        colors = ColorBase()
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-32768, self.transparent],
-                          [0, self.red],
-                          [1, self.transparent]])
-
-        # At minimum
-        colors = ColorBase([(0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=self.int_band.MinimumValue,
-                             new_color=self.red)
-        self.assertEqual(
-            sorted_colors,
-            [[-32768, self.red],
-             [-32767, self.black]]
-        )
-
-        # Before smallest color
-        colors = ColorBase([(0, self.black),
-                            (2, self.white)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=self.int_band.MinimumValue,
-                             new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-32768, self.red],
-                          [-32767, self.black],
-                          [2, self.white]])
-
-        # Between colors
-        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
-                            (-1, self.black),
-                            (1, self.white)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-32768, self.transparent],
-                          [-1, self.black],
-                          [0, self.red],
-                          [1, self.white]])
-
-        # Replacing a color
-        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
-                            (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-32768, self.transparent],
-                          [0, self.red],
-                          [1, self.black]])
-
-        # After largest color
-        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
-                            (-1, self.black)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-32768, self.transparent],
-                          [-1, self.black],
-                          [0, self.red],
-                          [1, self.black]])
-
-        # Just before maximum
-        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
-                            (0, self.black),
-                            (self.int_band.MaximumValue, self.white)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=(self.int_band.MaximumValue - 1),
-                             new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[self.int_band.MinimumValue, self.transparent],
-                          [0, self.black],
-                          [32766, self.red],
-                          [32767, self.white]])
-
-        # At maximum
-        colors = ColorBase([(self.int_band.MinimumValue, self.transparent),
-                            (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.int_band)
-        colors._insert_exact(band=self.int_band, colors=sorted_colors,
-                             band_value=self.int_band.MaximumValue,
-                             new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[self.int_band.MinimumValue, self.transparent],
-                          [0, self.black],
-                          [32767, self.red]])
-
-    def test_insert_exact_float(self):
-        # Empty
-        colors = ColorBase()
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.transparent],
-                          [0, self.red],
-                          [1.4012984643248171e-45, self.transparent]])
-
-        # At minimum
-        colors = ColorBase([(0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=self.float_band.MinimumValue,
-                             new_color=self.red)
-        self.assertEqual(
-            sorted_colors,
-            [[-numpy.inf, self.red],
-             [-3.4028234663852886e+38, self.black]]
-        )
-
-        # Before smallest color
-        colors = ColorBase([(0, self.black),
-                            (2, self.white)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=self.float_band.MinimumValue,
-                             new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.red],
-                          [-3.4028234663852886e+38, self.black],
-                          [2, self.white]])
-
-        # Between colors
-        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
-                            (-1, self.black),
-                            (1, self.white)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.transparent],
-                          [-1, self.black],
-                          [0, self.red],
-                          [1.4012984643248171e-45, self.black],
-                          [1, self.white]])
-
-        # Replacing a color
-        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
-                            (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.transparent],
-                          [0, self.red],
-                          [1.4012984643248171e-45, self.black]])
-
-        # After largest color
-        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
-                            (-1, self.black)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=0, new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[-numpy.inf, self.transparent],
-                          [-1, self.black],
-                          [0, self.red],
-                          [1.4012984643248171e-45, self.black]])
-
-        # At maximum
-        colors = ColorBase([(self.float_band.MinimumValue, self.transparent),
-                            (0, self.black)])
-        sorted_colors = colors._sorted_list(band=self.float_band)
-        colors._insert_exact(band=self.float_band, colors=sorted_colors,
-                             band_value=numpy.inf,
-                             new_color=self.red)
-        self.assertEqual(sorted_colors,
-                         [[self.float_band.MinimumValue, self.transparent],
-                          [0, self.black],
-                          [numpy.inf, self.red]])
-
-    def test_palette_float(self):
-        # No colors.
-        colors = ColorPalette()
-        self.assertEqual(colors, {})
-        self.assertRaises(ValueError, colors.quantize, band=self.float_band)
-
-        # Red throughout.
-        colors = ColorPalette([(0, self.red)])
-        self.assertEqual(colors,
-                         {0: self.red})
-        self.assertEqual(colors.quantize(band=self.float_band),
-                         {-numpy.inf: self.red})
-
-        # Red when x < 0,
-        # Green when 0 <= x
-        colors = ColorPalette([(-1, self.red),
-                               (0, self.green)])
-        self.assertEqual(colors,
-                         {-1: self.red,
-                          0: self.green})
-        self.assertEqual(colors.quantize(band=self.float_band),
-                         {-numpy.inf: self.red,
-                          0: self.green})
-
-        # Black when x < -1,
-        # Red when -1 <= x < 0
-        # Green when 0 <= x < 1
-        # White when 1 <= x
-        # Nodata at 10
-        nodata_dataset = Dataset(os.path.join(__dir__, 'paletted.nodata.tif'))
-        nodata_band = nodata_dataset.GetRasterBand(1)
-        colors = ColorPalette([(nodata_band.MinimumValue, self.black),
-                               (-1, self.red),
-                               (0, self.green),
-                               (1, self.white)])
-        self.assertEqual(colors,
-                         {-numpy.inf: self.black,
-                          -1: self.red,
-                          0: self.green,
-                          1: self.white})
-        self.assertEqual(
-            colors.quantize(band=nodata_band),
-            OrderedDict([
-                (-numpy.inf, self.black),
-                (-1, self.red),
-                (0, self.green),
-                (1, self.white),
-                (10, self.transparent),
-                (nodata_band.IncrementValue(10), self.white),
-            ])
-        )
-
-    def test_palette_int(self):
-        # No colors.
-        colors = ColorPalette()
-        self.assertEqual(colors, {})
-        self.assertRaises(ValueError, colors.quantize, band=self.int_band)
-
-        # Red throughout.
-        colors = ColorPalette([(0, self.red)])
-        self.assertEqual(colors,
-                         {0: self.red})
-        self.assertEqual(colors.quantize(band=self.int_band),
-                         {-32768: self.red})
-
-        # Red when x < 0,
-        # Green when 0 <= x
-        colors = ColorPalette([(-1, self.red),
-                               (0, self.green)])
-        self.assertEqual(colors,
-                         {-1: self.red,
-                          0: self.green})
-        self.assertEqual(colors.quantize(band=self.int_band),
-                         {-32768: self.red,
-                          0: self.green})
-
-        # Black when x < -1,
-        # Red when -1 <= x < 0
-        # Green when 0 <= x < 1
-        # White when 1 <= x
-        # Nodata at 10
-        nodata_dataset = Dataset(os.path.join(__dir__, 'srtm.nodata.tif'))
-        nodata_band = nodata_dataset.GetRasterBand(1)
-        colors = ColorPalette([(nodata_band.MinimumValue, self.black),
-                               (-1, self.red),
-                               (0, self.green),
-                               (1, self.white)])
-        self.assertEqual(colors,
-                         {-32768: self.black,
-                          -1: self.red,
-                          0: self.green,
-                          1: self.white})
-        self.assertEqual(
-            colors.quantize(band=nodata_band),
-            OrderedDict([
-                (-32768, self.black),
-                (-1, self.red),
-                (0, self.green),
-                (1, self.white),
-                (10000, self.transparent),
-                (10001, self.white),
-            ])
-        )
-
-    def test_sorted_list_float(self):
-        colors = ColorBase([[0, None],
-                            [-1, None],
-                            [1, None],
-                            [-numpy.inf, None]])
-        self.assertEqual(colors._sorted_list(band=self.float_band),
-                         [[-numpy.inf, None],
-                          [-1, None],
-                          [0, None],
-                          [1, None]])
-
-    def test_sorted_list_int(self):
-        colors = ColorBase([[0, None],
-                            [-1, None],
-                            [1, None],
-                            [-numpy.inf, None]])
-        self.assertEqual(colors._sorted_list(band=self.int_band),
-                         [[-32768, None],
-                          [-1, None],
-                          [0, None],
-                          [1, None]])
 
 
 class TestBand(TestCase):
