@@ -158,3 +158,84 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                 CalledProcessError,
                 check_call, command, env=self.environ, stderr=null
             )
+
+    def test_colors(self):
+        null = open('/dev/null', 'rw')
+
+        with NamedTemporaryFile(suffix='.mbtiles') as output:
+            # Valid
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       '--color', '0:#00f',
+                       '--color', '1:green',
+                       self.inputfile, output.name]
+            check_call(command, env=self.environ)
+
+            # Invalid color
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       '--color', 'invalid',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       '--color', '0:1',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       '--color', 's:#000',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            # Missing --color
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            # Invalid --coloring
+            command = [sys.executable, self.script,
+                       '--coloring', 'invalid',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            # Missing --coloring
+            command = [sys.executable, self.script,
+                       '--color', '0:#00f',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)
+
+            # Valid multi-band
+            command = [sys.executable, self.script,
+                       '--coloring', 'gradient',
+                       '--color', '0:#00f',
+                       '--color', '1:green',
+                       '--colorize-band', '2',
+                       self.inputfile, output.name]
+            check_call(command, env=self.environ)
+
+            # Invalid band
+            command = [sys.executable, self.script,
+                       '--coloring', 'palette',
+                       '--color', '0:#00f',
+                       '--color', '1:green',
+                       '--colorize-band', '-2',
+                       self.inputfile, output.name]
+            self.assertRaises(CalledProcessError,
+                              check_call, command, env=self.environ,
+                              stderr=null)

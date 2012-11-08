@@ -28,9 +28,61 @@ from tempfile import NamedTemporaryFile
 
 from gdal2mbtiles.gdal import RESAMPLING_METHODS, SpatialReference
 from gdal2mbtiles.mbtiles import Metadata
+from gdal2mbtiles.types import rgba
+
+
+COLORING_METHODS = {
+    'exact': 'ColorExact',
+    'gradient': 'ColorGradient',
+    'palette': 'ColorPalette',
+}
+
+def coloring_arg(s):
+    """Validates --coloring"""
+    from gdal2mbtiles import vips
+    if s is None:
+        return None
+    return getattr(vips, COLORING_METHODS[s])
+
+def color_arg(s):
+    """Validates --color"""
+    try:
+        band_value, html_color = s.split(':', 1)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "'{0}' must be in format: BAND-VALUE:HTML-COLOR".format(s)
+        )
+
+    try:
+        band_value = float(band_value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "'{0}' is not a valid number".format(band_value)
+        )
+
+    try:
+        color = rgba.webcolor(html_color)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "'{0}' is not a valid HTML color".format(html_color)
+        )
+
+    return band_value, color
+
+def colorize_band_arg(s):
+    """Validates --colorize-band"""
+    try:
+        result = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError("invalid int value: '{0}'".format(s))
+    if result <= 0:
+        raise argparse.ArgumentTypeError("'{0}' must be 1 or greater".format(s))
+    return result
 
 
 def parse_args(args):
+    """Parses command-line `args`"""
+
     LatestMetadata = Metadata.latest()
 
     parser = argparse.ArgumentParser(
@@ -62,24 +114,33 @@ def parse_args(args):
                        help='Tile image format. Defaults to "png"')
 
     group = parser.add_argument_group(title='GDAL warp arguments')
-    # group.add_argument('--colorize-band', default=1,
-    #                    help='Raster band to colorize. Defaults to 1')
     group.add_argument('--spatial-reference', type=int, default=3785,
                        help=('Destination EPSG spatial reference. '
                              'Defaults to 3785'))
     group.add_argument('--resampling',
                        default='near',
-                       choices = RESAMPLING_METHODS.values(),
+                       choices=RESAMPLING_METHODS.values(),
                        help=('Resampling algorithm for warping. '
                              'Defaults to "near" (nearest-neighbour)'))
 
-    group = parser.add_argument_group(title='Rendering agurments')
+    group = parser.add_argument_group(title='Rendering arguments')
     group.add_argument('--min-resolution', type=int, default=None,
                        help=('Minimum resolution to render and slice. '
                              'Defaults to None (do not downsample)'))
     group.add_argument('--max-resolution', type=int, default=None,
                        help=('Maximum resolution to render and slice. '
                              'Defaults to None (do not upsample)'))
+
+    group = parser.add_argument_group(title='Coloring arguments')
+    group.add_argument('--coloring', default=None,
+                       choices=COLORING_METHODS,
+                       help='Coloring algorithm.')
+    group.add_argument('--color', dest='colors', action='append',
+                       type=color_arg, metavar='BAND-VALUE:HTML-COLOR',
+                       help=('Examples: --color="0:#ff00ff" --color=255:red'))
+    group.add_argument('--colorize-band', metavar='COLORIZE-BAND',
+                       type=colorize_band_arg, default=1,
+                       help='Raster band to colorize. Defaults to 1')
 
     args = parser.parse_args(args=args)
 
@@ -96,6 +157,15 @@ def parse_args(args):
 
     if args.name is None:
         args.name = os.path.basename(args.INPUT.name)
+
+    # Make sure that --color and --coloring match up
+    if (args.coloring is None and args.colors):
+        parser.error('must provide --coloring')
+    elif (args.coloring is not None and not args.colors):
+        parser.error('must provide at least one --color')
+
+    # Transform choices into ColorBase classes
+    args.coloring = coloring_arg(args.coloring)
 
     return args
 
@@ -134,6 +204,7 @@ def main(args):
 
     with input_output(inputfile=args.INPUT,
                       outputfile=args.OUTPUT) as (inputfile, outputfile):
+        # MBTiles
         metadata = dict(
             description=args.description,
             format=args.format,
@@ -141,7 +212,17 @@ def main(args):
             type=args.layer_type,
             version=args.version,
         )
+
+        # GDAL
         spatial_ref = SpatialReference.FromEPSG(args.spatial_reference)
+
+        # Coloring
+        if not args.coloring:
+            colors = band = None
+        else:
+            colors = args.coloring(args.colors)
+            band = args.colorize_band
+
         warp_mbtiles(inputfile=inputfile.name, outputfile=outputfile.name,
                      # MBTiles
                      metadata=metadata,
@@ -149,7 +230,9 @@ def main(args):
                      spatial_ref=spatial_ref, resampling=args.resampling,
                      # Rendering
                      min_resolution=args.min_resolution,
-                     max_resolution=args.max_resolution)
+                     max_resolution=args.max_resolution,
+                     # Coloring
+                     colors=colors, band=band)
         return 0
 
 
