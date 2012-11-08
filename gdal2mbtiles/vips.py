@@ -660,7 +660,8 @@ class TmsPyramid(object):
     def colorize(self, colors):
         """Replaces this image with a colorized version."""
         with LibVips.disable_warnings():
-            self._image = colors.colorize(self.image)
+            nodata = self.dataset.GetRasterBand(1).GetNoDataValue()
+            self._image = colors.colorize(image=self.image, nodata=nodata)
 
     @property
     def dataset(self):
