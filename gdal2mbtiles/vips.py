@@ -11,6 +11,7 @@ from multiprocessing import cpu_count
 from operator import itemgetter
 
 import numexpr
+import numpy
 
 from vipsCC.VError import VError
 import vipsCC.VImage
@@ -146,6 +147,19 @@ class VImage(vipsCC.VImage.VImage):
         'white': 4,                 # Fill bands with 255
     }
 
+    NUMPY_TYPES = {
+        vipsCC.VImage.VImage.FMTCHAR: numpy.int8,
+        vipsCC.VImage.VImage.FMTUCHAR: numpy.uint8,
+        vipsCC.VImage.VImage.FMTSHORT: numpy.int16,
+        vipsCC.VImage.VImage.FMTUSHORT: numpy.uint16,
+        vipsCC.VImage.VImage.FMTINT: numpy.int32,
+        vipsCC.VImage.VImage.FMTUINT: numpy.uint32,
+        vipsCC.VImage.VImage.FMTFLOAT: numpy.float32,
+        vipsCC.VImage.VImage.FMTDOUBLE: numpy.float64,
+        vipsCC.VImage.VImage.FMTCOMPLEX: numpy.complex64,
+        vipsCC.VImage.VImage.FMTDPCOMPLEX: numpy.complex128,
+    }
+
     def __init__(self, *args, **kwargs):
         if VIPS.get_concurrency() == 0:
             # Override auto-detection from environ and argv.
@@ -180,6 +194,80 @@ class VImage(vipsCC.VImage.VImage):
         new.__dict__.update(other.__dict__)
         return new
 
+    @classmethod
+    def from_gdal_dataset(cls, dataset, band):
+        """
+        Creates a new 1-band VImage from `dataset` at `band`
+
+        dataset: GDAL Dataset
+        band: Number of the band, starting from 1
+        """
+        filename = dataset.GetFileList()[0]
+        image1 = VImage(filename)
+
+        # Extract the band
+        image2 = image1.extract_bands(band=(band - 1), nbands=1)
+
+        # Cast to the right datatype, if necessary
+        datatype = dataset.GetRasterBand(band).NumPyDataType
+        if image2.NumPyType == datatype:
+            return image2
+        types = dict((v, k) for k, v in cls.NUMPY_TYPES.iteritems())
+        image3 = VImage.frombuffer(image2.tobuffer(),
+                                   width=image2.Xsize(), height=image2.Ysize(),
+                                   bands=1, format=types[datatype])
+        image3._buf = image2
+        return image3
+
+    @classmethod
+    def frombuffer(cls, buffer, width, height, bands, format):
+        """
+        Returns a new VImage created from a `buffer` of pixel data.
+
+        buffer: The raw buffer
+        width: Integer dimension
+        height: Integer dimension
+        bands: Number of bands in the buffer
+        format: Band format (all bands must be the same format)
+        """
+        return cls.from_vimage(
+            super(VImage, cls).frombuffer(buffer, width, height, bands, format)
+        )
+
+    @classmethod
+    def from_numpy_array(cls, array, width, height, bands, format):
+        """
+        Returns a new VImage created from a NumPy `array` of pixel data.
+
+        array: The NumPy array
+        width: Integer dimension
+        height: Integer dimension
+        bands: Number of bands in the buffer
+        format: Band format (all bands must be the same format)
+        """
+        array = array.astype(cls.NUMPY_TYPES[format])
+        buf = numpy.getbuffer(array)
+        image = cls.from_vimage(
+            super(VImage, cls).frombuffer(buf, width, height, bands, format)
+        )
+        # Hold on to the numpy array to prevent garbage collection
+        image._numpy_array = array
+        return image
+
+    @classmethod
+    def gbandjoin(cls, bands):
+        """
+        Returns a new VImage that is a bandwise join of `bands`.
+
+        bands: Sequence of VImage objects.
+        """
+        image = cls.from_vimage(
+            super(VImage, cls).gbandjoin(bands)
+        )
+        # Hold on to the other band to prevent garbage collection
+        image._buf = bands
+        return image
+
     def initdesc(self, width, height, bands, bandfmt, coding, type, xres,
                  yres, xoffset, yoffset):
         """Initializes the descriptor for this VImage."""
@@ -187,9 +275,12 @@ class VImage(vipsCC.VImage.VImage):
                                      type, xres, yres, xoffset, yoffset)
 
     def bandjoin(self, other):
-        return self.from_vimage(
+        image = self.from_vimage(
             super(VImage, self).bandjoin(other)
         )
+        # Hold on to the other band to prevent garbage collection
+        image._buf = other
+        return image
 
     def draw_rect(self, left, top, width, height, fill, ink):
         return super(VImage, self).draw_rect(left, top, width, height,
@@ -218,9 +309,12 @@ class VImage(vipsCC.VImage.VImage):
         band: First band to extract.
         nbands: Number of bands to extract.
         """
-        return self.from_vimage(
+        image = self.from_vimage(
             super(VImage, self).extract_bands(band, nbands)
         )
+        # Hold on to the other band to prevent garbage collection
+        image._buf = self
+        return image
 
     def affine(self, a, b, c, d, dx, dy, ox, oy, ow, oh,
               interpolate=None):
@@ -378,6 +472,10 @@ class VImage(vipsCC.VImage.VImage):
 
         # Resize
         return self.from_vimage(self.embed(_type, x, y, width, height))
+
+    def NumPyType(self):
+        """Return the NumPy data type."""
+        return self.NUMPY_TYPES[self.BandFmt()]
 
     def vips2jpeg(self, out):
         if isinstance(out, unicode):
@@ -661,6 +759,29 @@ def validate_resolutions(resolution, min_resolution=None,
 
 
 # Utility classes for coloring
+class ColorList(list):
+    """Represents a list of (band_value, color) for a single band."""
+
+    def deduplicate(self):
+        """Remove duplicate colors."""
+        self[:] = [
+            next(g)             # First in the group: smallest expression
+            for k, g
+            in groupby(self,
+                       key=itemgetter(1))  # Group by band color
+        ]
+
+    def lstrip(self, value):
+        """
+        Remove smallest `colors` that are equal to the background for `band`.
+        """
+        for i, v in enumerate(self):
+            if v[1] != value:
+                # First non-background color
+                self[:] = self[i:]
+                return
+        self[:] = []
+
 
 class ColorBase(dict):
     """Base class for ColorExact, ColorPalette, and ColorGradient."""
@@ -668,65 +789,70 @@ class ColorBase(dict):
     # Background is transparent
     BACKGROUND = rgba(r=0, g=0, b=0, a=0)
 
-    def _numexpr_clauses(self, band, nodata=None):
+    @classmethod
+    def _background(self, band):
+        """Returns the background color for `band`"""
+        return getattr(self.BACKGROUND, band)
+
+    def _clauses(self, band, nodata=None):
         raise NotImplementedError()
 
-    def _as_numexpr(self, band, nodata=None):
-        clauses = self._numexpr_clauses(band=band, nodata=nodata)
+    def _colors(self, band):
+        """Returns a list of (band_value, color) for `band`"""
+        colors = ColorList((band_value, getattr(color, band))
+                           for band_value, color in self.iteritems())
+        colors.sort()
+        return colors
+
+    def _colorize_bands(self, data, nodata=None):
+        for band in 'rgba':
+            expr = self._expression(band=band, nodata=nodata)
+            if expr is None:
+                # No expression, so create an array filled with the background
+                # value.
+                array = numpy.empty(shape=data.size, dtype=numpy.uint8)
+                array.fill(self._background(band=band))
+                yield array
+            else:
+                # Evaluate expression
+                yield numexpr.evaluate(self._expression(band=band,
+                                                        nodata=nodata),
+                                       local_dict=dict(n=data.copy()),
+                                       global_dict={})
+
+    def colorize(self, image, nodata=None):
+        """Returns a new RGBA VImage that has been colorized"""
+        if image.Bands() != 1:
+            raise ValueError(
+                'image {0!r} has more than one band'.format(image)
+            )
+
+        # Convert to a numpy array
+        data = numpy.frombuffer(buffer=image.tobuffer(),
+                                dtype=image.NumPyType())
+
+        # Use numexpr to color the data as RGBA bands
+        bands = self._colorize_bands(data=data, nodata=nodata)
+
+        # Merge the bands into a single RGBA VImage
+        width, height = image.Xsize(), image.Ysize()
+        images = [VImage.from_numpy_array(array=band,
+                                          width=width, height=height,
+                                          bands=1, format=VImage.FMTUCHAR)
+                  for band in bands]
+        return VImage.gbandjoin(bands=images)
+
+    def _expression(self, band, nodata=None):
+        clauses = self._clauses(band=band, nodata=nodata)
+        if not clauses:
+            return None
 
         result = str(getattr(self.BACKGROUND, band))  # Set default background
         for expression, true_value in clauses:
             result = 'where({expression}, {true}, {false})'.format(
                 expression=expression, true=true_value, false=result
             )
-        return result
-
-    def _background(self, band):
-        """Returns the background color for `band`"""
-        return getattr(self.BACKGROUND, band)
-
-    def _colors(self, band, duplicates=True):
-        """Returns a list of (band_value, color) for `band`"""
-        colors = sorted([(band_value, getattr(color, band))
-                         for band_value, color in self.iteritems()])
-
-        if not colors:
-            return []
-
-        if not duplicates:
-            # Remove duplicate colors
-            colors = [
-                next(g)             # First in the group: smallest expression
-                for k, g
-                in groupby(self._colors(band=band),
-                           key=itemgetter(1))  # Group by band color
-            ]
-
-            background = self._background(band=band)
-            if background == colors[0][1]:
-                # First color is also the background, so just drop it
-                del colors[0]
-
-        return colors
-
-    def colorize(self, image, nodata=None):
-        """Returns a new RGBA VImage that has been colorized"""
-        context = dict(n=image)
-        r, g, b, a = [numexpr.evaluate(self._as_numexpr(band='r',
-                                                        datatype=image.dtype,
-                                                        nodata=nodata),
-                                       local_dict=context, global_dict={})
-                      for b in 'rgba']
-        rgba = r.bandjoin(g).bandjoin(b).bandjoin(a)
-
-        self.initdesc(width=image.Xsize(), height=image.Ysize(),
-                      bands=4,                  # RGBA
-                      bandfmt=VImage.FMTUCHAR,  # 8-bit unsigned
-                      coding=VImage.NOCODING,   # No coding and no compression
-                      type=VImage.sRGB,
-                      xres=image.Xres(), yres=image.Yres(),
-                      xoffset=image.Xoffset(), yoffset=image.Yoffset())
-        return rgba
+        return bytes(result)
 
 
 class ColorExact(ColorBase):
@@ -746,8 +872,8 @@ class ColorExact(ColorBase):
     All other values are transparent.
     """
 
-    def _numexpr_clauses(self, band, nodata=None):
-        colors = self._colors(band=band, duplicates=True)
+    def _clauses(self, band, nodata=None):
+        colors = self._colors(band=band)
         background = self._background(band=band)
 
         return [('n == {0}'.format(band_value),  # Expression
@@ -773,8 +899,10 @@ class ColorPalette(ColorBase):
     All values less than the smallest become transparent.
     """
 
-    def _numexpr_clauses(self, band, nodata=None):
-        colors = self._colors(band=band, duplicates=False)
+    def _clauses(self, band, nodata=None):
+        colors = self._colors(band=band)
+        colors.lstrip(value=self._background(band=band))
+        colors.deduplicate()
 
         result = [('n >= {0}'.format(band_value),  # Expression
                    color)                          # True value
@@ -820,26 +948,37 @@ class ColorGradient(ColorBase):
             return
 
         prev_value, prev_color = colors[0]
+        m = b = None
         for value, color in colors[1:]:
-            # Solve for (color = m * value + b) with two points
-            m = (prev_value - value) / (prev_color - color)
-            b = prev_color - m * prev_value
+            if prev_color == color:
+                # Horizontal line: y = b
+                m = 0
+                b = prev_color
+            else:
+                # Solve for (color = m * value + b) with two points
+                m = (prev_value - value) / (prev_color - color)
+                b = prev_color - m * prev_value
             yield (prev_value, m, b)
             prev_value, prev_color = value, color
 
-        # Last color is constant
-        yield (prev_value, 0, prev_color)  # Horizontal line: y = b
+        # Last color is constant, but don't repeat it
+        if m != 0 and prev_color != b:
+            yield (prev_value, 0, prev_color)  # Horizontal line: y = b
 
-    def _numexpr_clauses(self, band, nodata=None):
-        colors = self._colors(band=band, duplicates=False)
+    def _clauses(self, band, nodata=None):
+        colors = self._colors(band=band)
 
-        result = [('n >= {0}'.format(band_value),     # Expression
-                   b if m == 0 else '{m} * n + {b}'.format(m=m, b=b))
-                  for band_value, m, b in self._linear_gradient(colors)]
+        result = ColorList(
+            ('n >= {0}'.format(band_value),     # Expression
+             b if m == 0 else '{m} * n + {b}'.format(m=m, b=b))
+            for band_value, m, b in self._linear_gradient(colors)
+        )
 
         if nodata is not None and band == 'a' and colors and \
            nodata >= colors[0][0]:
             result.append(('n == {0}'.format(nodata),     # Expression
                            self._background(band=band)))  # True value
 
+        result.lstrip(value=self._background(band=band))
+        result.deduplicate()
         return result
