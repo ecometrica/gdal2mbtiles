@@ -202,22 +202,24 @@ class VImage(vipsCC.VImage.VImage):
         dataset: GDAL Dataset
         band: Number of the band, starting from 1
         """
-        filename = dataset.GetFileList()[0]
-        image1 = VImage(filename)
+        with LibVips.disable_warnings():
+            filename = dataset.GetFileList()[0]
+            image1 = VImage(filename)
 
-        # Extract the band
-        image2 = image1.extract_bands(band=(band - 1), nbands=1)
+            # Extract the band
+            image2 = image1.extract_bands(band=(band - 1), nbands=1)
 
-        # Cast to the right datatype, if necessary
-        datatype = dataset.GetRasterBand(band).NumPyDataType
-        if image2.NumPyType == datatype:
-            return image2
-        types = dict((v, k) for k, v in cls.NUMPY_TYPES.iteritems())
-        image3 = VImage.frombuffer(image2.tobuffer(),
-                                   width=image2.Xsize(), height=image2.Ysize(),
-                                   bands=1, format=types[datatype])
-        image3._buf = image2
-        return image3
+            # Cast to the right datatype, if necessary
+            datatype = dataset.GetRasterBand(band).NumPyDataType
+            if image2.NumPyType == datatype:
+                return image2
+            types = dict((v, k) for k, v in cls.NUMPY_TYPES.iteritems())
+            image3 = VImage.frombuffer(image2.tobuffer(),
+                                       width=image2.Xsize(),
+                                       height=image2.Ysize(),
+                                       bands=1, format=types[datatype])
+            image3._buf = image2
+            return image3
 
     @classmethod
     def frombuffer(cls, buffer, width, height, bands, format):
