@@ -706,7 +706,7 @@ class VRT(object):
         tempfile.seek(0)
         return tempfile
 
-    def render(self, outputfile, cmd=GDALWARP, working_memory=512,
+    def render(self, outputfile, cmd=GDALTRANSLATE, working_memory=512,
                compress=None, tempdir=None):
         """Generate a GeoTIFF from a vrt string"""
         tmpfile = NamedTemporaryFile(
@@ -720,16 +720,18 @@ class VRT(object):
                     cmd,
                     '-q',                   # Quiet - FIXME: Use logging
                     '-of', 'GTiff',         # Output to GeoTIFF
-                    '-multi',               # Use multiple processes
-                    '-overwrite',           # Overwrite outputfile
                     '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
-                    '-wo', 'NUM_THREADS=ALL_CPUS',  # Use all CPUs
+                    # gdal_translate does not support the following
+                    # '-multi',               # Use multiple processes
+                    # '-overwrite',           # Overwrite outputfile
+                    # '-wo', 'NUM_THREADS=ALL_CPUS',  # Use all CPUs
                 ]
 
                 # Set the working memory so that gdalwarp doesn't stall of disk
                 # I/O
                 warp_cmd.extend([
-                    '-wm', working_memory,
+                    # gdal_translate does not support -wm
+                    # '-wm', working_memory,
                     '--config', 'GDAL_CACHEMAX', working_memory
                 ])
 

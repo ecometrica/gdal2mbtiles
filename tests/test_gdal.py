@@ -175,17 +175,18 @@ class TestPreprocess(unittest.TestCase):
 
     def test_nodata(self):
         inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+        in_data = Dataset(inputfile)
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name)
             self.assertTrue(os.path.exists(outputfile.name))
             self.assertTrue(os.stat(outputfile.name).st_size > 0)
 
-            # No Data value must be None in an RGBA file
+            # Output nodata value should be the same an input nodata value
             out_data = Dataset(outputfile.name)
-            for band in range(1, out_data.RasterCount + 1):
-                self.assertEqual(out_data.GetRasterBand(band).GetNoDataValue(),
-                                 None)
+            self.assertEqual(out_data.RasterCount, 1)  # Only one output band
+            self.assertEqual(out_data.GetRasterBand(1).GetNoDataValue(),
+                             in_data.GetRasterBand(1).GetNoDataValue())
 
 
 class TestVrt(TestCase):
