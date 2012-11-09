@@ -406,8 +406,9 @@ class Dataset(gdal.Dataset):
         Get a native destination resolution that does not reduce the precision
         of the source data.
         """
-        # Get the source projection's units for a 1x1 pixel
-        _, width, _, _, _, height = self.GetGeoTransform()
+        # Get the source projection's units for a 1x1 pixel, assuming square
+        # pixels.
+        width, height = self.GetPixelDimensions()
         src_pixel_size = min(abs(width), abs(height))
 
         if transform is None:
@@ -433,6 +434,11 @@ class Dataset(gdal.Dataset):
             )
             if (res_pixel_size - dst_pixel_size) <= error:
                 return resolution
+
+    def GetPixelDimensions(self):
+        """Returns the (width, height) of pixels in this Dataset's units."""
+        _, width, _, _, _, height = self.GetGeoTransform()
+        return XY(x=width, y=height)
 
     def PixelCoordinates(self, x, y, transform=None):
         """
@@ -531,6 +537,28 @@ class Dataset(gdal.Dataset):
         return Extents(lower_left=XY(left, bottom),
                        upper_right=XY(right, top))
 
+    def GetTileScalingRatios(self, resolution=None):
+        """
+        Get the scaling ratios required to upsample an image to `resolution`.
+
+        If resolution is None, then assume it will be upsampled to the native
+        destination resolution. See Dataset.GetNativeResolution()
+        """
+        if resolution is None:
+            resolution = self.GetNativeResolution(transform=None)
+
+        # Get the pixel dimensions in map units. There is no custom transform,
+        # because it makes no sense to compute a pixel ratio for a
+        # reprojection.
+        spatial_ref = self.GetSpatialReference()
+        dst_pixel_width, dst_pixel_height = spatial_ref.GetPixelDimensions(
+            resolution=resolution
+        )
+        src_pixel_width, src_pixel_height = self.GetPixelDimensions()
+
+        return XY(x=abs(src_pixel_width / dst_pixel_width),
+                  y=abs(src_pixel_height / dst_pixel_height))
+
     def GetTmsExtents(self, resolution=None, transform=None):
         """
         Returns (lower-left, upper-right) TMS tile coordinates.
@@ -539,8 +567,9 @@ class Dataset(gdal.Dataset):
         lower-left are included.
         """
         if resolution is None:
-            resolution = self.GetNativeResolution()
+            resolution = self.GetNativeResolution(transform=transform)
 
+        # Get the tile dimensions in map units
         if transform is None:
             spatial_ref = self.GetSpatialReference()
         else:
@@ -664,8 +693,8 @@ class SpatialReference(osr.SpatialReference):
     def GetPixelDimensions(self, resolution):
         # Assume square pixels.
         width, height = self.GetTileDimensions(resolution=resolution)
-        return XY(width / TILE_SIDE,
-                  height / TILE_SIDE)
+        return XY(x=width / TILE_SIDE,
+                  y=height / TILE_SIDE)
 
     def GetTileDimensions(self, resolution):
         # Assume square tiles.

@@ -426,6 +426,15 @@ class TestDataset(TestCase):
         self.spanningfile = os.path.join(__dir__,
                                          'bluemarble-spanning-ll.tif')
 
+        # Whole world: (180°W, 85°S), (180°E, 85°N)
+        self.upsamplingfile = os.path.join(__dir__,
+                                           'upsampling.tif')
+
+        # Unaligned (spanning) partial: (162.4°W, 76.7°S), (17.6°W, 8.3°S)
+        # that is also not at a native resolution.
+        self.foreignfile = os.path.join(__dir__,
+                                        'bluemarble-spanning-foreign.tif')
+
     def test_open(self):
         from osgeo.gdalconst import GA_Update
 
@@ -483,6 +492,25 @@ class TestDataset(TestCase):
         transform = dataset.GetCoordinateTransformation(dst_ref=sr)
         self.assertEqual(dataset.GetNativeResolution(transform=transform),
                          2 + int(round(log(3.28, 2))))  # 3.28 ft/m
+
+    def test_get_pixel_dimensions(self):
+        # bluemarble.tif is a 1024 × 1024 whole-world map
+        dataset = Dataset(inputfile=self.inputfile)
+        self.assertEqual(dataset.GetPixelDimensions(),
+                         XY(x=39135.758476562499709,
+                            y=-39135.758476562499709))
+
+        # upsampling.tif is a 256 × 256 whole-world map
+        dataset = Dataset(inputfile=self.upsamplingfile)
+        self.assertEqual(dataset.GetPixelDimensions(),
+                         XY(x=156543.033906249998836,
+                            y=-156543.033906249998836))
+
+        # bluemarble-spanning-foreign.tif is a 154 × 154 partial map
+        dataset = Dataset(inputfile=self.foreignfile)
+        self.assertEqual(dataset.GetPixelDimensions(),
+                         XY(x=104362.022604166661040,
+                            y=-104362.022604166661040))
 
     def test_pixel_coordinates(self):
         dataset = Dataset(inputfile=self.inputfile)
@@ -795,6 +823,25 @@ class TestDataset(TestCase):
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)
         self.assertAlmostEqual(ur.y, 90.0, places=0)
+
+    def test_get_tile_scaling_ratios(self):
+        # bluemarble.tif is a 1024 × 1024 whole-world map
+        dataset = Dataset(inputfile=self.inputfile)
+        ratio = dataset.GetTileScalingRatios()
+        self.assertAlmostEqual(ratio.x, 1.0)
+        self.assertAlmostEqual(ratio.y, 1.0)
+
+        # upsampling.tif is a 256 × 256 whole-world map
+        dataset = Dataset(inputfile=self.upsamplingfile)
+        ratio = dataset.GetTileScalingRatios()
+        self.assertAlmostEqual(ratio.x, 1.0)
+        self.assertAlmostEqual(ratio.y, 1.0)
+
+        # bluemarble-spanning-foreign.tif is a 154 × 154 partial map
+        dataset = Dataset(inputfile=self.foreignfile)
+        ratio = dataset.GetTileScalingRatios()
+        self.assertAlmostEqual(ratio.x, 4.0 / 3.0)
+        self.assertAlmostEqual(ratio.y, 4.0 / 3.0)
 
     def test_get_tms_extents(self):
         dataset = Dataset(self.inputfile)
