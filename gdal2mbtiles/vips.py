@@ -976,8 +976,8 @@ class ColorExact(ColorBase):
         colors = self._colors(band=band)
         background = self._background(band=band)
 
-        return [('n == {0}'.format(band_value),  # Expression
-                 color)                          # True value
+        return [('n == {0!r}'.format(band_value),  # Expression
+                 color)                            # True value
                 for band_value, color in colors
                 if band_value != nodata and color != background]
 
@@ -1004,14 +1004,14 @@ class ColorPalette(ColorBase):
         colors.lstrip(value=self._background(band=band))
         colors.deduplicate()
 
-        result = [('n >= {0}'.format(band_value),  # Expression
-                   color)                          # True value
+        result = [('n >= {0!r}'.format(band_value),  # Expression
+                   color)                            # True value
                   for band_value, color in colors]
 
         if nodata is not None and band == 'a' and colors and \
            nodata >= colors[0][0]:
-            result.append(('n == {0}'.format(nodata),     # Expression
-                           self._background(band=band)))  # True value
+            result.append(('n == {0!r}'.format(nodata),     # Expression
+                           self._background(band=band)))    # True value
 
         return result
 
@@ -1069,15 +1069,15 @@ class ColorGradient(ColorBase):
         colors = self._colors(band=band)
 
         result = ColorList(
-            ('n >= {0}'.format(band_value),     # Expression
-             b if m == 0 else '{m} * n + {b}'.format(m=m, b=b))
+            ('n >= {0!r}'.format(band_value),     # Expression
+             b if m == 0 else '{m!r} * n + {b!r}'.format(m=m, b=b))
             for band_value, m, b in self._linear_gradient(colors)
         )
 
         if nodata is not None and band == 'a' and colors and \
            nodata >= colors[0][0]:
-            result.append(('n == {0}'.format(nodata),     # Expression
-                           self._background(band=band)))  # True value
+            result.append(('n == {0!r}'.format(nodata),     # Expression
+                           self._background(band=band)))    # True value
 
         result.lstrip(value=self._background(band=band))
         result.deduplicate()

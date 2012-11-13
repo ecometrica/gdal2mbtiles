@@ -803,7 +803,7 @@ class TestColors(unittest.TestCase):
         self.assertEqual(
             colors._clauses(band='r'),
             [('n >= 0', '-0.5 * n + {0}'.format(float(self.red.r))),
-             ('n >= 64', '-1.50393700787 * n + 223.251968504'),
+             ('n >= 64', '-1.5039370078740157 * n + 223.251968503937'),
              ('n >= 255', self.black.r)]
         )
         self.assertEqual(colors._clauses(band='g'),
@@ -813,7 +813,7 @@ class TestColors(unittest.TestCase):
         self.assertEqual(
             colors._expression(band='r'),
             'where(n >= 255, {black}, '
-            'where(n >= 64, -1.50393700787 * n + 223.251968504, '
+            'where(n >= 64, -1.5039370078740157 * n + 223.251968503937, '
             'where(n >= 0, -0.5 * n + {red}, {false})))'.format(
                 black=self.black.r,
                 red=float(self.red.r),
