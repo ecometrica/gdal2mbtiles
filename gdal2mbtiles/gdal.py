@@ -432,7 +432,7 @@ class Dataset(gdal.Dataset):
         # We allow some floating point error between src_pixel_size and
         # dst_pixel_size based on the major circumference so that the error is
         # in the destination units
-        error = dst_ref.GetMajorCircumference() * 1.0e-09
+        error = max(*dst_ref.GetPixelDimensions(resolution=0)) / 128
 
         # Find the resolution where the pixels are smaller than dst_pixel_size.
         for resolution in count():
@@ -444,6 +444,9 @@ class Dataset(gdal.Dataset):
             )
             if (res_pixel_size - dst_pixel_size) <= error:
                 return resolution
+
+            # Halve error each resolution
+            error /= 2
 
     def GetPixelDimensions(self):
         """Returns the (width, height) of pixels in this Dataset's units."""
