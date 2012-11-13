@@ -378,20 +378,14 @@ class Dataset(gdal.Dataset):
         spatial_ref = self.GetSpatialReference()
         world_extents = spatial_ref.GetWorldExtents()
         extents = self.GetExtents()
-        ll_offset = XY(
-            x=abs(world_extents.lower_left.x - extents.lower_left.x),
-            y=abs(world_extents.lower_left.y - extents.lower_left.y)
-        )
-        ur_offset = XY(
-            x=abs(world_extents.upper_right.x - extents.upper_right.x),
-            y=abs(world_extents.upper_right.y - extents.upper_right.y)
-        )
+        ll_offset = world_extents.lower_left - extents.lower_left
+        ur_offset = world_extents.upper_right - extents.upper_right
 
         pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
-        return (ll_offset.x <= pixel_sizes.x and
-                ll_offset.y <= pixel_sizes.y and
-                ur_offset.x <= pixel_sizes.x and
-                ur_offset.y <= pixel_sizes.y)
+        return (abs(ll_offset.x) <= pixel_sizes.x and
+                abs(ll_offset.y) <= pixel_sizes.y and
+                abs(ur_offset.x) <= pixel_sizes.x and
+                abs(ur_offset.y) <= pixel_sizes.y)
 
     def GetRasterBand(self, i):
         return Band(band=super(Dataset, self).GetRasterBand(i),
@@ -659,11 +653,9 @@ class Dataset(gdal.Dataset):
             resolution = self.GetNativeResolution()
 
         spatial_ref = self.GetSpatialReference()
-        world = spatial_ref.GetWorldExtents()
-        src_pixel_sizes = XY(
-            x=(world.upper_right.x - world.lower_left.x) / self.RasterXSize,
-            y=(world.upper_right.y - world.lower_left.y) / self.RasterYSize,
-        )
+        world = spatial_ref.GetWorldExtents().dimensions
+        src_pixel_sizes = XY(x=world.x / self.RasterXSize,
+                             y=world.y / self.RasterYSize)
         dst_pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
 
         xscale = abs(src_pixel_sizes.x / dst_pixel_sizes.x)
@@ -787,25 +779,20 @@ class SpatialReference(osr.SpatialReference):
 
     def GetPixelDimensions(self, resolution):
         # Assume square pixels.
-        width, height = self.GetTileDimensions(resolution=resolution)
-        return XY(x=width / TILE_SIDE,
-                  y=height / TILE_SIDE)
+        return self.GetTileDimensions(resolution=resolution) / TILE_SIDE
 
     def GetTileDimensions(self, resolution):
         # Assume square tiles.
         width = self.GetMajorCircumference() / 2 ** resolution
         height = self.GetMinorCircumference() / 2 ** resolution
+        result = XY(width, height)
         if self.IsProjected() == 0:
             # Resolution 0 only covers a longitudinal hemisphere
-            return XY(width / 2, height / 2)
-        else:
-            # Resolution 0 covers the whole world
-            return XY(width, height)
+            result /= 2
+        return result
 
     def GetTilesCount(self, extents, resolution):
-        width = extents.upper_right.x - extents.lower_left.x
-        height = extents.upper_right.y - extents.lower_left.y
-
+        width, height = extents.dimensions
         tile_width, tile_height = self.GetTileDimensions(resolution=resolution)
 
         return XY(int(round(width / tile_width)),

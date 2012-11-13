@@ -56,11 +56,34 @@ class Extents(_Extents):
                 self.upper_right.almost_equal(other.upper_right,
                                               places=places, delta=delta))
 
+    @property
+    def dimensions(self):
+        return self.upper_right - self.lower_left
+
 
 _XY = namedtuple('XY', ['x', 'y'])
 
 
 class XY(_XY):
+    def __add__(self, other):
+        return type(self)(x=self.x + other.x,
+                          y=self.y + other.y)
+
+    def __sub__(self, other):
+        return type(self)(x=self.x - other.x,
+                          y=self.y - other.y)
+
+    def __mul__(self, other):
+        return type(self)(x=self.x * other,
+                          y=self.y * other)
+
+    def __truediv__(self, other):
+        return type(self)(x=self.x / other,
+                          y=self.y / other)
+
+    def floor(self):
+        return type(self)(int(self.x), int(self.y))
+
     def almost_equal(self, other, places=None, delta=None):
         if self.x == other[0] and self.y == other[1]:
             return True         # Shortcut

@@ -580,8 +580,7 @@ class TmsTiles(object):
         offset = self.offset
 
         for res in reversed(range(self.resolution - levels, self.resolution)):
-            offset = XY(x=offset.x / 2.0,
-                        y=offset.y / 2.0)
+            offset /= 2.0
 
             shrunk = image.shrink(xscale=0.5, yscale=0.5)
             aligned = shrunk.tms_align(tile_width=self.tile_width,
@@ -592,7 +591,7 @@ class TmsTiles(object):
                                    storage=self.storage,
                                    tile_width=self.tile_width,
                                    tile_height=self.tile_height,
-                                   offset=XY(int(offset.x), int(offset.y)),
+                                   offset=offset.floor(),
                                    resolution=res)
             image = tiles.image
         return tiles
@@ -609,10 +608,7 @@ class TmsTiles(object):
         # boundaries.
         assert levels > 0
         scale = 2 ** levels
-
-        offset = XY(self.offset.x * scale,
-                    self.offset.y * scale)
-
+        offset = self.offset * scale
         stretched = self.image.stretch(xscale=scale, yscale=scale)
         aligned = stretched.tms_align(tile_width=self.tile_width,
                                       tile_height=self.tile_height,
@@ -622,7 +618,7 @@ class TmsTiles(object):
                                storage=self.storage,
                                tile_width=self.tile_width,
                                tile_height=self.tile_height,
-                               offset=XY(int(offset.x), int(offset.y)),
+                               offset=offset.floor(),
                                resolution=self.resolution + levels)
         return tiles
 
@@ -755,16 +751,15 @@ class TmsPyramid(object):
             return
 
         extents = self.dataset.GetExtents()
-        width = extents.upper_right.x - extents.lower_left.x
-        height = extents.lower_left.y - extents.upper_right.y
+        width, height = extents.dimensions
 
         with LibVips.disable_warnings():
             self._image = self.image.stretch(xscale=ratios.x,
                                              yscale=ratios.y)
             # Fix the dataset's metadata
             geotransform = list(self.dataset.GetGeoTransform())
-            geotransform[1] = width / self._image.Xsize()   # pixel width
-            geotransform[5] = height / self._image.Ysize()  # pixel height
+            geotransform[1] = width / self._image.Xsize()    # pixel width
+            geotransform[5] = -height / self._image.Ysize()  # pixel height
             self.dataset.SetGeoTransform(geotransform, local=True)
             self.dataset.SetLocalSizes(xsize=self._image.Xsize(),
                                        ysize=self._image.Ysize())
@@ -787,9 +782,8 @@ class TmsPyramid(object):
 
         # Force world to be full width by changing pixel width
         world = self.dataset.GetSpatialReference().GetWorldExtents()
-        width = world.upper_right.x - world.lower_left.x
         geotransform = list(self.dataset.GetGeoTransform())
-        geotransform[1] = width / self._image.Xsize()   # pixel width
+        geotransform[1] = world.dimensions.x / self._image.Xsize()
         self.dataset.SetGeoTransform(geotransform, local=True)
 
         return result
@@ -813,14 +807,9 @@ class TmsPyramid(object):
             ((tile_extents.upper_right.y - extents.upper_right.y) /
              pixel_sizes.y)
         ))
-        width = int(
-            ((tile_extents.upper_right.x - tile_extents.lower_left.x) /
-             pixel_sizes.x)
-        )
-        height = int(
-            ((tile_extents.upper_right.y - tile_extents.lower_left.y) /
-             pixel_sizes.y)
-        )
+
+        width = int(tile_extents.dimensions.x / pixel_sizes.x)
+        height = int(tile_extents.dimensions.y / pixel_sizes.y)
 
         if left == top == 0 and \
            width == self.dataset.RasterXSize and \
