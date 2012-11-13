@@ -105,9 +105,9 @@ class TestVImage(unittest.TestCase):
         self.assertEqual(shrunk.Ysize(), image.Ysize() * 0.5)
 
         # Not a power of 2
-        shrunk = image.shrink(xscale=0.1, yscale=0.2)
-        self.assertEqual(shrunk.Xsize(), int(image.Xsize() * 0.1))
-        self.assertEqual(shrunk.Ysize(), int(image.Ysize() * 0.2))
+        shrunk = image.shrink(xscale=0.0625, yscale=0.125)
+        self.assertEqual(shrunk.Xsize(), int(image.Xsize() * 0.0625))
+        self.assertEqual(shrunk.Ysize(), int(image.Ysize() * 0.125))
 
         # Out of bounds
         self.assertRaises(ValueError,
@@ -153,12 +153,12 @@ class TestTmsPyramid(unittest.TestCase):
             __dir__, 'bluemarble-spanning-foreign.tif'
         )
 
-    def test_upsample_to_native(self):
+    def test_upsample(self):
         dummystorage = None
 
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
         pyramid = TmsPyramid(inputfile=self.foreignfile, storage=dummystorage)
-        pyramid.upsample_to_native()
+        pyramid.upsample(resolution=None)
         self.assertEqual(pyramid.image.Xsize(), 512)
         self.assertEqual(pyramid.image.Ysize(), 512)
 

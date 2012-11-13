@@ -3,6 +3,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from functools import partial
 from tempfile import NamedTemporaryFile
 
 from .gdal import Dataset, preprocess
@@ -157,12 +158,14 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
         preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
                    spatial_ref=spatial_ref, resampling=resampling,
                    compress='LZW')
+        preprocessor = partial(upsample_after_warp,
+                               whole_world=dataset.IsWholeWorld())
         return image_mbtiles(inputfile=tempfile.name, outputfile=outputfile,
                              metadata=metadata,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer, hasher=hasher,
-                             preprocessor=upsample_after_warp)
+                             preprocessor=preprocessor)
 
 
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,
@@ -208,11 +211,13 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
                    spatial_ref=spatial_ref, resampling=resampling,
                    compress='LZW')
+        preprocessor = partial(upsample_after_warp,
+                               whole_world=dataset.IsWholeWorld())
         return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer, hasher=hasher,
-                             preprocessor=upsample_after_warp)
+                             preprocessor=preprocessor)
 
 
 def warp_slice(inputfile, outputdir, colors=None, band=None,
@@ -247,20 +252,32 @@ def warp_slice(inputfile, outputdir, colors=None, band=None,
         band = 1
 
     with NamedTemporaryFile(suffix='.tif') as tempfile:
+        dataset = Dataset(inputfile)
         preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
                    spatial_ref=spatial_ref, resampling=resampling,
                    compress='LZW')
+        preprocessor = partial(upsample_after_warp,
+                               whole_world=dataset.IsWholeWorld())
         return image_slice(inputfile=tempfile.name, outputdir=outputdir,
                            colors=colors, renderer=renderer, hasher=hasher,
-                           preprocessor=upsample_after_warp)
+                           preprocessor=preprocessor)
 
 
 # Preprocessors
 
-def upsample_after_warp(pyramid, colors, **kwargs):
-    pyramid.upsample_to_native()
+def upsample_after_warp(pyramid, colors, whole_world, **kwargs):
+    resolution = pyramid.dataset.GetNativeResolution()
+    if whole_world:
+        # We must upsample the image to fit whole tiles, even if this makes the
+        # extents of the image go PAST the full world.
+        #
+        # This is because GDAL sometimes reprojects from a whole world image
+        # into a partial world image, due to rounding errors.
+        pyramid.upsample_to_world()
+    else:
+        pyramid.upsample(resolution=resolution)
     colorize(pyramid=pyramid, colors=colors)
-    pyramid.align_to_grid()
+    pyramid.align_to_grid(resolution=resolution)
     return pyramid
 
 

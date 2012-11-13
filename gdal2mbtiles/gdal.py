@@ -368,6 +368,31 @@ class Dataset(gdal.Dataset):
         self._geotransform = None
         self._rastersizes = None
 
+    def IsWholeWorld(self, resolution=None):
+        """
+        Returns whether the dataset covers the whole world or not.
+        """
+        if resolution is None:
+            resolution = self.GetNativeResolution()
+
+        spatial_ref = self.GetSpatialReference()
+        world_extents = spatial_ref.GetWorldExtents()
+        extents = self.GetExtents()
+        ll_offset = XY(
+            x=abs(world_extents.lower_left.x - extents.lower_left.x),
+            y=abs(world_extents.lower_left.y - extents.lower_left.y)
+        )
+        ur_offset = XY(
+            x=abs(world_extents.upper_right.x - extents.upper_right.x),
+            y=abs(world_extents.upper_right.y - extents.upper_right.y)
+        )
+
+        pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
+        return (ll_offset.x <= pixel_sizes.x and
+                ll_offset.y <= pixel_sizes.y and
+                ur_offset.x <= pixel_sizes.x and
+                ur_offset.y <= pixel_sizes.y)
+
     def GetRasterBand(self, i):
         return Band(band=super(Dataset, self).GetRasterBand(i),
                     dataset=self)
@@ -411,8 +436,9 @@ class Dataset(gdal.Dataset):
             dst_ref = transform.dst_ref
 
         # We allow some floating point error between src_pixel_size and
-        # dst_pixel_size
-        error = dst_pixel_size * 1.0e-06
+        # dst_pixel_size based on the major circumference so that the error is
+        # in the destination units
+        error = dst_ref.GetMajorCircumference() * 1.0e-09
 
         # Find the resolution where the pixels are smaller than dst_pixel_size.
         for resolution in count():
@@ -618,6 +644,38 @@ class Dataset(gdal.Dataset):
                                      int(bottom / tile_height)),
                        upper_right=XY(int(right / tile_width),
                                       int(top / tile_height)))
+
+    def GetWorldScalingRatios(self, resolution=None, places=None):
+        """
+        Get the scaling ratios required to upsample for the whole world.
+
+        If resolution is None, then assume it will be upsampled to the native
+        destination resolution. See Dataset.GetNativeResolution()
+
+        If places is not None, rounds the ratios to the number of decimal
+        places specified.
+        """
+        if resolution is None:
+            resolution = self.GetNativeResolution()
+
+        spatial_ref = self.GetSpatialReference()
+        world = spatial_ref.GetWorldExtents()
+        src_pixel_sizes = XY(
+            x=(world.upper_right.x - world.lower_left.x) / self.RasterXSize,
+            y=(world.upper_right.y - world.lower_left.y) / self.RasterYSize,
+        )
+        dst_pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
+
+        xscale = abs(src_pixel_sizes.x / dst_pixel_sizes.x)
+
+        # Make sure that yscale fits within the whole world
+        yscale = min(xscale, abs(src_pixel_sizes.y / dst_pixel_sizes.y))
+
+        if places is not None:
+            xscale = round(xscale, places)
+            yscale = round(yscale, places)
+
+        return XY(x=xscale, y=yscale)
 
     def GetWorldTmsExtents(self, resolution=None, transform=None):
         if resolution is None:

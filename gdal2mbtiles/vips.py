@@ -375,8 +375,8 @@ class VImage(vipsCC.VImage.VImage):
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
 
-        output_width = int(self.Xsize() * xscale)
-        output_height = int(self.Ysize() * yscale)
+        output_width = int(round(self.Xsize() * xscale))
+        output_height = int(round(self.Ysize() * yscale))
 
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
@@ -749,10 +749,7 @@ class TmsPyramid(object):
         # update some metadata
         self.storage.post_import(pyramid=self)
 
-    def upsample_to_native(self):
-        """Upsamples the image to native TMS resolution."""
-        ratios = self.dataset.GetTileScalingRatios(places=5)
-
+    def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
             return
@@ -772,9 +769,35 @@ class TmsPyramid(object):
             self.dataset.SetLocalSizes(xsize=self._image.Xsize(),
                                        ysize=self._image.Ysize())
 
-    def align_to_grid(self):
+    def upsample(self, resolution=resolution):
+        """Upsamples the image to `resolution`."""
+        return self._upsample(
+            ratios=self.dataset.GetTileScalingRatios(resolution=resolution,
+                                                     places=5)
+        )
+
+    def upsample_to_world(self):
+        """Upsamples the image to native TMS resolution for the whole world."""
+        ratios = self.dataset.GetWorldScalingRatios()
+        if ratios == XY(x=1.0, y=1.0):
+            # No upsampling needed
+            return
+
+        result = self._upsample(ratios=ratios)
+
+        # Force world to be full width by changing pixel width
+        world = self.dataset.GetSpatialReference().GetWorldExtents()
+        width = world.upper_right.x - world.lower_left.x
+        geotransform = list(self.dataset.GetGeoTransform())
+        geotransform[1] = width / self._image.Xsize()   # pixel width
+        self.dataset.SetGeoTransform(geotransform, local=True)
+
+        return result
+
+    def align_to_grid(self, resolution=None):
         """Aligns the image to the TMS tile grid."""
-        resolution = self.dataset.GetNativeResolution()
+        if resolution is None:
+            resolution = self.dataset.GetNativeResolution()
         spatial_ref = self.dataset.GetSpatialReference()
         pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
 
