@@ -151,33 +151,6 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
             raise UnknownResamplingMethodError(resampling)
         warp_cmd.extend(['-r', resampling])
 
-    # Compute the target extents
-    src_spatial_ref = dataset.GetSpatialReference()
-    transform = CoordinateTransformation(src_spatial_ref, spatial_ref)
-    resolution = dataset.GetNativeResolution(transform=transform,
-                                             maximum=maximum_resolution)
-    extents = dataset.GetTiledExtents(transform=transform,
-                                             resolution=resolution)
-    warp_cmd.append('-te')
-    warp_cmd.extend(map(
-        # Ensure that we use as much precision as possible for floating point
-        # numbers.
-        '{!r}'.format,
-        [
-            extents.lower_left.x, extents.lower_left.y,   # xmin ymin
-            extents.upper_right.x, extents.upper_right.y  # xmax ymax
-        ]
-    ))
-
-    # Generate an output file with an whole number of tiles, in pixels.
-    num_tiles = spatial_ref.GetTilesCount(extents=extents,
-                                          resolution=resolution)
-    warp_cmd.extend([
-        '-ts',
-        int(num_tiles.x) * TILE_SIDE,
-        int(num_tiles.y) * TILE_SIDE
-    ])
-
     # Propagate No Data Value
     nodata_values = [dataset.GetRasterBand(i).GetNoDataValue()
                      for i in range(1, dataset.RasterCount + 1)]
@@ -390,6 +363,11 @@ class Dataset(gdal.Dataset):
         except RuntimeError as e:
             raise GdalError(e.message)
 
+        # Shadow for metadata so we can overwrite it without saving
+        # it to the original file.
+        self._geotransform = None
+        self._rastersizes = None
+
     def GetRasterBand(self, i):
         return Band(band=super(Dataset, self).GetRasterBand(i),
                     dataset=self)
@@ -400,6 +378,18 @@ class Dataset(gdal.Dataset):
     def GetCoordinateTransformation(self, dst_ref):
         return CoordinateTransformation(src_ref=self.GetSpatialReference(),
                                         dst_ref=dst_ref)
+
+    def GetGeoTransform(self):
+        if self._geotransform is not None:
+            return self._geotransform
+        return super(Dataset, self).GetGeoTransform()
+
+    def SetGeoTransform(self, geotransform, local=False):
+        if local is True:
+            # Write to the local shadow, so we don't overwrite the file.
+            self._geotransform = geotransform
+        else:
+            super(Dataset, self).SetGeoTransform(geotransform)
 
     def GetNativeResolution(self, transform=None, maximum=None):
         """
@@ -506,6 +496,9 @@ class Dataset(gdal.Dataset):
         tile_width, tile_height = spatial_ref.GetTileDimensions(
             resolution=resolution
         )
+        pixel_width, pixel_height = spatial_ref.GetPixelDimensions(
+            resolution=resolution
+        )
 
         # Project the extents to the destination projection.
         extents = self.GetExtents(transform=transform)
@@ -516,10 +509,29 @@ class Dataset(gdal.Dataset):
         right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Compute the extents aligned to the above tiles.
-        left -= left % tile_width
-        right += -right % tile_width
-        bottom -= bottom % tile_height
-        top += -top % tile_height
+        offset = left % tile_width
+        if offset <= (tile_width - pixel_width):
+            left -= offset
+        else:
+            left += tile_width - offset
+
+        offset = -right % tile_width
+        if offset <= (tile_width - pixel_width):
+            right += offset
+        else:
+            right -= tile_width - offset
+
+        offset = bottom % tile_height
+        if offset <= (tile_height - pixel_height):
+            bottom -= offset
+        else:
+            bottom += tile_width - offset
+
+        offset = -top % tile_height
+        if offset <= (tile_height - pixel_height):
+            top += offset
+        else:
+            top -= tile_width - offset
 
         # Undo the correction.
         left, bottom = spatial_ref.OffsetPoint(left, bottom, reverse=True)
@@ -533,16 +545,18 @@ class Dataset(gdal.Dataset):
         right = min(right, world_extents.upper_right.x)
         top = min(top, world_extents.upper_right.y)
 
-        # Undo the correction.
         return Extents(lower_left=XY(left, bottom),
                        upper_right=XY(right, top))
 
-    def GetTileScalingRatios(self, resolution=None):
+    def GetTileScalingRatios(self, resolution=None, places=None):
         """
         Get the scaling ratios required to upsample an image to `resolution`.
 
         If resolution is None, then assume it will be upsampled to the native
         destination resolution. See Dataset.GetNativeResolution()
+
+        If places is not None, rounds the ratios to the number of decimal
+        places specified.
         """
         if resolution is None:
             resolution = self.GetNativeResolution(transform=None)
@@ -556,8 +570,14 @@ class Dataset(gdal.Dataset):
         )
         src_pixel_width, src_pixel_height = self.GetPixelDimensions()
 
-        return XY(x=abs(src_pixel_width / dst_pixel_width),
-                  y=abs(src_pixel_height / dst_pixel_height))
+        xscale = abs(src_pixel_width / dst_pixel_width)
+        yscale = abs(src_pixel_height / dst_pixel_height)
+
+        if places is not None:
+            xscale = round(xscale, places)
+            yscale = round(yscale, places)
+
+        return XY(x=xscale, y=yscale)
 
     def GetTmsExtents(self, resolution=None, transform=None):
         """
@@ -581,8 +601,9 @@ class Dataset(gdal.Dataset):
 
         # Validate that the native resolution extents are tile-aligned.
         extents = self.GetTiledExtents(transform=transform)
+        pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
         if not extents.almost_equal(self.GetExtents(transform=transform),
-                                    places=2):
+                                    delta=min(*pixel_sizes)):
             raise UnalignedInputError('Dataset is not aligned to TMS grid')
 
         # Correct for origin, because you can't do modular arithmetic on
@@ -626,6 +647,22 @@ class Dataset(gdal.Dataset):
                 for y in xrange(world_extents.lower_left.y,
                                 world_extents.upper_right.y)
                 if XY(x, y) not in data_extents)
+
+    @property
+    def RasterXSize(self):
+        if self._rastersizes is not None:
+            return self._rastersizes.x
+        return super(Dataset, self).RasterXSize
+
+    @property
+    def RasterYSize(self):
+        if self._rastersizes is not None:
+            return self._rastersizes.y
+        return super(Dataset, self).RasterYSize
+
+    def SetLocalSizes(self, xsize, ysize):
+        # Write to the local shadow, because we can't edit XSize and YSize
+        self._rastersizes = XY(x=xsize, y=ysize)
 
 
 class SpatialReference(osr.SpatialReference):

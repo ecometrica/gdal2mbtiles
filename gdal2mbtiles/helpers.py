@@ -13,7 +13,8 @@ from .vips import TmsPyramid, validate_resolutions
 
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None,
-                  colors=None, renderer=None, hasher=None):
+                  colors=None, renderer=None, hasher=None,
+                  preprocessor=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -26,6 +27,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
                                   10: rgba(255, 255, 255, 255)})
             Defaults to no colorization.
     hasher: Hashing function to use for image data.
+    preprocessor: Function to run on the TmsPyramid before slicing.
 
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
@@ -40,14 +42,16 @@ def image_mbtiles(inputfile, outputfile, metadata,
                              storage=storage,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution)
-        if colors is not None:
-            pyramid.colorize(colors)
+        if preprocessor is None:
+            preprocessor = colorize
+        pyramid = preprocessor(**locals())
         pyramid.slice()
 
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None,
-                  colors=None, renderer=None, hasher=None):
+                  colors=None, renderer=None, hasher=None,
+                  preprocessor=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -56,6 +60,7 @@ def image_pyramid(inputfile, outputdir,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     hasher: Hashing function to use for image data.
+    preprocessor: Function to run on the TmsPyramid before slicing.
 
     Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
 
@@ -74,12 +79,14 @@ def image_pyramid(inputfile, outputdir,
                          storage=storage,
                          min_resolution=min_resolution,
                          max_resolution=max_resolution)
-    if colors is not None:
-        pyramid.colorize(colors)
+    if preprocessor is None:
+        preprocessor = colorize
+    pyramid = preprocessor(**locals())
     pyramid.slice()
 
 
-def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None):
+def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None,
+                preprocessor=None):
     """
     Slices a GDAL-readable inputfile into PNG tiles.
 
@@ -90,6 +97,7 @@ def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None):
                                   10: rgba(255, 255, 255, 255)})
             Defaults to no colorization.
     hasher: Hashing function to use for image data.
+    preprocessor: Function to run on the TmsPyramid before slicing.
 
     Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
 
@@ -105,8 +113,9 @@ def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None):
                          storage=storage,
                          min_resolution=None,
                          max_resolution=None)
-    if colors is not None:
-        pyramid.colorize(colors)
+    if preprocessor is None:
+        preprocessor = colorize
+    pyramid = preprocessor(**locals())
     pyramid.slice()
 
 
@@ -152,7 +161,8 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                              metadata=metadata,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
-                             colors=colors, renderer=renderer, hasher=hasher)
+                             colors=colors, renderer=renderer, hasher=hasher,
+                             preprocessor=upsample_after_warp)
 
 
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,
@@ -201,7 +211,8 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
-                             colors=colors, renderer=renderer, hasher=hasher)
+                             colors=colors, renderer=renderer, hasher=hasher,
+                             preprocessor=upsample_after_warp)
 
 
 def warp_slice(inputfile, outputdir, colors=None, band=None,
@@ -240,4 +251,20 @@ def warp_slice(inputfile, outputdir, colors=None, band=None,
                    spatial_ref=spatial_ref, resampling=resampling,
                    compress='LZW')
         return image_slice(inputfile=tempfile.name, outputdir=outputdir,
-                           colors=colors, renderer=renderer, hasher=hasher)
+                           colors=colors, renderer=renderer, hasher=hasher,
+                           preprocessor=upsample_after_warp)
+
+
+# Preprocessors
+
+def upsample_after_warp(pyramid, colors, **kwargs):
+    pyramid.upsample_to_native()
+    colorize(pyramid=pyramid, colors=colors)
+    pyramid.align_to_grid()
+    return pyramid
+
+
+def colorize(pyramid, colors, **kwargs):
+    if colors is not None:
+        pyramid.colorize(colors)
+    return pyramid

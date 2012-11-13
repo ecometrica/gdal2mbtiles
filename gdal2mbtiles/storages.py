@@ -253,7 +253,6 @@ class MbtilesStorage(Storage):
         lower_left, upper_right = pyramid.dataset.GetTiledExtents(
             transform=transform
         )
-
         self.mbtiles.metadata['bounds'] = lower_left + upper_right
 
     def save(self, x, y, z, image):

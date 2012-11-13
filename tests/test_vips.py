@@ -3,13 +3,19 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import os
 import unittest
+
+import numpy
 
 from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import rgba, XY
 from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
-                               LibVips, TmsTiles, VImage, VIPS)
+                               LibVips, TmsPyramid, TmsTiles, VImage, VIPS)
+
+
+__dir__ = os.path.dirname(__file__)
 
 
 class TestLibVips(unittest.TestCase):
@@ -133,6 +139,58 @@ class TestVImage(unittest.TestCase):
                                  offset=XY(1, 1))
         self.assertEqual(result.Xsize(), image.Xsize() * 2)
         self.assertEqual(result.Ysize(), image.Ysize() * 2)
+
+
+class TestTmsPyramid(unittest.TestCase):
+    def setUp(self):
+        self.inputfile = os.path.join(__dir__,
+                                      'bluemarble.tif')
+
+        self.foreignfile = os.path.join(__dir__,
+                                        'bluemarble-foreign.tif')
+
+        self.spanningforeignfile = os.path.join(
+            __dir__, 'bluemarble-spanning-foreign.tif'
+        )
+
+    def test_upsample_to_native(self):
+        dummystorage = None
+
+        # bluemarble-foreign.tif is a 500 × 250 whole-world map.
+        pyramid = TmsPyramid(inputfile=self.foreignfile, storage=dummystorage)
+        pyramid.upsample_to_native()
+        self.assertEqual(pyramid.image.Xsize(), 512)
+        self.assertEqual(pyramid.image.Ysize(), 512)
+
+    def test_align_to_grid(self):
+        dummystorage = None
+
+        with LibVips.disable_warnings():
+            # bluemarble.tif is a 1024 × 1024 whole-world map.
+            pyramid = TmsPyramid(inputfile=self.inputfile,
+                                 storage=dummystorage)
+            pyramid.align_to_grid()
+            self.assertEqual(pyramid.image.Xsize(), 1024)
+            self.assertEqual(pyramid.image.Ysize(), 1024)
+
+            # bluemarble-foreign.tif is a 500 × 250 whole-world map.
+            pyramid = TmsPyramid(inputfile=self.foreignfile,
+                                 storage=dummystorage)
+            pyramid.align_to_grid()
+            self.assertEqual(pyramid.image.Xsize(), 512)
+            self.assertEqual(pyramid.image.Ysize(), 512)
+
+            # bluemarble-spanning-foreign.tif is a 154 × 154 whole-world map.
+            pyramid = TmsPyramid(inputfile=self.spanningforeignfile,
+                                 storage=dummystorage)
+            pyramid.align_to_grid()
+            self.assertEqual(pyramid.image.Xsize(), 256)
+            self.assertEqual(pyramid.image.Ysize(), 256)
+            # The upper-left corner should be transparent
+            data = numpy.frombuffer(pyramid.image.tobuffer(),
+                                    dtype=numpy.uint8)
+            self.assertEqual(tuple(data[0:4]),
+                             rgba(0, 0, 0, 0))
 
 
 class TestTmsTiles(unittest.TestCase):

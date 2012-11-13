@@ -294,9 +294,11 @@ class VImage(vipsCC.VImage.VImage):
             if fill not in self.FILL_OPTIONS:
                 raise ValueError('Invalid fill: {0!r}'.format(fill))
             fill = self.FILL_OPTIONS[fill]
-        return self.from_vimage(
+        image = self.from_vimage(
             super(VImage, self).embed(fill, left, top, width, height)
         )
+        image._buf = self
+        return image
 
     def extract_area(self, left, top, width, height):
         """Returns a new VImage with a region cropped out of this VImage."""
@@ -746,6 +748,84 @@ class TmsPyramid(object):
         # Post-import hook needs to be called in case the storage has to
         # update some metadata
         self.storage.post_import(pyramid=self)
+
+    def upsample_to_native(self):
+        """Upsamples the image to native TMS resolution."""
+        ratios = self.dataset.GetTileScalingRatios(places=5)
+
+        if ratios == XY(x=1.0, y=1.0):
+            # No upsampling needed
+            return
+
+        extents = self.dataset.GetExtents()
+        width = extents.upper_right.x - extents.lower_left.x
+        height = extents.lower_left.y - extents.upper_right.y
+
+        with LibVips.disable_warnings():
+            self._image = self.image.stretch(xscale=ratios.x,
+                                             yscale=ratios.y)
+            # Fix the dataset's metadata
+            geotransform = list(self.dataset.GetGeoTransform())
+            geotransform[1] = width / self._image.Xsize()   # pixel width
+            geotransform[5] = height / self._image.Ysize()  # pixel height
+            self.dataset.SetGeoTransform(geotransform, local=True)
+            self.dataset.SetLocalSizes(xsize=self._image.Xsize(),
+                                       ysize=self._image.Ysize())
+
+    def align_to_grid(self):
+        """Aligns the image to the TMS tile grid."""
+        resolution = self.dataset.GetNativeResolution()
+        spatial_ref = self.dataset.GetSpatialReference()
+        pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
+
+        # Assume the image is already in the right projection
+        extents = self.dataset.GetExtents(transform=None)
+        tile_extents = self.dataset.GetTiledExtents(transform=None)
+
+        left = int(round(
+            ((extents.lower_left.x - tile_extents.lower_left.x) /
+             pixel_sizes.x)
+        ))
+        top = int(round(
+            ((tile_extents.upper_right.y - extents.upper_right.y) /
+             pixel_sizes.y)
+        ))
+        width = int(
+            ((tile_extents.upper_right.x - tile_extents.lower_left.x) /
+             pixel_sizes.x)
+        )
+        height = int(
+            ((tile_extents.upper_right.y - tile_extents.lower_left.y) /
+             pixel_sizes.y)
+        )
+
+        if left == top == 0 and \
+           width == self.dataset.RasterXSize and \
+           height == self.dataset.RasterYSize:
+            # No alignment needed
+            return
+
+        if width % TILE_SIDE != 0:
+            raise AssertionError(
+                'width {0} is not an integer multiple of {1}'.format(width,
+                                                                     TILE_SIDE)
+            )
+        if height % TILE_SIDE != 0:
+            raise AssertionError(
+                'height {0} is not an integer multiple of {1}'.format(height,
+                                                                      TILE_SIDE)
+            )
+
+        with LibVips.disable_warnings():
+            self._image = self.image.embed(fill='black',
+                                           left=left, top=top,
+                                           width=width, height=height)
+            # Fix the dataset's metadata
+            geotransform = list(self.dataset.GetGeoTransform())
+            geotransform[0] -= left * pixel_sizes.x  # left
+            geotransform[3] += top * pixel_sizes.y   # top
+            self.dataset.SetGeoTransform(geotransform, local=True)
+            self.dataset.SetLocalSizes(xsize=width, ysize=height)
 
 
 def validate_resolutions(resolution, min_resolution=None,

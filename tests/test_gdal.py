@@ -108,30 +108,6 @@ class TestWarp(unittest.TestCase):
                     spatial_ref=SpatialReference.FromEPSG(4326)).get_root()
         self.assertTrue('WGS 84' in root.find('.//TargetSRS').text)
 
-    def test_partial(self):
-        root = warp(self.alignedfile).get_root()
-        # Since this is already aligned, SrcGeoTransform and DstGeoTransform
-        # should be the same.
-        src_geotransform = [float(f) for f
-                            in root.find('.//SrcGeoTransform').text.split(',')]
-        dst_geotransform = [float(f) for f
-                            in root.find('.//DstGeoTransform').text.split(',')]
-        for src, dst in zip(src_geotransform, dst_geotransform):
-            self.assertAlmostEqual(src, dst, places=2)
-
-    def test_maximum_resolution_partial(self):
-        # Limit to resolution 1, which will give us the south-west quadrant
-        root = warp(self.alignedfile, maximum_resolution=1).get_root()
-
-        src_geotransform = [float(f) for f
-                            in root.find('.//SrcGeoTransform').text.split(',')]
-        dst_geotransform = [float(f) for f
-                            in root.find('.//DstGeoTransform').text.split(',')]
-        for src, dst in zip(src_geotransform, dst_geotransform):
-            # Native resolution is 2 and the file is aligned to the top-right
-            # corner, so all transformations should be doubled.
-            self.assertAlmostEqual(src * 2, dst, places=2)
-
     def test_invalid(self):
         self.assertRaises(GdalError, warp, '/dev/null')
 
@@ -261,28 +237,10 @@ class TestVrt(TestCase):
                 0
             )
 
-            # Test that the metadata hasn't been munged by warp()
+            # Should be a 412×412 image
             out_data = Dataset(outputfile)
-
-            # gdalwarp outputs rgba(0, 0, 0, 0) as transparent, so the
-            # upper-left corner should have this color.
-            self.assertEqual(out_data.ReadAsArray(0, 0, 1, 1).tolist(),
-                             [[[0]], [[0]], [[0]], [[0]]])
-
-            # Extents should be south-western quadrant
-            mercator = out_data.GetSpatialReference()
-            major_half_circumference = mercator.GetMajorCircumference() / 2
-            minor_half_circumference = mercator.GetMinorCircumference() / 2
-            self.assertExtentsEqual(
-                out_data.GetExtents(),
-                Extents(lower_left=XY(-major_half_circumference,
-                                      -minor_half_circumference),
-                        upper_right=XY(0.0, 0.0))
-            )
-
-            # Should be a 512×512 quadrant of the full 1024×1024 image
-            self.assertEqual(out_data.RasterXSize, 512)
-            self.assertEqual(out_data.RasterYSize, 512)
+            self.assertEqual(out_data.RasterXSize, 412)
+            self.assertEqual(out_data.RasterYSize, 412)
 
     def test_invalid_input(self):
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
@@ -831,6 +789,11 @@ class TestDataset(TestCase):
         self.assertAlmostEqual(ratio.x, 1.0)
         self.assertAlmostEqual(ratio.y, 1.0)
 
+        # Test rounding
+        ratio = dataset.GetTileScalingRatios(places=5)
+        self.assertEqual(ratio.x, 1.0)
+        self.assertEqual(ratio.y, 1.0)
+
         # upsampling.tif is a 256 × 256 whole-world map
         dataset = Dataset(inputfile=self.upsamplingfile)
         ratio = dataset.GetTileScalingRatios()
@@ -842,6 +805,11 @@ class TestDataset(TestCase):
         ratio = dataset.GetTileScalingRatios()
         self.assertAlmostEqual(ratio.x, 4.0 / 3.0)
         self.assertAlmostEqual(ratio.y, 4.0 / 3.0)
+
+        # Test rounding
+        ratio = dataset.GetTileScalingRatios(places=5)
+        self.assertEqual(ratio.x, 1.33333)
+        self.assertEqual(ratio.y, 1.33333)
 
     def test_get_tms_extents(self):
         dataset = Dataset(self.inputfile)
