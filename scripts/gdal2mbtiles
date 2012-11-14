@@ -130,6 +130,13 @@ def parse_args(args):
     group.add_argument('--max-resolution', type=int, default=None,
                        help=('Maximum resolution to render and slice. '
                              'Defaults to None (do not upsample)'))
+    group.add_argument('--fill-borders',
+                       action='store_const', const=True, default=True,
+                       help=('Fill image to whole world with empty tiles. '
+                             'Default.'))
+    group.add_argument('--no-fill-borders', dest='fill_borders',
+                       action='store_const', const=False,
+                       help='Do not add borders to fill image.')
 
     group = parser.add_argument_group(title='Coloring arguments')
     group.add_argument('--coloring', default=None,
@@ -231,6 +238,7 @@ def main(args):
                      # Rendering
                      min_resolution=args.min_resolution,
                      max_resolution=args.max_resolution,
+                     fill_borders=args.fill_borders,
                      # Coloring
                      colors=colors, band=band)
         return 0

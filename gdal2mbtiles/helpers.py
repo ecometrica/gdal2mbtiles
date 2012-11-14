@@ -13,7 +13,7 @@ from .vips import TmsPyramid, validate_resolutions
 
 
 def image_mbtiles(inputfile, outputfile, metadata,
-                  min_resolution=None, max_resolution=None,
+                  min_resolution=None, max_resolution=None, fill_borders=None,
                   colors=None, renderer=None, hasher=None,
                   preprocessor=None):
     """
@@ -23,6 +23,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
     outputfile: The output .mbtiles file.
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
+    fill_borders: Fill borders of image with empty tiles.
     colors: Color palette applied to single band files.
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
@@ -46,11 +47,11 @@ def image_mbtiles(inputfile, outputfile, metadata,
         if preprocessor is None:
             preprocessor = colorize
         pyramid = preprocessor(**locals())
-        pyramid.slice()
+        pyramid.slice(fill_borders=fill_borders)
 
 
 def image_pyramid(inputfile, outputdir,
-                  min_resolution=None, max_resolution=None,
+                  min_resolution=None, max_resolution=None, fill_borders=None,
                   colors=None, renderer=None, hasher=None,
                   preprocessor=None):
     """
@@ -60,6 +61,7 @@ def image_pyramid(inputfile, outputdir,
     outputdir: The output directory for the PNG tiles.
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
+    fill_borders: Fill borders of image with empty tiles.
     hasher: Hashing function to use for image data.
     preprocessor: Function to run on the TmsPyramid before slicing.
 
@@ -83,16 +85,18 @@ def image_pyramid(inputfile, outputdir,
     if preprocessor is None:
         preprocessor = colorize
     pyramid = preprocessor(**locals())
-    pyramid.slice()
+    pyramid.slice(fill_borders=fill_borders)
 
 
-def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None,
+def image_slice(inputfile, outputdir, fill_borders=None,
+                colors=None, renderer=None, hasher=None,
                 preprocessor=None):
     """
     Slices a GDAL-readable inputfile into PNG tiles.
 
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
+    fill_borders: Fill borders of image with empty tiles.
     colors: Color palette applied to single band files.
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
@@ -117,13 +121,13 @@ def image_slice(inputfile, outputdir, colors=None, renderer=None, hasher=None,
     if preprocessor is None:
         preprocessor = colorize
     pyramid = preprocessor(**locals())
-    pyramid.slice()
+    pyramid.slice(fill_borders=fill_borders)
 
 
 def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
-                 min_resolution=None, max_resolution=None, renderer=None,
-                 hasher=None):
+                 min_resolution=None, max_resolution=None, fill_borders=None,
+                 renderer=None, hasher=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -142,6 +146,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
+    fill_borders: Fill borders of image with empty tiles.
     hasher: Hashing function to use for image data.
 
     If `min_resolution` is None, don't downsample.
@@ -165,13 +170,14 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer, hasher=hasher,
-                             preprocessor=preprocessor)
+                             preprocessor=preprocessor,
+                             fill_borders=fill_borders)
 
 
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,
                  spatial_ref=None, resampling=None,
-                 min_resolution=None, max_resolution=None, renderer=None,
-                 hasher=None):
+                 min_resolution=None, max_resolution=None, fill_borders=None,
+                 renderer=None, hasher=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -190,6 +196,7 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
+    fill_borders: Fill borders of image with empty tiles.
     hasher: Hashing function to use for image data.
 
     Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
@@ -217,10 +224,11 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer, hasher=hasher,
-                             preprocessor=preprocessor)
+                             preprocessor=preprocessor,
+                             fill_borders=fill_borders)
 
 
-def warp_slice(inputfile, outputdir, colors=None, band=None,
+def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
                spatial_ref=None, resampling=None,
                renderer=None, hasher=None):
     """
@@ -229,6 +237,7 @@ def warp_slice(inputfile, outputdir, colors=None, band=None,
     inputfile: Filename
     outputdir: The output directory for the PNG tiles.
 
+    fill_borders: Fill borders of image with empty tiles.
     colors: Color palette applied to single band files.
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
@@ -260,7 +269,8 @@ def warp_slice(inputfile, outputdir, colors=None, band=None,
                                whole_world=dataset.IsWholeWorld())
         return image_slice(inputfile=tempfile.name, outputdir=outputdir,
                            colors=colors, renderer=renderer, hasher=hasher,
-                           preprocessor=preprocessor)
+                           preprocessor=preprocessor,
+                           fill_borders=fill_borders)
 
 
 # Preprocessors

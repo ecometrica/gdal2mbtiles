@@ -32,6 +32,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
 
         self.inputfile = os.path.join(__dir__, 'upsampling.tif')
         self.rgbfile = os.path.join(__dir__, 'bluemarble.tif')
+        self.spanningfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:
@@ -158,6 +159,41 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                 CalledProcessError,
                 check_call, command, env=self.environ, stderr=null
             )
+
+    def test_fill_borders(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as output:
+            # fill-borders
+            command = [sys.executable, self.script,
+                       '--fill-borders',
+                       self.spanningfile, output.name]
+            check_call(command, env=self.environ)
+
+            # Dataset (bluemarble-spanning-ll.tif) bounds in EPSG:4326
+            dataset_bounds = '-180.0,-90.0,0.0,0.0'
+
+            with MBTiles(output.name) as mbtiles:
+                # Default metadata
+                cursor = mbtiles._conn.execute('SELECT * FROM metadata')
+                self.assertTrue(dict(cursor.fetchall()),
+                                dict(name=os.path.basename(self.inputfile),
+                                     description='',
+                                     format='png',
+                                     type='overlay',
+                                     version='1.0.0',
+                                     bounds=dataset_bounds))
+                # 16 tiles
+                cursor = cursor.execute('SELECT COUNT(*) FROM tiles')
+                self.assertTrue(cursor.fetchone(), [16])
+
+            # --no-fill-borders
+            command = [sys.executable, self.script,
+                       '--no-fill-borders',
+                       self.spanningfile, output.name]
+            check_call(command, env=self.environ)
+            with MBTiles(output.name) as mbtiles:
+                # 4 tiles, since the borders were not created
+                cursor = mbtiles._conn.execute('SELECT COUNT(*) FROM tiles')
+                self.assertTrue(cursor.fetchone(), [4])
 
     def test_colors(self):
         null = open('/dev/null', 'rw')

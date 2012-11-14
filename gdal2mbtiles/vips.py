@@ -679,7 +679,7 @@ class TmsPyramid(object):
             self._resolution = self.dataset.GetNativeResolution()
         return self._resolution
 
-    def slice_downsample(self, tiles, min_resolution):
+    def slice_downsample(self, tiles, min_resolution, fill_borders=None):
         """Downsamples the input TmsTiles down to min_resolution and slices."""
         validate_resolutions(resolution=self.resolution,
                              min_resolution=min_resolution)
@@ -688,13 +688,14 @@ class TmsPyramid(object):
             # downsampled results.
             for res in reversed(range(min_resolution, self.resolution)):
                 tiles = tiles.downsample()
-                tiles.fill_borders(
-                    borders=self.dataset.GetWorldTmsBorders(resolution=res),
-                    resolution=res
-                )
+                if fill_borders or fill_borders is None:
+                    tiles.fill_borders(
+                        borders=self.dataset.GetWorldTmsBorders(resolution=res),
+                        resolution=res
+                    )
                 tiles._slice()
 
-    def slice_native(self):
+    def slice_native(self, fill_borders=None):
         """Slices the input image at native resolution."""
         with LibVips.disable_warnings():
             offset = self.dataset.GetTmsExtents()
@@ -703,16 +704,17 @@ class TmsPyramid(object):
                                   tile_width=TILE_SIDE, tile_height=TILE_SIDE,
                                   offset=offset.lower_left,
                                   resolution=self.resolution)
-            tiles.fill_borders(
-                borders=self.dataset.GetWorldTmsBorders(
+            if fill_borders or fill_borders is None:
+                tiles.fill_borders(
+                    borders=self.dataset.GetWorldTmsBorders(
+                        resolution=self.resolution
+                    ),
                     resolution=self.resolution
-                ),
-                resolution=self.resolution
-            )
+                )
             tiles._slice()
             return tiles
 
-    def slice_upsample(self, tiles, max_resolution):
+    def slice_upsample(self, tiles, max_resolution, fill_borders=None):
         """Upsamples the input TmsTiles up to max_resolution and slices."""
         validate_resolutions(resolution=self.resolution,
                              max_resolution=max_resolution)
@@ -720,25 +722,28 @@ class TmsPyramid(object):
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
                 upsampled = tiles.upsample(levels=(res - self.resolution))
-                upsampled.fill_borders(
-                    borders=self.dataset.GetWorldTmsBorders(resolution=res),
-                    resolution=res
-                )
+                if fill_borders or fill_borders is None:
+                    upsampled.fill_borders(
+                        borders=self.dataset.GetWorldTmsBorders(resolution=res),
+                        resolution=res
+                    )
                 upsampled._slice()
 
-    def slice(self):
+    def slice(self, fill_borders=True):
         """Slices the input image into the pyramid of PNG tiles."""
         validate_resolutions(resolution=self.resolution,
                              min_resolution=self.min_resolution,
                              max_resolution=self.max_resolution)
 
-        tiles = self.slice_native()
+        tiles = self.slice_native(fill_borders=fill_borders)
         if self.min_resolution is not None:
             self.slice_downsample(tiles=tiles,
-                                  min_resolution=self.min_resolution)
+                                  min_resolution=self.min_resolution,
+                                  fill_borders=fill_borders)
         if self.max_resolution is not None:
             self.slice_upsample(tiles=tiles,
-                                max_resolution=self.max_resolution)
+                                max_resolution=self.max_resolution,
+                                fill_borders=fill_borders)
         self.storage.waitall()
 
         # Post-import hook needs to be called in case the storage has to
