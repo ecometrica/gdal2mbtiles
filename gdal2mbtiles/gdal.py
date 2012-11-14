@@ -28,6 +28,7 @@ from .constants import (EPSG_WEB_MERCATOR, GDALTRANSLATE,
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
 from .types import Extents, GdalFormat, XY
+from .utils import rmfile
 
 
 RESAMPLING_METHODS = {
@@ -60,8 +61,17 @@ def preprocess(inputfile, outputfile, band=None, spatial_ref=None,
         functions.append(lambda f: extract_color_band(inputfile=f, band=band))
 
     # Warp
-    functions.append(lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
-                                    resampling=resampling)),
+    if spatial_ref is not None and \
+       Dataset(inputfile).GetSpatialReference() != spatial_ref:
+        functions.append(lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
+                                        resampling=resampling)),
+
+    if not functions:
+        # No work needs to be done, so just symlink the outputfile to inputfile
+        rmfile(outputfile, ignore_missing=True)
+        srcfile = os.path.relpath(inputfile, os.path.dirname(outputfile))
+        os.symlink(srcfile, outputfile)
+        return inputfile
 
     return pipeline(inputfile=inputfile, outputfile=outputfile,
                     functions=functions, compress=compress, **kwargs)
@@ -732,6 +742,9 @@ class SpatialReference(osr.SpatialReference):
     def __eq__(self, other):
         return bool(self.IsSame(other))
 
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def GetEPSGCode(self):
         epsg_string = self.GetEPSGString()
         if epsg_string:
@@ -863,6 +876,7 @@ class VRT(object):
                 # If it succeeds, then we move it to overwrite the actual
                 # output
                 os.rename(tmpfile.name, outputfile)
+                return outputfile
         finally:
             try:
                 os.remove(tmpfile.name)

@@ -155,17 +155,17 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     if colors and band is None:
         band = 1
 
-    with NamedTemporaryFile(suffix='.tif') as tempfile:
+    with NamedTemporaryFile(suffix='.tif', delete=False) as tempfile:
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),
                              min_resolution=min_resolution,
                              max_resolution=max_resolution)
-        preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
-                   spatial_ref=spatial_ref, resampling=resampling,
-                   compress='LZW')
+        warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
+                            band=band, spatial_ref=spatial_ref,
+                            resampling=resampling, compress='LZW')
         preprocessor = partial(upsample_after_warp,
                                whole_world=dataset.IsWholeWorld())
-        return image_mbtiles(inputfile=tempfile.name, outputfile=outputfile,
+        return image_mbtiles(inputfile=warped, outputfile=outputfile,
                              metadata=metadata,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
@@ -215,12 +215,12 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         validate_resolutions(resolution=dataset.GetNativeResolution(),
                              min_resolution=min_resolution,
                              max_resolution=max_resolution)
-        preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
-                   spatial_ref=spatial_ref, resampling=resampling,
-                   compress='LZW')
+        warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
+                            band=band, spatial_ref=spatial_ref,
+                            resampling=resampling, compress='LZW')
         preprocessor = partial(upsample_after_warp,
                                whole_world=dataset.IsWholeWorld())
-        return image_pyramid(inputfile=tempfile.name, outputdir=outputdir,
+        return image_pyramid(inputfile=warped, outputdir=outputdir,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer, hasher=hasher,
@@ -262,12 +262,12 @@ def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
 
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         dataset = Dataset(inputfile)
-        preprocess(inputfile=inputfile, outputfile=tempfile.name, band=band,
-                   spatial_ref=spatial_ref, resampling=resampling,
-                   compress='LZW')
+        warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
+                            band=band, spatial_ref=spatial_ref,
+                            resampling=resampling, compress='LZW')
         preprocessor = partial(upsample_after_warp,
                                whole_world=dataset.IsWholeWorld())
-        return image_slice(inputfile=tempfile.name, outputdir=outputdir,
+        return image_slice(inputfile=warped, outputdir=outputdir,
                            colors=colors, renderer=renderer, hasher=hasher,
                            preprocessor=preprocessor,
                            fill_borders=fill_borders)
