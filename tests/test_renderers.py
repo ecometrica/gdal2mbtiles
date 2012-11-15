@@ -15,21 +15,19 @@ class TestJpegRenderer(unittest.TestCase):
     def test_simple(self):
         renderer = JpegRenderer()
 
-        # Transparent 1×1 image
-        image = VImage.new_rgba(width=1, height=1,
-                                ink=rgba(r=0, g=0, b=0, a=0))
-
-        contents = renderer.render(image=image)
-        self.assertEqual(intmd5(contents),
-                         320855993302411795134614280716687425643)
-
         # Black 1×1 image
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=255))
 
-        contents = renderer.render(image=image)
-        self.assertEqual(intmd5(contents),
-                         320855993302411795134614280716687425643)
+        black = renderer.render(image=image)
+        black_md5 = intmd5(black)
+
+        # Transparent 1×1 image
+        image = VImage.new_rgba(width=1, height=1,
+                                ink=rgba(r=0, g=0, b=0, a=0))
+
+        transparent = renderer.render(image=image)
+        self.assertEqual(intmd5(transparent), black_md5)
 
     def test_suffix(self):
         # Default
@@ -54,10 +52,10 @@ class TestPngRenderer(unittest.TestCase):
                          89446660811628514001822794642426893173)
 
     def test_compression(self):
-        renderer = PngRenderer(compression=0, png8=False, optimize=False)
+        renderer = PngRenderer(compression=1, png8=False, optimize=False)
         contents = renderer.render(image=self.image)
         self.assertEqual(intmd5(contents),
-                         12841159377787173134361510884891270318)
+                         227024021824580215543073313661866089265)
 
     def test_interlace(self):
         renderer = PngRenderer(interlace=1, png8=False, optimize=False)
@@ -75,7 +73,7 @@ class TestPngRenderer(unittest.TestCase):
         renderer = PngRenderer(png8=False, optimize=2)
         contents = renderer.render(image=self.image)
         self.assertEqual(intmd5(contents),
-                         86467695395038688928059075665951437140)
+                         227024021824580215543073313661866089265)
 
         # Default is PNG8=False and optimize=2
         renderer = PngRenderer()

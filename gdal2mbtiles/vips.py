@@ -3,6 +3,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from contextlib import contextmanager
 from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
 from itertools import groupby
@@ -20,6 +21,30 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .types import rgba, XY
 from .utils import tempenv
+
+
+class LibTiff(object):
+    def __init__(self, version=None):
+        library = find_library('tiff')
+        if version is not None or library is None:
+            library = 'libvips.so.{0:d}'.format(version)
+        self.libtiff = cdll.LoadLibrary(library)
+        self.functions = {}
+
+    @contextmanager
+    def disable_warnings(self):
+        function = self.functions.get('TIFFSetWarningHandler', None)
+        if function is None:
+            function = self.libtiff.TIFFSetWarningHandler
+            function.argtypes = [c_void_p]
+            function.restype = c_void_p
+            self.functions['TIFFSetWarningHandler'] = function
+
+        error_handler = function(None)
+        yield
+        function(error_handler)
+
+TIFF = LibTiff()
 
 
 class LibVips(object):
@@ -168,7 +193,8 @@ class VImage(vipsCC.VImage.VImage):
             # args[0] is a Unicode filename
             args = list(args)
             args[0] = args[0].encode('utf-8')
-        super(VImage, self).__init__(*args, **kwargs)
+        with TIFF.disable_warnings():
+            super(VImage, self).__init__(*args, **kwargs)
 
     @classmethod
     def new_rgba(cls, width, height, ink=None):

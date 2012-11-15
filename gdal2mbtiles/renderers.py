@@ -135,7 +135,7 @@ class PngRenderer(Renderer):
                     'optimize must be between 0 and 7: {0!r}'.format(optimize)
                 )
         if _optimize:
-            self.compression = 0  # Prevent double-compression
+            self.compression = 1  # Reduce cost of double-compression
         self.optimize = _optimize
 
         super(PngRenderer, self).__init__(**kwargs)
