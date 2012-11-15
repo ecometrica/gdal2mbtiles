@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
 from itertools import groupby
+import logging
 from math import ceil
 from multiprocessing import cpu_count
 from operator import itemgetter
@@ -21,6 +22,10 @@ from .constants import TILE_SIDE
 from .gdal import Dataset
 from .types import rgba, XY
 from .utils import tempenv
+
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class LibTiff(object):
@@ -714,6 +719,15 @@ class TmsPyramid(object):
             # downsampled results.
             for res in reversed(range(min_resolution, self.resolution)):
                 tiles = tiles.downsample()
+                logger.debug(
+                    'Slicing at downsampled resolution {resolution}: '
+                    '{width} × {height}'.format(
+                        resolution=res,
+                        width=tiles.image.Xsize(),
+                        height=tiles.image.Ysize()
+                    )
+                )
+
                 if fill_borders or fill_borders is None:
                     tiles.fill_borders(
                         borders=self.dataset.GetWorldTmsBorders(resolution=res),
@@ -723,6 +737,14 @@ class TmsPyramid(object):
 
     def slice_native(self, fill_borders=None):
         """Slices the input image at native resolution."""
+        logger.debug(
+            'Slicing at native resolution {resolution}: '
+            '{width} × {height}'.format(
+                resolution=self.resolution,
+                width=self.image.Xsize(),
+                height=self.image.Ysize()
+            )
+        )
         with LibVips.disable_warnings():
             offset = self.dataset.GetTmsExtents()
             tiles = self.TmsTiles(image=self.image,
@@ -748,6 +770,15 @@ class TmsPyramid(object):
             # Upsampling one zoom level at a time, from the native image.
             for res in range(self.resolution + 1, max_resolution + 1):
                 upsampled = tiles.upsample(levels=(res - self.resolution))
+                logger.debug(
+                    'Slicing at upsampled resolution {resolution}: '
+                    '{width} × {height}'.format(
+                        resolution=res,
+                        width=upsampled.image.Xsize(),
+                        height=upsampled.image.Ysize()
+                    )
+                )
+
                 if fill_borders or fill_borders is None:
                     upsampled.fill_borders(
                         borders=self.dataset.GetWorldTmsBorders(resolution=res),
@@ -761,6 +792,7 @@ class TmsPyramid(object):
                              min_resolution=self.min_resolution,
                              max_resolution=self.max_resolution)
 
+        logger.info('Slicing tiles')
         tiles = self.slice_native(fill_borders=fill_borders)
         if self.min_resolution is not None:
             self.slice_downsample(tiles=tiles,
@@ -783,6 +815,16 @@ class TmsPyramid(object):
 
         extents = self.dataset.GetExtents()
         width, height = extents.dimensions
+
+        logger.debug(
+            'Resizing from {src_width} × {src_height} '
+            'to {dst_width} × {dst_height}'.format(
+                src_width=self.dataset.RasterXSize,
+                src_height=self.dataset.RasterYSize,
+                dst_width=int(round(self.dataset.RasterXSize * ratios.x)),
+                dst_height=int(round(self.dataset.RasterYSize * ratios.y))
+            )
+        )
 
         with LibVips.disable_warnings():
             self._image = self.image.stretch(xscale=ratios.x,
@@ -858,6 +900,12 @@ class TmsPyramid(object):
                 'height {0} is not an integer multiple of {1}'.format(height,
                                                                       TILE_SIDE)
             )
+
+        logger.debug(
+            'Aligning within {width} × {height} at ({left}, {top})'.format(
+                width=width, height=height, left=left, top=top
+            )
+        )
 
         with LibVips.disable_warnings():
             self._image = self.image.embed(fill='black',
@@ -957,6 +1005,14 @@ class ColorBase(dict):
             raise ValueError(
                 'image {0!r} has more than one band'.format(image)
             )
+
+        logging.info('Coloring data')
+        logging.debug(
+            'Algorithm: {0} {1}'.format(
+                type(self).__name__, self
+            )
+        )
+
 
         # Convert to a numpy array
         data = numpy.frombuffer(buffer=image.tobuffer(),

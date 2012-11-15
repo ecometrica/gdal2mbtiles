@@ -4,6 +4,8 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import errno
+from functools import partial
+import logging
 from math import pi
 from itertools import count
 import os
@@ -31,6 +33,10 @@ from .types import Extents, GdalFormat, XY
 from .utils import rmfile
 
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
+
 RESAMPLING_METHODS = {
     GRA_NearestNeighbour: 'near',
     GRA_Bilinear: 'bilinear',
@@ -55,16 +61,27 @@ def check_output_gdal(*popenargs, **kwargs):
 def preprocess(inputfile, outputfile, band=None, spatial_ref=None,
                resampling=None, compress=None, **kwargs):
     functions = []
+    dataset = Dataset(inputfile)
 
     # Extract desired band to reduce the amount of warping
-    if band is not None:
-        functions.append(lambda f: extract_color_band(inputfile=f, band=band))
+    if band is not None and not 1 <= band <= dataset.RasterCount:
+        raise ValueError(
+            'band {0} must be between 1 and {1}'.format(band,
+                                                        dataset.RasterCount)
+        )
+    if band is not None and dataset.RasterCount > 1:
+        functions.append(
+            ('Extracting band {0}'.format(band),
+             partial(extract_color_band, band=band))
+        )
 
     # Warp
-    if spatial_ref is not None and \
-       Dataset(inputfile).GetSpatialReference() != spatial_ref:
-        functions.append(lambda f: warp(inputfile=f, spatial_ref=spatial_ref,
-                                        resampling=resampling)),
+    if spatial_ref is not None and dataset.GetSpatialReference() != spatial_ref:
+        functions.append(
+            ('Reprojecting to EPSG:{0}'.format(spatial_ref.GetEPSGCode()),
+             partial(warp,
+                     spatial_ref=spatial_ref, resampling=resampling))
+        )
 
     if not functions:
         # No work needs to be done, so just symlink the outputfile to inputfile
@@ -90,11 +107,13 @@ def pipeline(inputfile, outputfile, functions, **kwargs):
     tmpfiles = []
     try:
         previous = inputfile
-        for i, f in enumerate(functions):
+        for name, f in functions:
+            logging.debug(name)
             vrt = f(previous)
-            current = vrt.get_tempfile(suffix='.vrt', prefix=('gdal%d' % i))
+            current = vrt.get_tempfile(suffix='.vrt', prefix='gdal')
             tmpfiles.append(current)
             previous = current.name
+        logging.info('Rendering reprojected image')
         return vrt.render(outputfile=outputfile, **kwargs)
     finally:
         for f in tmpfiles:

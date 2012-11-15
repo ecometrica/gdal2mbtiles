@@ -21,6 +21,7 @@ from __future__ import (absolute_import, division, print_function,
 
 import argparse
 from contextlib import contextmanager
+import logging;
 import os
 from shutil import copyfileobj
 import sys
@@ -88,6 +89,8 @@ def parse_args(args):
     parser = argparse.ArgumentParser(
         description='Converts a GDAL-readable into an MBTiles file'
     )
+    parser.add_argument('-v', '--verbose', action='count',
+                        help='explain what is being done')
 
     group = parser.add_argument_group(title='Positional arguments')
     group.add_argument('INPUT', type=argparse.FileType('rb'), nargs='?',
@@ -146,7 +149,7 @@ def parse_args(args):
                        type=color_arg, metavar='BAND-VALUE:HTML-COLOR',
                        help=('Examples: --color="0:#ff00ff" --color=255:red'))
     group.add_argument('--colorize-band', metavar='COLORIZE-BAND',
-                       type=colorize_band_arg, default=1,
+                       type=colorize_band_arg, default=None,
                        help='Raster band to colorize. Defaults to 1')
 
     args = parser.parse_args(args=args)
@@ -166,9 +169,10 @@ def parse_args(args):
         args.name = os.path.basename(args.INPUT.name)
 
     # Make sure that --color and --coloring match up
-    if (args.coloring is None and args.colors):
+    if args.coloring is None and (args.colors or
+                                  args.colorize_band is not None):
         parser.error('must provide --coloring')
-    elif (args.coloring is not None and not args.colors):
+    elif args.coloring is not None and not args.colors:
         parser.error('must provide at least one --color')
 
     # Transform choices into ColorBase classes
@@ -202,8 +206,11 @@ def input_output(inputfile, outputfile):
             f.close()
 
 
-def main(args):
+def main(args, configure_logging=None):
     args = parse_args(args=args)
+
+    if configure_logging is not None:
+        configure_logging(args)
 
     # HACK: Import here, so that VIPS doesn't parse sys.argv!!!
     # In vimagemodule.cxx, SWIG_init actually does argument parsing
@@ -244,5 +251,22 @@ def main(args):
         return 0
 
 
+def configure_logging(args):
+    if not args.verbose:
+        return
+
+    if args.verbose == 1:
+        level = logging.INFO
+        fmt='%(message)s'
+    else:
+        level = logging.DEBUG
+        fmt='%(asctime)s %(module)s: %(message)s'
+
+    logging.basicConfig(level=level, format=fmt,
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
+
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    retcode = main(sys.argv[1:], configure_logging=configure_logging)
+    logging.info('Done')
+    sys.exit(retcode)
