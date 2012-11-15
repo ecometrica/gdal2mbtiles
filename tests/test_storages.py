@@ -24,8 +24,7 @@ class TestSimpleFileStorage(unittest.TestCase):
         self.outputdir = self.tempdir.__enter__()
         self.renderer = TouchRenderer(suffix='.png')
         self.storage = SimpleFileStorage(outputdir=self.outputdir,
-                                         renderer=self.renderer,
-                                         hasher=intmd5)
+                                         renderer=self.renderer)
 
     def tearDown(self):
         self.tempdir.__exit__(None, None, None)
@@ -133,8 +132,7 @@ class TestNestedFileStorage(unittest.TestCase):
         self.outputdir = self.tempdir.__enter__()
         self.renderer = TouchRenderer(suffix='.png')
         self.storage = NestedFileStorage(outputdir=self.outputdir,
-                                         renderer=self.renderer,
-                                         hasher=intmd5)
+                                         renderer=self.renderer)
 
     def tearDown(self):
         self.tempdir.__exit__(None, None, None)
@@ -261,8 +259,7 @@ class TestMbtilesStorage(unittest.TestCase):
         )
         self.storage = MbtilesStorage.create(renderer=self.renderer,
                                              filename=':memory:',
-                                             metadata=self.metadata,
-                                             hasher=intmd5)
+                                             metadata=self.metadata)
 
     def tearDown(self):
         try:
@@ -298,8 +295,7 @@ class TestMbtilesStorage(unittest.TestCase):
         # We must create this on disk
         self.storage = MbtilesStorage.create(renderer=self.renderer,
                                              filename=self.tempfile.name,
-                                             metadata=self.metadata,
-                                             hasher=intmd5)
+                                             metadata=self.metadata)
 
         # Transparent 1×1 image
         image = VImage.new_rgba(width=1, height=1,

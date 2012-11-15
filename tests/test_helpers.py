@@ -34,7 +34,7 @@ class TestImageMbtiles(unittest.TestCase):
             image_mbtiles(inputfile=self.inputfile, outputfile=outputfile.name,
                           metadata=metadata,
                           min_resolution=0, max_resolution=3,
-                          renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+                          renderer=TouchRenderer(suffix='.png'))
             with MbtilesStorage(renderer=None,
                                 filename=outputfile.name) as storage:
                 self.assertEqual(
@@ -61,7 +61,6 @@ class TestImagePyramid(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             # Native resolution only
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
-                          hasher=intmd5,
                           renderer=TouchRenderer(suffix='.png'))
 
             self.assertEqual(
@@ -94,7 +93,7 @@ class TestImagePyramid(unittest.TestCase):
     def test_downsample(self):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
-                          min_resolution=0, hasher=intmd5,
+                          min_resolution=0,
                           renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
@@ -138,7 +137,7 @@ class TestImagePyramid(unittest.TestCase):
     def test_downsample_aligned(self):
         with NamedTemporaryDir() as outputdir:
             image_pyramid(inputfile=self.alignedfile, outputdir=outputdir,
-                          min_resolution=0, hasher=intmd5,
+                          min_resolution=0,
                           renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
@@ -185,7 +184,7 @@ class TestImagePyramid(unittest.TestCase):
             self.assertRaises(UnalignedInputError,
                               image_pyramid,
                               inputfile=self.spanningfile, outputdir=outputdir,
-                              min_resolution=0, hasher=intmd5,
+                              min_resolution=0,
                               renderer=TouchRenderer(suffix='.png'))
 
     def test_upsample(self):
@@ -193,7 +192,6 @@ class TestImagePyramid(unittest.TestCase):
             dataset = Dataset(self.inputfile)
             image_pyramid(inputfile=self.inputfile, outputdir=outputdir,
                           max_resolution=dataset.GetNativeResolution() + 1,
-                          hasher=intmd5,
                           renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
@@ -304,7 +302,7 @@ class TestImagePyramid(unittest.TestCase):
             dataset = Dataset(self.upsamplingfile)
             image_pyramid(inputfile=self.upsamplingfile, outputdir=outputdir,
                           max_resolution=dataset.GetNativeResolution() + zoom,
-                          hasher=intmd5, renderer=TouchRenderer(suffix='.png'))
+                          renderer=TouchRenderer(suffix='.png'))
 
             files = set(recursive_listdir(outputdir))
             self.assertEqual(
@@ -427,7 +425,7 @@ class TestImageSlice(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.inputfile, outputdir=outputdir,
-                        hasher=intmd5, renderer=TouchRenderer(suffix='.png'))
+                        renderer=TouchRenderer(suffix='.png'))
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -455,7 +453,7 @@ class TestImageSlice(unittest.TestCase):
     def test_aligned(self):
         with NamedTemporaryDir() as outputdir:
             image_slice(inputfile=self.alignedfile, outputdir=outputdir,
-                        hasher=intmd5, renderer=TouchRenderer(suffix='.png'))
+                        renderer=TouchRenderer(suffix='.png'))
 
             files = set(os.listdir(outputdir))
             self.assertEqual(
@@ -504,7 +502,7 @@ class TestWarpMbtiles(unittest.TestCase):
             warp_mbtiles(inputfile=self.inputfile, outputfile=outputfile.name,
                          metadata=metadata,
                          min_resolution=0, max_resolution=3,
-                         renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+                         renderer=TouchRenderer(suffix='.png'))
             with MbtilesStorage(renderer=None,
                                 filename=outputfile.name) as storage:
                 self.assertEqual(
@@ -528,7 +526,7 @@ class TestWarpPyramid(unittest.TestCase):
         with NamedTemporaryDir() as outputdir:
             warp_pyramid(inputfile=self.inputfile, outputdir=outputdir,
                          min_resolution=0, max_resolution=3,
-                         renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+                         renderer=TouchRenderer(suffix='.png'))
             self.assertEqual(
                 set(recursive_listdir(outputdir)),
                 set((
@@ -648,7 +646,7 @@ class TestWarpSlice(unittest.TestCase):
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
             warp_slice(inputfile=self.inputfile, outputdir=outputdir,
-                       renderer=TouchRenderer(suffix='.png'), hasher=intmd5)
+                       renderer=TouchRenderer(suffix='.png'))
             self.assertEqual(
                 set(os.listdir(outputdir)),
                 set((

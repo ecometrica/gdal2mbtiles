@@ -65,19 +65,3 @@ def recursive_listdir(directory):
 def intmd5(x):
     """Returns the MD5 digest of `x` as an integer."""
     return int(md5(x).hexdigest(), base=16)
-
-
-def get_hasher():
-    """Returns a sensible, fast hashing algorithm"""
-    try:
-        import smhasher
-
-        machine = platform.machine()
-        if machine == 'x86_64':
-            return smhasher.murmur3_x64_128
-        elif machine == 'i386':
-            return smhasher.murmur3_x86_128
-    except ImportError:
-        pass
-    # No hasher was found
-    return intmd5

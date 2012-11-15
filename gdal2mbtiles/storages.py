@@ -12,20 +12,19 @@ from .gdal import SpatialReference
 from .mbtiles import MBTiles
 from .pool import Pool
 from .types import rgba
-from .utils import get_hasher, makedirs
+from .utils import intmd5, makedirs
 from .vips import VImage
 
 
 class Storage(object):
     """Base class for storages."""
 
-    def __init__(self, renderer, pool=None, hasher=None):
+    def __init__(self, renderer, pool=None):
         """
         Initialize a storage.
 
         renderer: Used to render images into tiles.
         pool: Process pool to coordinate subprocesses.
-        hasher: Hashing function to use for image data.
         """
         self.renderer = renderer
 
@@ -34,9 +33,7 @@ class Storage(object):
             pool = Pool(processes=None)
         self.pool = pool
 
-        if hasher is None:
-            hasher = get_hasher()
-        self.hasher = hasher
+        self.hasher = intmd5
 
     def __enter__(self):
         return self
@@ -87,7 +84,6 @@ class SimpleFileStorage(Storage):
         renderer: Used to render images into tiles.
         outputdir: Output directory for tiles
         pool: Process pool to coordinate subprocesses.
-        hasher: Hashing function to use for image data.
         """
         super(SimpleFileStorage, self).__init__(renderer=renderer,
                                                 **kwargs)
@@ -159,7 +155,6 @@ class NestedFileStorage(SimpleFileStorage):
         renderer: Used to render images into tiles.
         outputdir: Output directory for tiles
         pool: Process pool to coordinate subprocesses.
-        hasher: Hashing function to use for image data.
         """
         super(NestedFileStorage, self).__init__(renderer=renderer,
                                                 **kwargs)
@@ -200,7 +195,6 @@ class MbtilesStorage(Storage):
         renderer: Used to render images into tiles.
         filename: Name of the MBTiles file.
         pool: Process pool to coordinate subprocesses.
-        hasher: Hashing function to use for image data.
         """
         super(MbtilesStorage, self).__init__(renderer=renderer,
                                              **kwargs)
@@ -229,7 +223,6 @@ class MbtilesStorage(Storage):
         metadata: Metadata dictionary.
         version: Optional MBTiles version.
         pool: Process pool to coordinate subprocesses.
-        hasher: Hashing function to use for image data.
 
         Metadata is also taken as **kwargs. See `mbtiles.Metadata`.
         """

@@ -14,8 +14,7 @@ from .vips import TmsPyramid, validate_resolutions
 
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None, fill_borders=None,
-                  colors=None, renderer=None, hasher=None,
-                  preprocessor=None):
+                  colors=None, renderer=None, preprocessor=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -28,7 +27,6 @@ def image_mbtiles(inputfile, outputfile, metadata,
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
             Defaults to no colorization.
-    hasher: Hashing function to use for image data.
     preprocessor: Function to run on the TmsPyramid before slicing.
 
     If `min_resolution` is None, don't downsample.
@@ -38,8 +36,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
         renderer = PngRenderer()
     with MbtilesStorage.create(filename=outputfile,
                                metadata=metadata,
-                               renderer=renderer,
-                               hasher=hasher) as storage:
+                               renderer=renderer) as storage:
         pyramid = TmsPyramid(inputfile=inputfile,
                              storage=storage,
                              min_resolution=min_resolution,
@@ -52,8 +49,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None, fill_borders=None,
-                  colors=None, renderer=None, hasher=None,
-                  preprocessor=None):
+                  colors=None, renderer=None, preprocessor=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -62,7 +58,6 @@ def image_pyramid(inputfile, outputdir,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     fill_borders: Fill borders of image with empty tiles.
-    hasher: Hashing function to use for image data.
     preprocessor: Function to run on the TmsPyramid before slicing.
 
     Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
@@ -76,8 +71,7 @@ def image_pyramid(inputfile, outputdir,
     if renderer is None:
         renderer = PngRenderer()
     storage = NestedFileStorage(outputdir=outputdir,
-                                renderer=renderer,
-                                hasher=hasher)
+                                renderer=renderer)
     pyramid = TmsPyramid(inputfile=inputfile,
                          storage=storage,
                          min_resolution=min_resolution,
@@ -89,8 +83,7 @@ def image_pyramid(inputfile, outputdir,
 
 
 def image_slice(inputfile, outputdir, fill_borders=None,
-                colors=None, renderer=None, hasher=None,
-                preprocessor=None):
+                colors=None, renderer=None, preprocessor=None):
     """
     Slices a GDAL-readable inputfile into PNG tiles.
 
@@ -101,7 +94,6 @@ def image_slice(inputfile, outputdir, fill_borders=None,
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
             Defaults to no colorization.
-    hasher: Hashing function to use for image data.
     preprocessor: Function to run on the TmsPyramid before slicing.
 
     Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
@@ -112,8 +104,7 @@ def image_slice(inputfile, outputdir, fill_borders=None,
     if renderer is None:
         renderer = PngRenderer()
     storage = SimpleFileStorage(outputdir=outputdir,
-                                renderer=renderer,
-                                hasher=hasher)
+                                renderer=renderer)
     pyramid = TmsPyramid(inputfile=inputfile,
                          storage=storage,
                          min_resolution=None,
@@ -127,7 +118,7 @@ def image_slice(inputfile, outputdir, fill_borders=None,
 def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, fill_borders=None,
-                 renderer=None, hasher=None):
+                 renderer=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -147,7 +138,6 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     fill_borders: Fill borders of image with empty tiles.
-    hasher: Hashing function to use for image data.
 
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
@@ -169,7 +159,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                              metadata=metadata,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
-                             colors=colors, renderer=renderer, hasher=hasher,
+                             colors=colors, renderer=renderer,
                              preprocessor=preprocessor,
                              fill_borders=fill_borders)
 
@@ -177,7 +167,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, fill_borders=None,
-                 renderer=None, hasher=None):
+                 renderer=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -197,7 +187,6 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     fill_borders: Fill borders of image with empty tiles.
-    hasher: Hashing function to use for image data.
 
     Filenames are in the format ``{tms_z}/{tms_x}/{tms_y}.png``.
 
@@ -223,14 +212,14 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         return image_pyramid(inputfile=warped, outputdir=outputdir,
                              min_resolution=min_resolution,
                              max_resolution=max_resolution,
-                             colors=colors, renderer=renderer, hasher=hasher,
+                             colors=colors, renderer=renderer,
                              preprocessor=preprocessor,
                              fill_borders=fill_borders)
 
 
 def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
                spatial_ref=None, resampling=None,
-               renderer=None, hasher=None):
+               renderer=None):
     """
     Warps a GDAL-readable inputfile into a directory of PNG tiles.
 
@@ -250,7 +239,6 @@ def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
 
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
-    hasher: Hashing function to use for image data.
 
     Filenames are in the format ``{tms_z}-{tms_x}-{tms_y}-{image_hash}.png``.
 
@@ -268,7 +256,7 @@ def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
         preprocessor = partial(upsample_after_warp,
                                whole_world=dataset.IsWholeWorld())
         return image_slice(inputfile=warped, outputdir=outputdir,
-                           colors=colors, renderer=renderer, hasher=hasher,
+                           colors=colors, renderer=renderer,
                            preprocessor=preprocessor,
                            fill_borders=fill_borders)
 
