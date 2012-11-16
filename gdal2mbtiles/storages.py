@@ -210,8 +210,13 @@ class MbtilesStorage(Storage):
             self.mbtiles = filename
             self.filename = self.mbtiles.filename
 
+    def __del__(self):
+        if self.mbtiles is not None:
+            self.mbtiles.close()
+
     def __exit__(self, type, value, traceback):
-        self.mbtiles.close()
+        if self.mbtiles is not None:
+            self.mbtiles.close()
 
     @classmethod
     def create(cls, renderer, filename, metadata, version=None, **kwargs):

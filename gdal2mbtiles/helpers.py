@@ -145,7 +145,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     if colors and band is None:
         band = 1
 
-    with NamedTemporaryFile(suffix='.tif', delete=False) as tempfile:
+    with NamedTemporaryFile(suffix='.tif') as tempfile:
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),
                              min_resolution=min_resolution,

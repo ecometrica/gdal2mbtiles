@@ -3,7 +3,6 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-import errno
 from functools import partial
 import logging
 from math import pi
@@ -897,8 +896,5 @@ class VRT(object):
                 os.rename(tmpfile.name, outputfile)
                 return outputfile
         finally:
-            try:
-                os.remove(tmpfile.name)
-            except OSError as e:
-                if e.errno != errno.ENOENT:
-                    raise
+            rmfile(tmpfile.name, ignore_missing=True)
+            rmfile(tmpfile.name + '.aux.xml', ignore_missing=True)

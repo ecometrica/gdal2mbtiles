@@ -7,7 +7,6 @@ from contextlib import contextmanager
 import errno
 from hashlib import md5
 import os
-import platform
 from shutil import rmtree
 from tempfile import mkdtemp
 

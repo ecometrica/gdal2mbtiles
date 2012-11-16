@@ -11,6 +11,7 @@ from struct import pack, unpack
 from UserDict import DictMixin
 
 from .types import enum
+from .utils import rmfile
 
 
 class MBTilesError(RuntimeError):
@@ -380,6 +381,7 @@ class MBTiles(object):
         #
         # However, we wish to normalize the tile_data, so we store each
         # in the images table.
+        rmfile(filename, ignore_missing=True)
         try:
             os.remove(filename)
         except OSError as e:
