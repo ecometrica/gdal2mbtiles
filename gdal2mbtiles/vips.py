@@ -711,6 +711,16 @@ class TmsPyramid(object):
             self._resolution = self.dataset.GetNativeResolution()
         return self._resolution
 
+    def get_tiles(self):
+        """Returns the TmsTiles object for the native resolution."""
+        offset = self.dataset.GetTmsExtents()
+        with LibVips.disable_warnings():
+            return self.TmsTiles(image=self.image,
+                                 storage=self.storage,
+                                 tile_width=TILE_SIDE, tile_height=TILE_SIDE,
+                                 offset=offset.lower_left,
+                                 resolution=self.resolution)
+
     def slice_downsample(self, tiles, min_resolution, fill_borders=None):
         """Downsamples the input TmsTiles down to min_resolution and slices."""
         validate_resolutions(resolution=self.resolution,
@@ -736,7 +746,7 @@ class TmsPyramid(object):
                     )
                 tiles._slice()
 
-    def slice_native(self, fill_borders=None):
+    def slice_native(self, tiles, fill_borders=None):
         """Slices the input image at native resolution."""
         logger.debug(
             'Slicing at native resolution {resolution}: '
@@ -747,12 +757,6 @@ class TmsPyramid(object):
             )
         )
         with LibVips.disable_warnings():
-            offset = self.dataset.GetTmsExtents()
-            tiles = self.TmsTiles(image=self.image,
-                                  storage=self.storage,
-                                  tile_width=TILE_SIDE, tile_height=TILE_SIDE,
-                                  offset=offset.lower_left,
-                                  resolution=self.resolution)
             if fill_borders or fill_borders is None:
                 tiles.fill_borders(
                     borders=self.dataset.GetWorldTmsBorders(
@@ -761,7 +765,6 @@ class TmsPyramid(object):
                     resolution=self.resolution
                 )
             tiles._slice()
-            return tiles
 
     def slice_upsample(self, tiles, max_resolution, fill_borders=None):
         """Upsamples the input TmsTiles up to max_resolution and slices."""
@@ -794,7 +797,8 @@ class TmsPyramid(object):
                              max_resolution=self.max_resolution)
 
         logger.info('Slicing tiles')
-        tiles = self.slice_native(fill_borders=fill_borders)
+        tiles = self.get_tiles()
+        self.slice_native(tiles=tiles, fill_borders=fill_borders)
         if self.min_resolution is not None:
             self.slice_downsample(tiles=tiles,
                                   min_resolution=self.min_resolution,
