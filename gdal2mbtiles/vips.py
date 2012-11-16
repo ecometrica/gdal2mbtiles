@@ -482,8 +482,6 @@ class VImage(vipsCC.VImage.VImage):
         tile_height: Number of pixels for each tile
         offset: TMS offset for the lower-left tile
         """
-        _type = 0               # Transparent
-
         # Pixel offset from top-left of the aligned image.
         #
         # The y value needs to be converted from the lower-left corner to the
@@ -506,7 +504,10 @@ class VImage(vipsCC.VImage.VImage):
             return self
 
         # Resize
-        return self.from_vimage(self.embed(_type, x, y, width, height))
+        return self.from_vimage(
+            self.embed(fill=0,  # Transparent
+                       left=x, top=y, width=width, height=height)
+        )
 
     def NumPyType(self):
         """Return the NumPy data type."""
