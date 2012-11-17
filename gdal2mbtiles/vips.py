@@ -1012,10 +1012,13 @@ class TmsPyramid(object):
             self._image = self.image.embed(fill='black',
                                            left=left, top=top,
                                            width=width, height=height)
-            # Fix the dataset's metadata
+            # Fix the dataset's metadata to match tile_extents exactly
             geotransform = list(self.dataset.GetGeoTransform())
-            geotransform[0] -= left * pixel_sizes.x  # left
-            geotransform[3] += top * pixel_sizes.y   # top
+            geotransform[0] = tile_extents.lower_left.x   # left
+            geotransform[3] = tile_extents.upper_right.y  # top
+            # pixel width and height
+            geotransform[5] = tile_extents.dimensions.x / self._image.Xsize()
+            geotransform[5] = -tile_extents.dimensions.y / self._image.Ysize()
             self.dataset.SetGeoTransform(geotransform, local=True)
             self.dataset.SetLocalSizes(xsize=width, ysize=height)
 
