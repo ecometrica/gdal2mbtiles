@@ -11,6 +11,7 @@ import logging
 from math import ceil
 from multiprocessing import cpu_count
 from operator import itemgetter
+from tempfile import NamedTemporaryFile
 
 import numexpr
 import numpy
@@ -194,10 +195,8 @@ class VImage(vipsCC.VImage.VImage):
         if VIPS.get_concurrency() == 0:
             # Override auto-detection from environ and argv.
             VIPS.set_concurrency(processes=cpu_count())
-        if args and isinstance(args[0], unicode):
-            # args[0] is a Unicode filename
-            args = list(args)
-            args[0] = args[0].encode('utf-8')
+        args = [a.encode('utf-8') if isinstance(a, unicode) else a
+                for a in args]
         with TIFF.disable_warnings():
             super(VImage, self).__init__(*args, **kwargs)
 
@@ -352,7 +351,7 @@ class VImage(vipsCC.VImage.VImage):
         return image
 
     def affine(self, a, b, c, d, dx, dy, ox, oy, ow, oh,
-              interpolate=None):
+               interpolate=None):
         """
         Returns a new VImage that is affine transformed from this image.
         Uses `interpolate` as the interpolation method.
@@ -509,6 +508,11 @@ class VImage(vipsCC.VImage.VImage):
                        left=x, top=y, width=width, height=height)
         )
 
+    def BufferSize(self):
+        """Return the size of the buffer in bytes if it were rendered."""
+        data_size = self.NumPyType()().itemsize
+        return (self.Xsize() * self.Ysize() * self.Bands() * data_size)
+
     def NumPyType(self):
         """Return the NumPy data type."""
         return self.NUMPY_TYPES[self.BandFmt()]
@@ -523,9 +527,29 @@ class VImage(vipsCC.VImage.VImage):
             out = out.encode('utf-8')
         return super(VImage, self).vips2png(out)
 
+    def write(self, *args):
+        args = [a.encode('utf-8') if isinstance(a, unicode) else a
+                for a in args]
+        return super(VImage, self).write(*args)
+
+    def write_to_memory(self):
+        image = VImage('', 't')
+        return self.from_vimage(self.write(image))
+
+    def write_to_tempfile(self, prefix='tmp', dir=None, delete=True):
+        vipsfile = NamedTemporaryFile(suffix='.v',
+                                      prefix=prefix, dir=dir, delete=delete)
+        image = self.from_vimage(self.write(vipsfile.name))
+        image._buf = vipsfile
+        return image
+
 
 class TmsTiles(object):
     """Represents a set of tiles in TMS co-ordinates."""
+
+    IMAGE_BUFFER_INTERVAL = 4
+    IMAGE_BUFFER_MEMORY_THRESHOLD = 1024 ** 2  # 1 MiB
+    IMAGE_BUFFER_DISK_THRESHOLD = 1024 ** 3    # 1 GiB
 
     def __init__(self, image, storage, tile_width, tile_height, offset,
                  resolution):
@@ -543,6 +567,9 @@ class TmsTiles(object):
         self.tile_height = tile_height
         self.offset = offset
         self.resolution = resolution
+
+        # Used to determine whether this TmsTiles is backed by a buffer.
+        self._parent = None
 
     @property
     def image_width(self):
@@ -567,7 +594,6 @@ class TmsTiles(object):
                         x, y,                    # left, top offsets
                         self.tile_width, self.tile_height
                     )
-
                     offset = XY(
                         x=int(x / self.tile_width + self.offset.x),
                         y=int((self.image_height - y) / self.tile_height +
@@ -602,7 +628,9 @@ class TmsTiles(object):
 
     def downsample(self, levels=1):
         """
-        Downsamples the image by one resolution.
+        Downsamples the image.
+
+        levels: Number of levels to downsample the image.
 
         Returns a new TmsTiles object containing the downsampled image.
         """
@@ -611,22 +639,52 @@ class TmsTiles(object):
         image = self.image
         offset = self.offset
 
+        parent = self._parent if self._parent is not None else self
+        parent_resolution = parent.resolution
+        parent_size = parent.image.BufferSize()
+
         for res in reversed(range(self.resolution - levels, self.resolution)):
             offset /= 2.0
-
             shrunk = image.shrink(xscale=0.5, yscale=0.5)
-            aligned = shrunk.tms_align(tile_width=self.tile_width,
-                                       tile_height=self.tile_height,
-                                       offset=offset)
+            image = shrunk.tms_align(tile_width=self.tile_width,
+                                     tile_height=self.tile_height,
+                                     offset=offset)
+            offset = offset.floor()
 
-            tiles = self.__class__(image=aligned,
-                                   storage=self.storage,
-                                   tile_width=self.tile_width,
-                                   tile_height=self.tile_height,
-                                   offset=offset.floor(),
-                                   resolution=res)
-            image = tiles.image
-        return tiles
+            # Render to a temporary buffer every 4 levels of scaling.
+            #
+            # Since VIPS is lazy, it will try to downscale from the parent
+            # image, each time you do a render. What you need to do is
+            # checkpoint the work every so often, trading off memory or disk
+            # space for memory or CPU time.
+            #
+            # Memory is saved, even when buffering to memory, because VIPS does
+            # not need to stream compressed data from the inputfile.
+            if parent_resolution - res >= self.IMAGE_BUFFER_INTERVAL:
+                if parent_size < self.IMAGE_BUFFER_MEMORY_THRESHOLD:
+                    # Not worth buffering because the parent is so small
+                    continue
+
+                image = self.write_buffer(image=image, resolution=res)
+                parent_resolution = res
+                parent_size = image.BufferSize()
+
+        if parent_resolution < parent.resolution:
+            # Buffering occurred.
+            parent = None
+            # The final resolution is not the same as the buffered resolution,
+            # so write the buffer once more.
+            if parent_resolution != res:
+                image = self.write_buffer(image=image, resolution=res)
+
+        result = self.__class__(image=image,
+                                storage=self.storage,
+                                tile_width=self.tile_width,
+                                tile_height=self.tile_height,
+                                offset=offset,
+                                resolution=res)
+        result._parent = parent
+        return result
 
     def upsample(self, levels=1):
         """
@@ -646,13 +704,24 @@ class TmsTiles(object):
                                       tile_height=self.tile_height,
                                       offset=offset)
 
-        tiles = self.__class__(image=aligned,
-                               storage=self.storage,
-                               tile_width=self.tile_width,
-                               tile_height=self.tile_height,
-                               offset=offset.floor(),
-                               resolution=self.resolution + levels)
-        return tiles
+        return self.__class__(image=aligned,
+                              storage=self.storage,
+                              tile_width=self.tile_width,
+                              tile_height=self.tile_height,
+                              offset=offset.floor(),
+                              resolution=self.resolution + levels)
+
+    def write_buffer(self, image, resolution):
+        if image.BufferSize() >= self.IMAGE_BUFFER_DISK_THRESHOLD:
+            logger.debug(
+                'Buffering resolution {0} to disk'.format(resolution)
+            )
+            return image.write_to_tempfile()
+
+        logger.debug(
+            'Buffering resolution {0} to memory'.format(resolution)
+        )
+        return image.write_to_memory()
 
 
 class TmsPyramid(object):
@@ -721,15 +790,22 @@ class TmsPyramid(object):
                                  offset=offset.lower_left,
                                  resolution=self.resolution)
 
-    def slice_downsample(self, tiles, min_resolution, fill_borders=None):
+    def slice_downsample(self, tiles, min_resolution, max_resolution=None,
+                         fill_borders=None):
         """Downsamples the input TmsTiles down to min_resolution and slices."""
         validate_resolutions(resolution=self.resolution,
                              min_resolution=min_resolution)
+        if max_resolution is None or max_resolution >= self.resolution:
+            max_resolution = self.resolution - 1
+
         with LibVips.disable_warnings():
-            # Downsampling one zoom level at a time, using the previous
-            # downsampled results.
-            for res in reversed(range(min_resolution, self.resolution)):
-                tiles = tiles.downsample()
+            # Skip resolutions if there's a gap between max_resolution and
+            # self.resolution.
+            tiles = tiles.downsample(
+                levels=(self.resolution - max_resolution),
+            )
+
+            for res in reversed(range(min_resolution, max_resolution + 1)):
                 logger.debug(
                     'Slicing at downsampled resolution {resolution}: '
                     '{width} × {height}'.format(
@@ -745,6 +821,11 @@ class TmsPyramid(object):
                         resolution=res
                     )
                 tiles._slice()
+
+                # Downsample to the next layer, unless we're not going to go
+                # through the loop again.
+                if res > min_resolution:
+                    tiles = tiles.downsample(levels=1)
 
     def slice_native(self, tiles, fill_borders=None):
         """Slices the input image at native resolution."""
@@ -766,13 +847,17 @@ class TmsPyramid(object):
                 )
             tiles._slice()
 
-    def slice_upsample(self, tiles, max_resolution, fill_borders=None):
+    def slice_upsample(self, tiles, max_resolution, min_resolution=None,
+                       fill_borders=None):
         """Upsamples the input TmsTiles up to max_resolution and slices."""
         validate_resolutions(resolution=self.resolution,
                              max_resolution=max_resolution)
+        if min_resolution is None or min_resolution <= self.resolution:
+            min_resolution = self.resolution + 1
+
         with LibVips.disable_warnings():
             # Upsampling one zoom level at a time, from the native image.
-            for res in range(self.resolution + 1, max_resolution + 1):
+            for res in range(min_resolution, max_resolution + 1):
                 upsampled = tiles.upsample(levels=(res - self.resolution))
                 logger.debug(
                     'Slicing at upsampled resolution {resolution}: '
@@ -792,20 +877,31 @@ class TmsPyramid(object):
 
     def slice(self, fill_borders=True):
         """Slices the input image into the pyramid of PNG tiles."""
-        validate_resolutions(resolution=self.resolution,
-                             min_resolution=self.min_resolution,
-                             max_resolution=self.max_resolution)
-
         logger.info('Slicing tiles')
-        tiles = self.get_tiles()
-        self.slice_native(tiles=tiles, fill_borders=fill_borders)
         if self.min_resolution is not None:
-            self.slice_downsample(tiles=tiles,
-                                  min_resolution=self.min_resolution,
-                                  fill_borders=fill_borders)
+            min_resolution = self.min_resolution
+        else:
+            min_resolution = self.resolution
+
         if self.max_resolution is not None:
+            max_resolution = self.max_resolution
+        else:
+            max_resolution = self.resolution
+
+        tiles = self.get_tiles()
+
+        if min_resolution <= self.resolution <= max_resolution:
+            self.slice_native(tiles, fill_borders=fill_borders)
+
+        if 0 <= min_resolution < self.resolution:
+            self.slice_downsample(tiles=tiles,
+                                  min_resolution=min_resolution,
+                                  max_resolution=max_resolution,
+                                  fill_borders=fill_borders)
+        if self.resolution < max_resolution:
             self.slice_upsample(tiles=tiles,
-                                max_resolution=self.max_resolution,
+                                min_resolution=min_resolution,
+                                max_resolution=max_resolution,
                                 fill_borders=fill_borders)
         self.storage.waitall()
 
@@ -924,22 +1020,58 @@ class TmsPyramid(object):
             self.dataset.SetLocalSizes(xsize=width, ysize=height)
 
 
-def validate_resolutions(resolution, min_resolution=None,
-                         max_resolution=None):
-    if min_resolution is not None and \
-       not 0 <= min_resolution < resolution:
-        raise ValueError(
-            'min_resolution {0!r} must be between 0 and {1}'.format(
-                min_resolution, resolution
-            )
-        )
+def validate_resolutions(resolution,
+                         min_resolution=None, max_resolution=None,
+                         strict=True):
+    """
+    Returns cleaned (min_resolution, max_resolution).
 
-    if max_resolution is not None and max_resolution < resolution:
-        raise ValueError(
-            'max_resolution {0!r} must be greater than {1}'.format(
-                max_resolution, resolution
+    If strict is True, then it is an error if this condition doesn't hold:
+        min_resolution < resolution < max_resolution
+    """
+    if min_resolution is not None:
+        if not strict:
+            if min_resolution < 0:
+                raise ValueError(
+                    'min_resolution {0!r} must be greater than 0'.format(
+                        min_resolution
+                    )
+                )
+            if max_resolution is None and min_resolution > resolution:
+                raise ValueError(
+                    'min_resolution {0!r} must be between 0 and {1}'.format(
+                        min_resolution, resolution
+                    )
+                )
+            if max_resolution is not None and min_resolution > max_resolution:
+                raise ValueError(
+                    'min_resolution {0!r} must be between 0 and {1}'.format(
+                        min_resolution, max_resolution
+                    )
+                )
+        elif not 0 <= min_resolution < resolution:
+            raise ValueError(
+                'min_resolution {0!r} must be between 0 and {1}'.format(
+                    min_resolution, resolution
+                )
             )
-        )
+
+    if max_resolution is not None:
+        if strict and max_resolution < resolution:
+            raise ValueError(
+                'max_resolution {0!r} must be greater than {1}'.format(
+                    max_resolution, resolution
+                )
+            )
+        if not strict and \
+           resolution > max_resolution and min_resolution is None:
+            raise ValueError(
+                'max_resolution {0!r} must be greater than {1}'.format(
+                    max_resolution, min_resolution
+                )
+            )
+
+    return min_resolution, max_resolution
 
 
 # Utility classes for coloring
@@ -1017,7 +1149,6 @@ class ColorBase(dict):
                 type(self).__name__, self
             )
         )
-
 
         # Convert to a numpy array
         data = numpy.frombuffer(buffer=image.tobuffer(),

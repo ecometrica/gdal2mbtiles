@@ -47,6 +47,16 @@ class TestVImage(unittest.TestCase):
         self.assertEqual(VImage.from_vimage(image).tostring(),
                          image.tostring())
 
+    def test_buffer_size(self):
+        image = VImage.new_rgba(width=16, height=16)
+        self.assertEqual(
+            image.BufferSize(),
+            (16 *               # width
+             16 *               # height
+             4 *                # bands
+             1)                 # data size
+        )
+
     def test_stretch(self):
         image = VImage.new_rgba(width=16, height=16)
 
@@ -139,6 +149,22 @@ class TestVImage(unittest.TestCase):
                                  offset=XY(1, 1))
         self.assertEqual(result.Xsize(), image.Xsize() * 2)
         self.assertEqual(result.Ysize(), image.Ysize() * 2)
+
+    def test_write_to_memory(self):
+        image = VImage.new_rgba(width=16, height=16)
+        image2 = image.write_to_memory()
+        self.assertEqual(image.tobuffer(), image2.tobuffer())
+
+    def test_write_to_tempfile(self):
+        image = VImage.new_rgba(width=16, height=16)
+        image2 = image.write_to_tempfile()
+        tempfile = image2._buf
+        self.assertEqual(image.tobuffer(), image2.tobuffer())
+
+        # Does the file delete itself?
+        self.assertTrue(os.path.exists(tempfile.name))
+        tempfile.close()
+        self.assertFalse(os.path.exists(tempfile.name))
 
 
 class TestTmsPyramid(unittest.TestCase):

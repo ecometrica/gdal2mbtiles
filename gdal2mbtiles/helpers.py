@@ -149,7 +149,8 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),
                              min_resolution=min_resolution,
-                             max_resolution=max_resolution)
+                             max_resolution=max_resolution,
+                             strict=False)
         warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
                             band=band, spatial_ref=spatial_ref,
                             resampling=resampling, compress='LZW')
@@ -203,7 +204,8 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),
                              min_resolution=min_resolution,
-                             max_resolution=max_resolution)
+                             max_resolution=max_resolution,
+                             strict=False)
         warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
                             band=band, spatial_ref=spatial_ref,
                             resampling=resampling, compress='LZW')

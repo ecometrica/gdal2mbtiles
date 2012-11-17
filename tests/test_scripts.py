@@ -132,7 +132,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                      3: 64}  # 8×8 at resolution 3
                 )
 
-            # Min resolution greater than input resolution
+            # Min resolution greater than input resolution with no max
             command = [sys.executable, self.script,
                        '--min-resolution', '3',
                        self.inputfile, output.name]
@@ -151,7 +151,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                 check_call, command, env=self.environ, stderr=null
             )
 
-            # Max resolution less than input resolution
+            # Max resolution less than input resolution with no min
             command = [sys.executable, self.script,
                        '--max-resolution', '0',
                        self.rgbfile, output.name]
