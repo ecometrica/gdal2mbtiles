@@ -32,8 +32,8 @@ logger.addHandler(logging.NullHandler())
 class LibTiff(object):
     def __init__(self, version=None):
         library = find_library('tiff')
-        if version is not None or library is None:
-            library = 'libvips.so.{0:d}'.format(version)
+        if version is not None and library is None:
+            library = 'libtiff.so.{0:d}'.format(version)
         self.libtiff = cdll.LoadLibrary(library)
         self.functions = {}
 
@@ -58,7 +58,7 @@ class LibVips(object):
 
     def __init__(self, version=None):
         library = find_library('vips')
-        if version is not None or library is None:
+        if version is not None and library is None:
             library = 'libvips.so.{0:d}'.format(version)
         self.libvips = cdll.LoadLibrary(library)
         self.functions = {}
