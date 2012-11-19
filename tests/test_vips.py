@@ -14,6 +14,8 @@ from gdal2mbtiles.types import rgba, XY
 from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
                                LibVips, TmsPyramid, TmsTiles, VImage, VIPS)
 
+from tests.test_gdal import TestCase as GdalTestCase
+
 
 __dir__ = os.path.dirname(__file__)
 
@@ -167,7 +169,7 @@ class TestVImage(unittest.TestCase):
         self.assertFalse(os.path.exists(tempfile.name))
 
 
-class TestTmsPyramid(unittest.TestCase):
+class TestTmsPyramid(GdalTestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
@@ -198,6 +200,10 @@ class TestTmsPyramid(unittest.TestCase):
             pyramid.align_to_grid()
             self.assertEqual(pyramid.image.Xsize(), 1024)
             self.assertEqual(pyramid.image.Ysize(), 1024)
+            self.assertEqual(pyramid.dataset.RasterXSize, 1024)
+            self.assertEqual(pyramid.dataset.RasterYSize, 1024)
+            self.assertExtentsEqual(pyramid.dataset.GetExtents(),
+                                    pyramid.dataset.GetTiledExtents())
 
             # bluemarble-foreign.tif is a 500 × 250 whole-world map.
             pyramid = TmsPyramid(inputfile=self.foreignfile,
@@ -205,6 +211,10 @@ class TestTmsPyramid(unittest.TestCase):
             pyramid.align_to_grid()
             self.assertEqual(pyramid.image.Xsize(), 512)
             self.assertEqual(pyramid.image.Ysize(), 512)
+            self.assertEqual(pyramid.dataset.RasterXSize, 512)
+            self.assertEqual(pyramid.dataset.RasterYSize, 512)
+            self.assertEqual(pyramid.dataset.GetExtents(),
+                                    pyramid.dataset.GetTiledExtents())
 
             # bluemarble-spanning-foreign.tif is a 154 × 154 whole-world map.
             pyramid = TmsPyramid(inputfile=self.spanningforeignfile,
@@ -212,6 +222,10 @@ class TestTmsPyramid(unittest.TestCase):
             pyramid.align_to_grid()
             self.assertEqual(pyramid.image.Xsize(), 256)
             self.assertEqual(pyramid.image.Ysize(), 256)
+            self.assertEqual(pyramid.dataset.RasterXSize, 256)
+            self.assertEqual(pyramid.dataset.RasterYSize, 256)
+            self.assertExtentsEqual(pyramid.dataset.GetExtents(),
+                                    pyramid.dataset.GetTiledExtents())
             # The upper-left corner should be transparent
             data = numpy.frombuffer(pyramid.image.tobuffer(),
                                     dtype=numpy.uint8)
