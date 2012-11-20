@@ -31,9 +31,10 @@ logger.addHandler(logging.NullHandler())
 
 class LibTiff(object):
     def __init__(self, version=None):
-        library = find_library('tiff')
-        if version is not None and library is None:
+        if version is not None:
             library = 'libtiff.so.{0:d}'.format(version)
+        else:
+            library = find_library('tiff')
         self.libtiff = cdll.LoadLibrary(library)
         self.functions = {}
 
@@ -57,9 +58,10 @@ class LibVips(object):
     """Wrapper object around C library."""
 
     def __init__(self, version=None):
-        library = find_library('vips')
-        if version is not None and library is None:
+        if version is not None:
             library = 'libvips.so.{0:d}'.format(version)
+        else:
+            library = find_library('vips')
         self.libvips = cdll.LoadLibrary(library)
         self.functions = {}
 
