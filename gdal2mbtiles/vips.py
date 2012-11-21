@@ -653,7 +653,8 @@ class TmsTiles(object):
                                      offset=offset)
             offset = offset.floor()
 
-            # Render to a temporary buffer every 4 levels of scaling.
+            # Render to a temporary buffer every IMAGE_BUFFER_INTERVAL levels
+            # of scaling.
             #
             # Since VIPS is lazy, it will try to downscale from the parent
             # image, each time you do a render. What you need to do is
@@ -940,7 +941,7 @@ class TmsPyramid(object):
             self.dataset.SetLocalSizes(xsize=self._image.Xsize(),
                                        ysize=self._image.Ysize())
 
-    def upsample(self, resolution=resolution):
+    def upsample(self, resolution=None):
         """Upsamples the image to `resolution`."""
         return self._upsample(
             ratios=self.dataset.GetTileScalingRatios(resolution=resolution,
