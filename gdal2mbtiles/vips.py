@@ -546,6 +546,139 @@ class VImage(vipsCC.VImage.VImage):
         return image
 
 
+class VipsDataset(Dataset):
+    def __init__(self, inputfile, *args, **kwargs):
+        """
+        Opens a GDAL-readable file and holds a VImage for scaling and aligning.
+        """
+        super(VipsDataset, self).__init__(inputfile, *args, **kwargs)
+
+        self.inputfile = inputfile
+        self._image = None
+
+    @property
+    def image(self):
+        if self._image is None:
+            self._image = VImage(self.inputfile)
+        return self._image
+
+    def _upsample(self, ratios):
+        if ratios == XY(x=1.0, y=1.0):
+            # No upsampling needed
+            return
+
+        extents = self.GetExtents()
+        width, height = extents.dimensions
+
+        logger.debug(
+            'Resizing from {src_width} × {src_height} '
+            'to {dst_width} × {dst_height}'.format(
+                src_width=self.RasterXSize,
+                src_height=self.RasterYSize,
+                dst_width=int(round(self.RasterXSize * ratios.x)),
+                dst_height=int(round(self.RasterYSize * ratios.y))
+            )
+        )
+
+        with LibVips.disable_warnings():
+            self._image = self.image.stretch(xscale=ratios.x,
+                                             yscale=ratios.y)
+            # Fix the dataset's metadata
+            geotransform = list(self.GetGeoTransform())
+            geotransform[1] = width / self._image.Xsize()    # pixel width
+            geotransform[5] = -height / self._image.Ysize()  # pixel height
+            self.SetGeoTransform(geotransform, local=True)
+            self.SetLocalSizes(xsize=self._image.Xsize(),
+                               ysize=self._image.Ysize())
+
+    def upsample(self, resolution=None):
+        """Upsamples the image to `resolution`."""
+        return self._upsample(
+            ratios=self.GetTileScalingRatios(resolution=resolution, places=5)
+        )
+
+    def upsample_to_world(self):
+        """Upsamples the image to native TMS resolution for the whole world."""
+        ratios = self.GetWorldScalingRatios()
+        if ratios == XY(x=1.0, y=1.0):
+            # No upsampling needed
+            return
+
+        result = self._upsample(ratios=ratios)
+
+        # Force world to be full width by changing pixel width
+        world = self.GetSpatialReference().GetWorldExtents()
+        geotransform = list(self.GetGeoTransform())
+        geotransform[1] = world.dimensions.x / self._image.Xsize()
+        self.SetGeoTransform(geotransform, local=True)
+
+        return result
+
+    def align_to_grid(self, resolution=None):
+        """Aligns the image to the TMS tile grid."""
+        if resolution is None:
+            resolution = self.GetNativeResolution()
+        spatial_ref = self.GetSpatialReference()
+        pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
+
+        # Assume the image is already in the right projection
+        extents = self.GetExtents(transform=None)
+        tile_extents = self.GetTiledExtents(transform=None)
+
+        left = int(round(
+            ((extents.lower_left.x - tile_extents.lower_left.x) /
+             pixel_sizes.x)
+        ))
+        top = int(round(
+            ((tile_extents.upper_right.y - extents.upper_right.y) /
+             pixel_sizes.y)
+        ))
+
+        width = int(tile_extents.dimensions.x / pixel_sizes.x)
+        height = int(tile_extents.dimensions.y / pixel_sizes.y)
+
+        if left == top == 0 and \
+           width == self.RasterXSize and \
+           height == self.RasterYSize:
+            # No alignment needed
+            return
+
+        if width % TILE_SIDE != 0:
+            raise AssertionError(
+                'width {0} is not an integer multiple of {1}'.format(
+                    width,
+                    TILE_SIDE
+                )
+            )
+        if height % TILE_SIDE != 0:
+            raise AssertionError(
+                'height {0} is not an integer multiple of {1}'.format(
+                    height,
+                    TILE_SIDE
+                )
+            )
+
+        logger.debug(
+            'Aligning within {width} × {height} at ({left}, {top})'.format(
+                width=width, height=height, left=left, top=top
+            )
+        )
+
+        with LibVips.disable_warnings():
+            self._image = self.image.embed(fill='black',
+                                           left=left, top=top,
+                                           width=width, height=height)
+            # Fix the dataset's metadata to match tile_extents exactly
+            geotransform = list(self.GetGeoTransform())
+            geotransform[0] = tile_extents.lower_left.x   # left
+            geotransform[3] = tile_extents.upper_right.y  # top
+            # pixel width and height
+            geotransform[1] = tile_extents.dimensions.x / self._image.Xsize()
+            geotransform[5] = -tile_extents.dimensions.y / self._image.Ysize()
+            self.SetGeoTransform(geotransform, local=True)
+            self.SetLocalSizes(xsize=width, ysize=height)
+
+
 class TmsTiles(object):
     """Represents a set of tiles in TMS co-ordinates."""
 
@@ -768,14 +901,12 @@ class TmsPyramid(object):
     @property
     def dataset(self):
         if self._dataset is None:
-            self._dataset = Dataset(self.inputfile)
+            self._dataset = VipsDataset(self.inputfile)
         return self._dataset
 
     @property
     def image(self):
-        if self._image is None:
-            self._image = VImage(self.inputfile)
-        return self._image
+        return self.dataset.image
 
     @property
     def resolution(self):
@@ -819,10 +950,8 @@ class TmsPyramid(object):
                 )
 
                 if fill_borders or fill_borders is None:
-                    tiles.fill_borders(
-                        borders=self.dataset.GetWorldTmsBorders(resolution=res),
-                        resolution=res
-                    )
+                    borders = self.dataset.GetWorldTmsBorders(resolution=res)
+                    tiles.fill_borders(borders=borders, resolution=res)
                 tiles._slice()
 
                 # Downsample to the next layer, unless we're not going to go
@@ -872,10 +1001,8 @@ class TmsPyramid(object):
                 )
 
                 if fill_borders or fill_borders is None:
-                    upsampled.fill_borders(
-                        borders=self.dataset.GetWorldTmsBorders(resolution=res),
-                        resolution=res
-                    )
+                    borders = self.dataset.GetWorldTmsBorders(resolution=res)
+                    upsampled.fill_borders(borders=borders, resolution=res)
                 upsampled._slice()
 
     def slice(self, fill_borders=True):
@@ -912,118 +1039,20 @@ class TmsPyramid(object):
         # update some metadata
         self.storage.post_import(pyramid=self)
 
-    def _upsample(self, ratios):
-        if ratios == XY(x=1.0, y=1.0):
-            # No upsampling needed
-            return
-
-        extents = self.dataset.GetExtents()
-        width, height = extents.dimensions
-
-        logger.debug(
-            'Resizing from {src_width} × {src_height} '
-            'to {dst_width} × {dst_height}'.format(
-                src_width=self.dataset.RasterXSize,
-                src_height=self.dataset.RasterYSize,
-                dst_width=int(round(self.dataset.RasterXSize * ratios.x)),
-                dst_height=int(round(self.dataset.RasterYSize * ratios.y))
-            )
-        )
-
-        with LibVips.disable_warnings():
-            self._image = self.image.stretch(xscale=ratios.x,
-                                             yscale=ratios.y)
-            # Fix the dataset's metadata
-            geotransform = list(self.dataset.GetGeoTransform())
-            geotransform[1] = width / self._image.Xsize()    # pixel width
-            geotransform[5] = -height / self._image.Ysize()  # pixel height
-            self.dataset.SetGeoTransform(geotransform, local=True)
-            self.dataset.SetLocalSizes(xsize=self._image.Xsize(),
-                                       ysize=self._image.Ysize())
-
     def upsample(self, resolution=None):
-        """Upsamples the image to `resolution`."""
-        return self._upsample(
-            ratios=self.dataset.GetTileScalingRatios(resolution=resolution,
-                                                     places=5)
-        )
+        """Upsamples the VIPS dataset to `resolution`."""
+        return self.dataset.upsample(resolution=resolution)
 
     def upsample_to_world(self):
-        """Upsamples the image to native TMS resolution for the whole world."""
-        ratios = self.dataset.GetWorldScalingRatios()
-        if ratios == XY(x=1.0, y=1.0):
-            # No upsampling needed
-            return
-
-        result = self._upsample(ratios=ratios)
-
-        # Force world to be full width by changing pixel width
-        world = self.dataset.GetSpatialReference().GetWorldExtents()
-        geotransform = list(self.dataset.GetGeoTransform())
-        geotransform[1] = world.dimensions.x / self._image.Xsize()
-        self.dataset.SetGeoTransform(geotransform, local=True)
-
-        return result
+        """
+        Upsamples the VIPS dataset to native TMS resolution for the whole
+        world.
+        """
+        return self.dataset.upsample_to_world()
 
     def align_to_grid(self, resolution=None):
-        """Aligns the image to the TMS tile grid."""
-        if resolution is None:
-            resolution = self.dataset.GetNativeResolution()
-        spatial_ref = self.dataset.GetSpatialReference()
-        pixel_sizes = spatial_ref.GetPixelDimensions(resolution=resolution)
-
-        # Assume the image is already in the right projection
-        extents = self.dataset.GetExtents(transform=None)
-        tile_extents = self.dataset.GetTiledExtents(transform=None)
-
-        left = int(round(
-            ((extents.lower_left.x - tile_extents.lower_left.x) /
-             pixel_sizes.x)
-        ))
-        top = int(round(
-            ((tile_extents.upper_right.y - extents.upper_right.y) /
-             pixel_sizes.y)
-        ))
-
-        width = int(tile_extents.dimensions.x / pixel_sizes.x)
-        height = int(tile_extents.dimensions.y / pixel_sizes.y)
-
-        if left == top == 0 and \
-           width == self.dataset.RasterXSize and \
-           height == self.dataset.RasterYSize:
-            # No alignment needed
-            return
-
-        if width % TILE_SIDE != 0:
-            raise AssertionError(
-                'width {0} is not an integer multiple of {1}'.format(width,
-                                                                     TILE_SIDE)
-            )
-        if height % TILE_SIDE != 0:
-            raise AssertionError(
-                'height {0} is not an integer multiple of {1}'.format(height,
-                                                                      TILE_SIDE)
-            )
-
-        logger.debug(
-            'Aligning within {width} × {height} at ({left}, {top})'.format(
-                width=width, height=height, left=left, top=top
-            )
-        )
-
-        with LibVips.disable_warnings():
-            self._image = self.image.embed(fill='black',
-                                           left=left, top=top,
-                                           width=width, height=height)
-            # Fix the dataset's metadata to match tile_extents exactly
-            geotransform = list(self.dataset.GetGeoTransform())
-            geotransform[0] = tile_extents.lower_left.x   # left
-            geotransform[3] = tile_extents.upper_right.y  # top
-            # pixel width and height
-            geotransform[1] = tile_extents.dimensions.x / self._image.Xsize()
-            geotransform[5] = -tile_extents.dimensions.y / self._image.Ysize()
-            self.dataset.SetGeoTransform(geotransform, local=True)
-            self.dataset.SetLocalSizes(xsize=width, ysize=height)
+        """Aligns the VIPS dataset to the TMS tile grid."""
+        return self.dataset.align_to_grid(resolution=resolution)
 
 
 def validate_resolutions(resolution,
