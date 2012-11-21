@@ -12,7 +12,7 @@ from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import rgba, XY
 from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
-                               LibVips, TmsPyramid, TmsTiles, VImage, VIPS)
+                               LibVips, TmsTiles, VImage, VipsDataset, VIPS)
 
 from tests.test_gdal import TestCase as GdalTestCase
 
@@ -169,7 +169,7 @@ class TestVImage(unittest.TestCase):
         self.assertFalse(os.path.exists(tempfile.name))
 
 
-class TestTmsPyramid(GdalTestCase):
+class TestVipsDataset(GdalTestCase):
     def setUp(self):
         self.inputfile = os.path.join(__dir__,
                                       'bluemarble.tif')
@@ -182,52 +182,47 @@ class TestTmsPyramid(GdalTestCase):
         )
 
     def test_upsample(self):
-        dummystorage = None
-
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
-        pyramid = TmsPyramid(inputfile=self.foreignfile, storage=dummystorage)
-        pyramid.upsample(resolution=None)
-        self.assertEqual(pyramid.image.Xsize(), 512)
-        self.assertEqual(pyramid.image.Ysize(), 512)
+        dataset = VipsDataset(inputfile=self.foreignfile)
+        dataset.upsample(resolution=None)
+        self.assertEqual(dataset.RasterXSize, dataset.image.Xsize())
+        self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
+        self.assertEqual(dataset.RasterXSize, 512)
+        self.assertEqual(dataset.RasterYSize, 512)
 
     def test_align_to_grid(self):
-        dummystorage = None
-
         with LibVips.disable_warnings():
             # bluemarble.tif is a 1024 × 1024 whole-world map.
-            pyramid = TmsPyramid(inputfile=self.inputfile,
-                                 storage=dummystorage)
-            pyramid.align_to_grid()
-            self.assertEqual(pyramid.image.Xsize(), 1024)
-            self.assertEqual(pyramid.image.Ysize(), 1024)
-            self.assertEqual(pyramid.dataset.RasterXSize, 1024)
-            self.assertEqual(pyramid.dataset.RasterYSize, 1024)
-            self.assertExtentsEqual(pyramid.dataset.GetExtents(),
-                                    pyramid.dataset.GetTiledExtents())
+            dataset = VipsDataset(inputfile=self.inputfile)
+            dataset.align_to_grid()
+            self.assertEqual(dataset.image.Xsize(), 1024)
+            self.assertEqual(dataset.image.Ysize(), 1024)
+            self.assertEqual(dataset.RasterXSize, 1024)
+            self.assertEqual(dataset.RasterYSize, 1024)
+            self.assertExtentsEqual(dataset.GetExtents(),
+                                    dataset.GetTiledExtents())
 
             # bluemarble-foreign.tif is a 500 × 250 whole-world map.
-            pyramid = TmsPyramid(inputfile=self.foreignfile,
-                                 storage=dummystorage)
-            pyramid.align_to_grid()
-            self.assertEqual(pyramid.image.Xsize(), 512)
-            self.assertEqual(pyramid.image.Ysize(), 512)
-            self.assertEqual(pyramid.dataset.RasterXSize, 512)
-            self.assertEqual(pyramid.dataset.RasterYSize, 512)
-            self.assertEqual(pyramid.dataset.GetExtents(),
-                                    pyramid.dataset.GetTiledExtents())
+            dataset = VipsDataset(inputfile=self.foreignfile)
+            dataset.align_to_grid()
+            self.assertEqual(dataset.image.Xsize(), 512)
+            self.assertEqual(dataset.image.Ysize(), 512)
+            self.assertEqual(dataset.RasterXSize, 512)
+            self.assertEqual(dataset.RasterYSize, 512)
+            self.assertEqual(dataset.GetExtents(),
+                             dataset.GetTiledExtents())
 
             # bluemarble-spanning-foreign.tif is a 154 × 154 whole-world map.
-            pyramid = TmsPyramid(inputfile=self.spanningforeignfile,
-                                 storage=dummystorage)
-            pyramid.align_to_grid()
-            self.assertEqual(pyramid.image.Xsize(), 256)
-            self.assertEqual(pyramid.image.Ysize(), 256)
-            self.assertEqual(pyramid.dataset.RasterXSize, 256)
-            self.assertEqual(pyramid.dataset.RasterYSize, 256)
-            self.assertExtentsEqual(pyramid.dataset.GetExtents(),
-                                    pyramid.dataset.GetTiledExtents())
+            dataset = VipsDataset(inputfile=self.spanningforeignfile)
+            dataset.align_to_grid()
+            self.assertEqual(dataset.image.Xsize(), 256)
+            self.assertEqual(dataset.image.Ysize(), 256)
+            self.assertEqual(dataset.RasterXSize, 256)
+            self.assertEqual(dataset.RasterYSize, 256)
+            self.assertExtentsEqual(dataset.GetExtents(),
+                                    dataset.GetTiledExtents())
             # The upper-left corner should be transparent
-            data = numpy.frombuffer(pyramid.image.tobuffer(),
+            data = numpy.frombuffer(dataset.image.tobuffer(),
                                     dtype=numpy.uint8)
             self.assertEqual(tuple(data[0:4]),
                              rgba(0, 0, 0, 0))

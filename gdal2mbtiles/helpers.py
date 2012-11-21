@@ -273,11 +273,11 @@ def upsample_after_warp(pyramid, colors, whole_world, **kwargs):
         #
         # This is because GDAL sometimes reprojects from a whole world image
         # into a partial world image, due to rounding errors.
-        pyramid.upsample_to_world()
+        pyramid.dataset.upsample_to_world()
     else:
-        pyramid.upsample(resolution=resolution)
+        pyramid.dataset.upsample(resolution=resolution)
     colorize(pyramid=pyramid, colors=colors)
-    pyramid.align_to_grid(resolution=resolution)
+    pyramid.dataset.align_to_grid(resolution=resolution)
     return pyramid
 
 

@@ -562,6 +562,15 @@ class VipsDataset(Dataset):
             self._image = VImage(self.inputfile)
         return self._image
 
+    def ReadAsArray(self, *args, **kwargs):
+        # To prevent you from shooting yourself in the foot.
+        # TODO: Implement this method to read from the VIPS buffer. This is
+        #       especially important after you've upsampled or aligned the
+        #       image.
+        raise NotImplementedError(
+            "Use gdal.Dataset if you want to call this method."
+        )
+
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
@@ -1038,21 +1047,6 @@ class TmsPyramid(object):
         # Post-import hook needs to be called in case the storage has to
         # update some metadata
         self.storage.post_import(pyramid=self)
-
-    def upsample(self, resolution=None):
-        """Upsamples the VIPS dataset to `resolution`."""
-        return self.dataset.upsample(resolution=resolution)
-
-    def upsample_to_world(self):
-        """
-        Upsamples the VIPS dataset to native TMS resolution for the whole
-        world.
-        """
-        return self.dataset.upsample_to_world()
-
-    def align_to_grid(self, resolution=None):
-        """Aligns the VIPS dataset to the TMS tile grid."""
-        return self.dataset.align_to_grid(resolution=resolution)
 
 
 def validate_resolutions(resolution,
