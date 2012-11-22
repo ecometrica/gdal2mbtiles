@@ -219,13 +219,16 @@ class MbtilesStorage(Storage):
             self.mbtiles.close()
 
     @classmethod
-    def create(cls, renderer, filename, metadata, version=None, **kwargs):
+    def create(cls, renderer, filename, metadata, zoom_offset=None,
+               version=None, **kwargs):
         """
         Creates a new MBTiles file.
 
         renderer: Used to render images into tiles.
         filename: Name of the MBTiles file.
         metadata: Metadata dictionary.
+        zoom_offset: Offset zoom level.
+
         version: Optional MBTiles version.
         pool: Process pool to coordinate subprocesses.
 
@@ -236,7 +239,7 @@ class MbtilesStorage(Storage):
         if bounds is not None:
             metadata['bounds'] = bounds.lower_left + bounds.upper_right
         mbtiles = MBTiles.create(filename=filename, metadata=metadata,
-                                 version=version)
+                                 version=version, zoom_offset=zoom_offset)
         return cls(renderer=renderer,
                    filename=mbtiles,
                    **kwargs)

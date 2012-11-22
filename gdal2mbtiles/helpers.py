@@ -14,7 +14,8 @@ from .vips import TmsPyramid, validate_resolutions
 
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None, fill_borders=None,
-                  colors=None, renderer=None, preprocessor=None):
+                  zoom_offset=None, colors=None, renderer=None,
+                  preprocessor=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -23,6 +24,8 @@ def image_mbtiles(inputfile, outputfile, metadata,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     fill_borders: Fill borders of image with empty tiles.
+    zoom_offset: Offset zoom level to fit unprojected images to square maps.
+
     colors: Color palette applied to single band files.
             colors=ColorGradient({0: rgba(0, 0, 0, 255),
                                   10: rgba(255, 255, 255, 255)})
@@ -36,6 +39,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
         renderer = PngRenderer()
     with MbtilesStorage.create(filename=outputfile,
                                metadata=metadata,
+                               zoom_offset=zoom_offset,
                                renderer=renderer) as storage:
         pyramid = TmsPyramid(inputfile=inputfile,
                              storage=storage,
@@ -118,7 +122,7 @@ def image_slice(inputfile, outputdir, fill_borders=None,
 def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, fill_borders=None,
-                 renderer=None):
+                 zoom_offset=None, renderer=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -138,6 +142,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     min_resolution: Minimum resolution to downsample tiles.
     max_resolution: Maximum resolution to upsample tiles.
     fill_borders: Fill borders of image with empty tiles.
+    zoom_offset: Offset zoom level to fit unprojected images to square maps.
 
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
@@ -162,7 +167,8 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                              max_resolution=max_resolution,
                              colors=colors, renderer=renderer,
                              preprocessor=preprocessor,
-                             fill_borders=fill_borders)
+                             fill_borders=fill_borders,
+                             zoom_offset=zoom_offset)
 
 
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,

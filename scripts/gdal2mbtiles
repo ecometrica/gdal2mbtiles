@@ -140,6 +140,10 @@ def parse_args(args):
     group.add_argument('--no-fill-borders', dest='fill_borders',
                        action='store_const', const=False,
                        help='Do not add borders to fill image.')
+    group.add_argument('--zoom-offset', type=int, default=0,
+                       metavar='N',
+                       help=('Offset zoom level by N to fit unprojected '
+                             'images to square maps. Defaults to 0.'))
 
     group = parser.add_argument_group(title='Coloring arguments')
     group.add_argument('--coloring', default=None,
@@ -246,6 +250,7 @@ def main(args, configure_logging=None):
                      min_resolution=args.min_resolution,
                      max_resolution=args.max_resolution,
                      fill_borders=args.fill_borders,
+                     zoom_offset=args.zoom_offset,
                      # Coloring
                      colors=colors, band=band)
         return 0

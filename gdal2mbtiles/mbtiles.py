@@ -356,16 +356,17 @@ class MBTiles(object):
         return self._conn
 
     @classmethod
-    def create(cls, filename, metadata, version=None):
+    def create(cls, filename, metadata, version=None, zoom_offset=None):
         """Create a new MBTiles file. See `Metadata`"""
         if version is None:
             version = cls.Metadata._detect(keys=metadata.keys())
-        mbtiles = cls._create(filename=filename, version=version)
+        mbtiles = cls._create(filename=filename, version=version,
+                              zoom_offset=zoom_offset)
         mbtiles.metadata._setup(metadata)
         return mbtiles
 
     @classmethod
-    def _create(cls, filename, version):
+    def _create(cls, filename, version, zoom_offset):
         """
         Creates a new MBTiles file named `filename`.
 
@@ -381,6 +382,10 @@ class MBTiles(object):
         #
         # However, we wish to normalize the tile_data, so we store each
         # in the images table.
+
+        if zoom_offset is None:
+            zoom_offset = 0
+
         rmfile(filename, ignore_missing=True)
         try:
             os.remove(filename)
@@ -417,13 +422,17 @@ class MBTiles(object):
             )
 
             # Finally, we emulate the tiles table using a view.
+            #
+            # Offsets to zoom levels are implemented dynamically
+            # through the view.
             conn.execute(
                 """
                 CREATE VIEW tiles AS
-                    SELECT zoom_level, tile_column, tile_row, tile_data
+                    SELECT zoom_level + {0} AS zoom_level,
+                           tile_column, tile_row, tile_data
                     FROM map, images
                     WHERE map.tile_id = images.tile_id
-                """
+                """.format(zoom_offset)
             )
 
             # We also need a table to store metadata.
