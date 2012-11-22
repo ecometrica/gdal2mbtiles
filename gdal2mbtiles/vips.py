@@ -20,7 +20,7 @@ from vipsCC.VError import VError
 import vipsCC.VImage
 
 from .constants import TILE_SIDE
-from .gdal import Dataset
+from .gdal import Dataset, Band
 from .types import rgba, XY
 from .utils import tempenv
 
@@ -546,6 +546,58 @@ class VImage(vipsCC.VImage.VImage):
         return image
 
 
+class VipsBand(Band):
+    def __init__(self, band, dataset, band_no):
+        """
+        Refers to a Band in a VipsDataset.
+
+        band: A gdal's Band that holds the SWIG object
+        dataset: The VipsDataset that this band belongs to
+        band_no: The number of the band in the dataset, 0 based
+        """
+        super(VipsBand, self).__init__(band, dataset)
+
+        self._band_no = band_no
+
+    def ReadAsArray(self, xoff=0, yoff=0, win_xsize=None, win_ysize=None,
+                    buf_xsize=None, buf_ysize=None, buf_obj=None):
+        """
+        Reads from the VIPS buffer into a NumPy array.
+
+        buf parameters are ignored. We always return a new ndarray.
+        """
+        if any((buf_xsize, buf_ysize, buf_obj)):
+            raise ValueError('Cannot handle buf-related parameters')
+
+        image = self._dataset.image
+
+        if win_xsize is None:
+            win_xsize = image.Xsize() - xoff
+
+        if win_ysize is None:
+            win_ysize = image.Ysize() - yoff
+
+        band = image.extract_bands(self._band_no, 1)
+        area = band.extract_area(left=xoff, top=yoff,
+                                 width=win_xsize, height=win_ysize)
+
+        return numpy.ndarray(shape=(win_xsize, win_ysize),
+                             buffer=area.tobuffer(),
+                             dtype=area.NumPyType())
+
+    # The next methods are there to prevent you from shooting yourself in the
+    # foot.
+    def ReadRaster(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Use ReadAsArray or a gdal.Band if you want to read from a band."
+        )
+
+    def ReadRaster1(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Use ReadAsArray or a gdal.Band if you want to read from a band."
+        )
+
+
 class VipsDataset(Dataset):
     def __init__(self, inputfile, *args, **kwargs):
         """
@@ -562,14 +614,30 @@ class VipsDataset(Dataset):
             self._image = VImage(self.inputfile)
         return self._image
 
-    def ReadAsArray(self, *args, **kwargs):
-        # To prevent you from shooting yourself in the foot.
-        # TODO: Implement this method to read from the VIPS buffer. This is
-        #       especially important after you've upsampled or aligned the
-        #       image.
-        raise NotImplementedError(
-            "Use gdal.Dataset if you want to call this method."
-        )
+    def GetRasterBand(self, i):
+        return VipsBand(band=super(Dataset, self).GetRasterBand(i),
+                        dataset=self, band_no=i-1)
+
+    def ReadAsArray(self, xoff=0, yoff=0, xsize=None, ysize=None,
+                    buf_obj=None):
+        """
+        Reads from the VIPS buffer at offset (xoff, yoff) into a numpy array.
+        """
+        if buf_obj is not None:
+            raise ValueError('Cannot handle buf-related parameters')
+
+        if xsize is None:
+            xsize = self.RasterXSize - xoff
+
+        if ysize is None:
+            ysize = self.RasterYSize - yoff
+
+        area = self.image.extract_area(left=xoff, top=yoff,
+                                       width=xsize, height=ysize)
+
+        return numpy.ndarray(shape=(self.RasterCount, ysize, xsize),
+                             buffer=area.tobuffer(),
+                             dtype=area.NumPyType())
 
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
@@ -686,6 +754,20 @@ class VipsDataset(Dataset):
             geotransform[5] = -tile_extents.dimensions.y / self._image.Ysize()
             self.SetGeoTransform(geotransform, local=True)
             self.SetLocalSizes(xsize=width, ysize=height)
+
+    # The next methods are there to prevent you from shooting yourself in the
+    # foot.
+    def ReadRaster(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Use ReadAsArray or a gdal.Dataset if you want to read from a "
+            " dataset."
+        )
+
+    def ReadRaster1(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Use ReadAsArray or a gdal.Dataset if you want to read from a "
+            " dataset."
+        )
 
 
 class TmsTiles(object):

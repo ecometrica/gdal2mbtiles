@@ -9,6 +9,7 @@ import unittest
 import numpy
 
 from gdal2mbtiles.constants import TILE_SIDE
+from gdal2mbtiles.gdal import Dataset
 from gdal2mbtiles.storages import Storage
 from gdal2mbtiles.types import rgba, XY
 from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
@@ -181,6 +182,8 @@ class TestVipsDataset(GdalTestCase):
             __dir__, 'bluemarble-spanning-foreign.tif'
         )
 
+        self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
+
     def test_upsample(self):
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
         dataset = VipsDataset(inputfile=self.foreignfile)
@@ -226,6 +229,53 @@ class TestVipsDataset(GdalTestCase):
                                     dtype=numpy.uint8)
             self.assertEqual(tuple(data[0:4]),
                              rgba(0, 0, 0, 0))
+
+    def test_readasarray(self):
+        with LibVips.disable_warnings():
+            vips_ds = VipsDataset(inputfile=self.upsamplingfile)
+            gdal_ds = Dataset(inputfile=self.upsamplingfile)
+
+            # Reading the whole file
+            self.assertEqual(
+                vips_ds.ReadAsArray(xoff=0, yoff=0).all(),
+                gdal_ds.ReadAsArray(xoff=0, yoff=0).all()
+            )
+
+            # Reading from an offset
+            vips_data = vips_ds.ReadAsArray(xoff=128, yoff=128)
+            gdal_data = gdal_ds.ReadAsArray(
+                xoff=128, yoff=128, xsize=128, ysize=128
+            )
+            self.assertEqual(vips_data.all(), gdal_data.all())
+
+            vips_blue = vips_ds.GetRasterBand(3)
+            gdal_blue = gdal_ds.GetRasterBand(3)
+
+            # Reading the whole band
+            self.assertEqual(
+                vips_blue.ReadAsArray(xoff=0, yoff=0).all(),
+                gdal_blue.ReadAsArray(xoff=0, yoff=0).all()
+            )
+
+            # Reading from an offset
+            vips_band_data = vips_blue.ReadAsArray(xoff=128, yoff=128)
+            gdal_band_data = gdal_blue.ReadAsArray(
+                xoff=128, yoff=128, win_xsize=128, win_ysize=128
+            )
+            self.assertEqual(vips_band_data.all(), gdal_band_data.all())
+
+            # Test for errors
+            self.assertRaises(
+                ValueError,
+                vips_ds.ReadAsArray,
+                xoff=0, yoff=0, buf_obj=[]
+            )
+
+            self.assertRaises(
+                ValueError,
+                vips_blue.ReadAsArray,
+                xoff=0, yoff=0, buf_xsize=1, buf_ysize=1
+            )
 
 
 class TestTmsTiles(unittest.TestCase):
