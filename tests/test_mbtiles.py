@@ -63,8 +63,10 @@ class TestMBTiles(unittest.TestCase):
                           MBTiles, filename=__file__)
 
         # Missing file
-        self.assertRaises(InvalidFileError,
+        self.assertRaises(IOError,
                           MBTiles, filename='/dev/missing')
+        self.assertRaises(IOError,
+                          MBTiles, filename='/missing')
 
     def test_create(self):
         # Create when filename does not exist

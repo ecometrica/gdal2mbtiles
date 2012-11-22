@@ -295,14 +295,15 @@ class MBTiles(object):
         'synchronous': 'OFF',
     }
 
-    def __init__(self, filename, version=None, options=None):
+    def __init__(self, filename, version=None, options=None,
+                 create=False):
         """Opens an MBTiles file named `filename`"""
         self.filename = filename
         self._conn = None
         self._metadata = None
         self._version = version
 
-        self.open(options=options)
+        self.open(options=options, create=create)
 
     def __del__(self):
         self.close()
@@ -326,14 +327,21 @@ class MBTiles(object):
         """Returns True if the file is closed."""
         return not bool(self._conn)
 
-    def open(self, options=None):
+    def open(self, options=None, create=False):
         """Re-opens the file."""
-        result = self._open(options=options)
+        result = self._open(options=options, create=create)
         self.metadata
         return result
 
-    def _open(self, options=None):
+    def _open(self, options=None, create=False):
         self.close()
+
+        if self.filename != ':memory:':
+            mode = 'wb' if create else 'rb'
+            with open(self.filename, mode):
+                # Raises exceptions if the file can't be opened
+                pass
+
         try:
             self._conn = sqlite3.connect(self.filename)
         except sqlite3.OperationalError:
@@ -393,7 +401,7 @@ class MBTiles(object):
             if e.errno != errno.ENOENT:  # Removing a non-existent file is OK.
                 raise
 
-        mbtiles = cls(filename=filename, version=version)
+        mbtiles = cls(filename=filename, version=version, create=True)
 
         conn = mbtiles._conn
         with conn:
