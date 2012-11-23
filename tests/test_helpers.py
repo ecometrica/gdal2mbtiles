@@ -48,6 +48,8 @@ class TestImageMbtiles(unittest.TestCase):
                     storage.mbtiles.metadata['bounds'],
                     '-90.0,-90.0,0.0,0.0'
                 )
+                self.assertEqual(storage.mbtiles.metadata['x-minzoom'], '0')
+                self.assertEqual(storage.mbtiles.metadata['x-maxzoom'], '3')
 
 
 class TestImagePyramid(unittest.TestCase):
@@ -516,6 +518,8 @@ class TestWarpMbtiles(unittest.TestCase):
                     storage.mbtiles.metadata['bounds'],
                     '-180.0,-90.0,0.0,0.0'
                 )
+                self.assertEqual(storage.mbtiles.metadata['x-minzoom'], '0')
+                self.assertEqual(storage.mbtiles.metadata['x-maxzoom'], '3')
 
 
 class TestWarpPyramid(unittest.TestCase):

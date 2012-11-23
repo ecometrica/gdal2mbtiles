@@ -50,6 +50,17 @@ def image_mbtiles(inputfile, outputfile, metadata,
         pyramid = preprocessor(**locals())
         pyramid.slice(fill_borders=fill_borders)
 
+        # Add metadata extensions
+        if zoom_offset is None:
+            zoom_offset = 0
+        if min_resolution is None:
+            min_resolution = pyramid.resolution
+        if max_resolution is None:
+            max_resolution = pyramid.resolution
+        metadata = storage.mbtiles.metadata
+        metadata['x-minzoom'] = min_resolution + zoom_offset
+        metadata['x-maxzoom'] = max_resolution + zoom_offset
+
 
 def image_pyramid(inputfile, outputdir,
                   min_resolution=None, max_resolution=None, fill_borders=None,

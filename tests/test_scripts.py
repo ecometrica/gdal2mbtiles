@@ -54,13 +54,17 @@ class TestGdal2mbtilesScript(unittest.TestCase):
             with MBTiles(output.name) as mbtiles:
                 # Default metadata
                 cursor = mbtiles._conn.execute('SELECT * FROM metadata')
-                self.assertTrue(dict(cursor.fetchall()),
-                                dict(name=os.path.basename(self.inputfile),
-                                     description='',
-                                     format='png',
-                                     type='overlay',
-                                     version='1.0.0',
-                                     bounds=dataset_bounds))
+                self.assertEqual(dict(cursor.fetchall()),
+                                 {
+                                     'name': os.path.basename(self.inputfile),
+                                     'description': '',
+                                     'format': 'png',
+                                     'type': 'overlay',
+                                     'version': '1.0.0',
+                                     'bounds': dataset_bounds,
+                                     'x-minzoom': '0',
+                                     'x-maxzoom': '0',
+                                 })
 
             command = [sys.executable, self.script,
                        '--name', 'test',
@@ -74,12 +78,16 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                 # Default metadata
                 cursor = mbtiles._conn.execute('SELECT * FROM metadata')
                 self.assertEqual(dict(cursor.fetchall()),
-                                 dict(name='test',
-                                      description='Unit test',
-                                      format='jpg',
-                                      type='baselayer',
-                                      version='2.0.1',
-                                      bounds=dataset_bounds))
+                                 {
+                                     'name': 'test',
+                                     'description': 'Unit test',
+                                     'format': 'jpg',
+                                     'type': 'baselayer',
+                                     'version': '2.0.1',
+                                     'bounds': dataset_bounds,
+                                     'x-minzoom': '0',
+                                     'x-maxzoom': '0',
+                                 })
 
     def test_warp(self):
         null = open('/dev/null', 'rw')
