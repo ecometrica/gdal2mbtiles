@@ -290,7 +290,7 @@ class MBTiles(object):
         'auto_vacuum': 'NONE',
         'encoding': '"UTF-8"',
         'foreign_keys': '0',
-        'journal_mode': 'TRUNCATE',
+        'journal_mode': 'MEMORY',
         'locking_mode': 'EXCLUSIVE',
         'synchronous': 'OFF',
     }
