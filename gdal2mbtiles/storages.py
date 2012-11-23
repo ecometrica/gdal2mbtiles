@@ -188,7 +188,8 @@ class MbtilesStorage(Storage):
 
     http://mapbox.com/developers/mbtiles/
     """
-    def __init__(self, renderer, filename, seen=None, **kwargs):
+    def __init__(self, renderer, filename, zoom_offset=None, seen=None,
+                 **kwargs):
         """
         Initializes storage.
 
@@ -198,6 +199,10 @@ class MbtilesStorage(Storage):
         """
         super(MbtilesStorage, self).__init__(renderer=renderer,
                                              **kwargs)
+        if zoom_offset is None:
+            zoom_offset = 0
+        self.zoom_offset = zoom_offset
+
         if seen is None:
             seen = set()
         self.seen = seen
@@ -239,9 +244,10 @@ class MbtilesStorage(Storage):
         if bounds is not None:
             metadata['bounds'] = bounds.lower_left + bounds.upper_right
         mbtiles = MBTiles.create(filename=filename, metadata=metadata,
-                                 version=version, zoom_offset=zoom_offset)
+                                 version=version)
         return cls(renderer=renderer,
                    filename=mbtiles,
+                   zoom_offset=zoom_offset,
                    **kwargs)
 
     def post_import(self, pyramid):
@@ -261,7 +267,9 @@ class MbtilesStorage(Storage):
         """Saves `image` at coordinates `x`, `y`, and `z`."""
         hashed = self.get_hash(image)
         if hashed in self.seen:
-            self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed)
+            self.mbtiles.insert(x=x, y=y,
+                                z=z + self.zoom_offset,
+                                hashed=hashed)
         else:
             self.seen.add(hashed)
             self.pool.apply_async(
@@ -274,7 +282,9 @@ class MbtilesStorage(Storage):
         """Returns a callback that saves the rendered image."""
         def callback(contents):
             # Insert the rendered file into the database
-            self.mbtiles.insert(x=x, y=y, z=z, hashed=hashed,
+            self.mbtiles.insert(x=x, y=y,
+                                z=z + self.zoom_offset,
+                                hashed=hashed,
                                 data=buffer(contents))
         return callback
 
@@ -286,4 +296,6 @@ class MbtilesStorage(Storage):
             self._border_hashed = self.get_hash(image)
         else:
             # self._border_hashed will already be inserted
-            self.mbtiles.insert(x=x, y=y, z=z, hashed=self._border_hashed)
+            self.mbtiles.insert(x=x, y=y,
+                                z=z + self.zoom_offset,
+                                hashed=self._border_hashed)

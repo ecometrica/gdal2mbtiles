@@ -521,6 +521,35 @@ class TestWarpMbtiles(unittest.TestCase):
                 self.assertEqual(storage.mbtiles.metadata['x-minzoom'], '0')
                 self.assertEqual(storage.mbtiles.metadata['x-maxzoom'], '3')
 
+    def test_zoom_offset(self):
+        with NamedTemporaryFile(suffix='.mbtiles') as outputfile:
+            metadata = dict(
+                name='bluemarble-aligned',
+                type='baselayer',
+                version='1.0.0',
+                description='BlueMarble 2004-07 Aligned',
+                format='png',
+            )
+            warp_mbtiles(inputfile=self.inputfile, outputfile=outputfile.name,
+                         metadata=metadata,
+                         min_resolution=0, max_resolution=3, zoom_offset=2,
+                         renderer=TouchRenderer(suffix='.png'))
+            with MbtilesStorage(renderer=None,
+                                filename=outputfile.name) as storage:
+                self.assertEqual(
+                    set((z, x, y) for z, x, y, data in storage.mbtiles.all()),
+                    set([(2, 0, 0)] +
+                        [(3, x, y) for x in range(0, 2) for y in range(0, 2)] +
+                        [(4, x, y) for x in range(0, 4) for y in range(0, 4)] +
+                        [(5, x, y) for x in range(0, 8) for y in range(0, 8)])
+                )
+                self.assertEqual(
+                    storage.mbtiles.metadata['bounds'],
+                    '-180.0,-90.0,0.0,0.0'
+                )
+                self.assertEqual(storage.mbtiles.metadata['x-minzoom'], '2')
+                self.assertEqual(storage.mbtiles.metadata['x-maxzoom'], '5')
+
 
 class TestWarpPyramid(unittest.TestCase):
     def setUp(self):
