@@ -577,7 +577,7 @@ class VipsBand(Band):
         if win_ysize is None:
             win_ysize = image.Ysize() - yoff
 
-        band = image.extract_bands(self._band_no, 1)
+        band = image.extract_bands(band=self._band_no, nbands=1)
         area = band.extract_area(left=xoff, top=yoff,
                                  width=win_xsize, height=win_ysize)
 
@@ -615,8 +615,8 @@ class VipsDataset(Dataset):
         return self._image
 
     def GetRasterBand(self, i):
-        return VipsBand(band=super(Dataset, self).GetRasterBand(i),
-                        dataset=self, band_no=i-1)
+        return VipsBand(band=super(VipsDataset, self).GetRasterBand(i),
+                        dataset=self, band_no=(i - 1))
 
     def ReadAsArray(self, xoff=0, yoff=0, xsize=None, ysize=None,
                     buf_obj=None):
