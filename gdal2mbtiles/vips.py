@@ -671,7 +671,7 @@ class VipsDataset(Dataset):
     def upsample(self, resolution=None):
         """Upsamples the image to `resolution`."""
         return self._upsample(
-            ratios=self.GetTileScalingRatios(resolution=resolution, places=5)
+            ratios=self.GetScalingRatios(resolution=resolution, places=5)
         )
 
     def upsample_to_world(self):

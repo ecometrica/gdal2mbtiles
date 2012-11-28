@@ -785,29 +785,29 @@ class TestDataset(TestCase):
     def test_get_tile_scaling_ratios(self):
         # bluemarble.tif is a 1024 × 1024 whole-world map
         dataset = Dataset(inputfile=self.inputfile)
-        ratio = dataset.GetTileScalingRatios()
+        ratio = dataset.GetScalingRatios()
         self.assertAlmostEqual(ratio.x, 1.0)
         self.assertAlmostEqual(ratio.y, 1.0)
 
         # Test rounding
-        ratio = dataset.GetTileScalingRatios(places=5)
+        ratio = dataset.GetScalingRatios(places=5)
         self.assertEqual(ratio.x, 1.0)
         self.assertEqual(ratio.y, 1.0)
 
         # upsampling.tif is a 256 × 256 whole-world map
         dataset = Dataset(inputfile=self.upsamplingfile)
-        ratio = dataset.GetTileScalingRatios()
+        ratio = dataset.GetScalingRatios()
         self.assertAlmostEqual(ratio.x, 1.0)
         self.assertAlmostEqual(ratio.y, 1.0)
 
         # bluemarble-spanning-foreign.tif is a 154 × 154 partial map
         dataset = Dataset(inputfile=self.foreignfile)
-        ratio = dataset.GetTileScalingRatios()
+        ratio = dataset.GetScalingRatios()
         self.assertAlmostEqual(ratio.x, 4.0 / 3.0)
         self.assertAlmostEqual(ratio.y, 4.0 / 3.0)
 
         # Test rounding
-        ratio = dataset.GetTileScalingRatios(places=5)
+        ratio = dataset.GetScalingRatios(places=5)
         self.assertEqual(ratio.x, 1.33333)
         self.assertEqual(ratio.y, 1.33333)
 
