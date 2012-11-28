@@ -599,7 +599,7 @@ class Dataset(gdal.Dataset):
         return Extents(lower_left=XY(left, bottom),
                        upper_right=XY(right, top))
 
-    def GetTileScalingRatios(self, resolution=None, places=None):
+    def GetScalingRatios(self, resolution=None, places=None):
         """
         Get the scaling ratios required to upsample an image to `resolution`.
 
