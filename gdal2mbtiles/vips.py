@@ -583,7 +583,7 @@ class VipsBand(Band):
 
         return numpy.ndarray(shape=(win_xsize, win_ysize),
                              buffer=area.tobuffer(),
-                             dtype=area.NumPyType())
+                             dtype=band.NumPyType())
 
     # The next methods are there to prevent you from shooting yourself in the
     # foot.
@@ -635,9 +635,12 @@ class VipsDataset(Dataset):
         area = self.image.extract_area(left=xoff, top=yoff,
                                        width=xsize, height=ysize)
 
+        # Get the first band's datatype to be consistent with GDAL's behavior
+        datatype = self.GetRasterBand(1).NumPyDataType
+
         return numpy.ndarray(shape=(self.RasterCount, ysize, xsize),
                              buffer=area.tobuffer(),
-                             dtype=area.NumPyType())
+                             dtype=datatype)
 
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
