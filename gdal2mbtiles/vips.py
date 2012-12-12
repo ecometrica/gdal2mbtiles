@@ -407,8 +407,8 @@ class VImage(vipsCC.VImage.VImage):
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
 
-        output_width = int(round(self.Xsize() * xscale))
-        output_height = int(round(self.Ysize() * yscale))
+        output_width = int(ceil(self.Xsize() * xscale))
+        output_height = int(ceil(self.Ysize() * yscale))
 
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
@@ -655,8 +655,8 @@ class VipsDataset(Dataset):
             'to {dst_width} × {dst_height}'.format(
                 src_width=self.RasterXSize,
                 src_height=self.RasterYSize,
-                dst_width=int(round(self.RasterXSize * ratios.x)),
-                dst_height=int(round(self.RasterYSize * ratios.y))
+                dst_width=int(ceil(self.RasterXSize * ratios.x)),
+                dst_height=int(ceil(self.RasterYSize * ratios.y))
             )
         )
 
