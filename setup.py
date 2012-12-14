@@ -22,6 +22,9 @@ setup(
     # You also need certain dependencies that aren't in PyPi:
     # python-gdal, python-vipscc, libtiff5, optipng, pngquant
 
+    # HACK: We cannot use PyPi's GDAL package because it's terribly
+    # broken and doesn't build out of the box.
+
     entry_points={
         'console_scripts': [
             'gdal2mbtiles = gdal2mbtiles.main:main',
