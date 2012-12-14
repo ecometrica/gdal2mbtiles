@@ -1,3 +1,6 @@
 syntax: glob
 
 *.py[co]
+
+build/
+dist/

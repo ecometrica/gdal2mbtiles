@@ -212,7 +212,9 @@ def input_output(inputfile, outputfile):
             f.close()
 
 
-def main(args, configure_logging=None):
+def main(args=None, configure_logging=None):
+    if args is None:
+        args = sys.argv[1:]
     args = parse_args(args=args)
 
     if configure_logging is not None:
