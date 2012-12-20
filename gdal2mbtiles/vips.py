@@ -559,6 +559,14 @@ class VipsBand(Band):
 
         self._band_no = band_no
 
+    @property
+    def XSize(self):
+        return self._dataset.RasterXSize
+
+    @property
+    def YSize(self):
+        return self._dataset.RasterYSize
+
     def ReadAsArray(self, xoff=0, yoff=0, win_xsize=None, win_ysize=None,
                     buf_xsize=None, buf_ysize=None, buf_obj=None):
         """
@@ -582,8 +590,8 @@ class VipsBand(Band):
                                  width=win_xsize, height=win_ysize)
 
         return numpy.ndarray(shape=(win_xsize, win_ysize),
-                             buffer=area.tobuffer(),
-                             dtype=band.NumPyType())
+                             buffer=bytes(area.tobuffer()),
+                             dtype=band.NumPyType()).copy()
 
     # The next methods are there to prevent you from shooting yourself in the
     # foot.
@@ -639,7 +647,7 @@ class VipsDataset(Dataset):
         datatype = self.GetRasterBand(1).NumPyDataType
 
         return numpy.ndarray(shape=(self.RasterCount, ysize, xsize),
-                             buffer=area.tobuffer(),
+                             buffer=bytes(area.tobuffer()),
                              dtype=datatype)
 
     def _upsample(self, ratios):
