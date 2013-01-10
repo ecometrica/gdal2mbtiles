@@ -1,5 +1,19 @@
 # -*- coding: utf-8 -*-
 
+# Quickstart
+# ----------
+#
+# To turn any GDAL-readable file into an MBTiles file, run:
+#   $ gdal2mbtiles filename.tiff
+# This creates a filename.mbtiles that can be served from a TMS service like
+# Mapbox.
+#
+# You can explicitly specify an output filename:
+#   $ gdal2mbtiles input.tiff output.mbtiles
+#
+# You can also pipe in any GDAL-readable file:
+#   $ cat input.tiff | gdal2mbtiles > output.mbtiles
+#
 # Licensed to Ecometrica under one or more contributor license
 # agreements.  See the NOTICE file distributed with this work
 # for additional information regarding copyright ownership.
@@ -212,12 +226,12 @@ def input_output(inputfile, outputfile):
             f.close()
 
 
-def main(args=None, configure_logging=None):
+def main(args=None, use_logging=True):
     if args is None:
         args = sys.argv[1:]
     args = parse_args(args=args)
 
-    if configure_logging is not None:
+    if use_logging:
         configure_logging(args)
 
     # HACK: Import here, so that VIPS doesn't parse sys.argv!!!
