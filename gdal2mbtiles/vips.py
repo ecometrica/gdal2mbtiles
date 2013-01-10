@@ -667,6 +667,12 @@ class VipsDataset(Dataset):
                              buffer=bytes(area.tobuffer()),
                              dtype=datatype)
 
+    def colorize(self, colors):
+        """Replaces this image with a colorized version."""
+        with LibVips.disable_warnings():
+            nodata = self.GetRasterBand(1).GetNoDataValue()
+            self._image = colors.colorize(image=self.image, nodata=nodata)
+
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
@@ -1008,14 +1014,11 @@ class TmsPyramid(object):
         self.max_resolution = max_resolution
 
         self._dataset = None
-        self._image = None
         self._resolution = None
 
     def colorize(self, colors):
         """Replaces this image with a colorized version."""
-        with LibVips.disable_warnings():
-            nodata = self.dataset.GetRasterBand(1).GetNoDataValue()
-            self._image = colors.colorize(image=self.image, nodata=nodata)
+        return self.dataset.colorize(colors)
 
     @property
     def dataset(self):
