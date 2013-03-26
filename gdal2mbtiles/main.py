@@ -43,6 +43,11 @@ from shutil import copyfileobj
 import sys
 from tempfile import NamedTemporaryFile
 
+if __name__ == '__main__' and __package__ is None:
+    # HACK: Force this to work when called directly
+    import gdal2mbtiles
+    __package__ = gdal2mbtiles.__name__
+
 from .gdal import RESAMPLING_METHODS, SpatialReference
 from .mbtiles import Metadata
 from .types import rgba
@@ -287,3 +292,8 @@ def configure_logging(args):
 
     logging.basicConfig(level=level, format=fmt,
                         datefmt='%Y-%m-%d %H:%M:%S')
+
+
+if __name__ == '__main__':
+    retcode = main(args=sys.argv[1:])
+    sys.exit(retcode)

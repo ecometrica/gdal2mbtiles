@@ -18,8 +18,7 @@ __dir__ = os.path.dirname(__file__)
 class TestGdal2mbtilesScript(unittest.TestCase):
     def setUp(self):
         self.repo_dir = os.path.join(__dir__, os.path.pardir)
-        self.scripts_dir = os.path.join(self.repo_dir, 'scripts')
-        self.script = os.path.join(self.scripts_dir, 'gdal2mbtiles')
+        self.script = os.path.join(self.repo_dir, 'gdal2mbtiles', 'main.py')
 
         self.environ = os.environ.copy()
 
