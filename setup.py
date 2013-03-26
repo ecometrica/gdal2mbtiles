@@ -1,9 +1,18 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
+
 from setuptools import setup
 
 import gdal2mbtiles
 
+
+# Hack to prevent stupid TypeError: 'NoneType' object is not callable error on
+# exit of python setup.py test in multiprocessing/util.py _exit_function when
+# running python setup.py test (see
+# http://www.eby-sarna.com/pipermail/peak/2010-May/003357.html)
+import multiprocessing
+multiprocessing
 
 setup(
     name='gdal2mbtiles',
@@ -31,6 +40,7 @@ setup(
         ]
     },
 
+    test_suite='tests',
 
     classifiers=[
         'Development Status :: 5 - Production/Stable',
@@ -45,4 +55,3 @@ setup(
 
     zip_safe=True,
 )
-
