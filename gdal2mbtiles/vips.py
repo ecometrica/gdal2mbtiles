@@ -673,6 +673,7 @@ class VipsDataset(Dataset):
             nodata = self.GetRasterBand(1).GetNoDataValue()
             self._image = colors.colorize(image=self.image, nodata=nodata)
 
+
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
@@ -745,8 +746,27 @@ class VipsDataset(Dataset):
              pixel_sizes.y)
         ))
 
-        width = int(tile_extents.dimensions.x / pixel_sizes.x)
-        height = int(tile_extents.dimensions.y / pixel_sizes.y)
+        # Defining
+        epsilon_lower = 1e-4
+        epsilon_higher = 1 - epsilon_lower
+
+        # Verifying that the width and height are within an acceptable
+        # floating point error.
+        width = tile_extents.dimensions.x / pixel_sizes.x
+        height = tile_extents.dimensions.y / pixel_sizes.y
+        if epsilon_lower < (width % 1) < epsilon_higher:
+            raise AssertionError(
+                'width {0!r} is not within an acceptable range of '
+                'an integer'.format(width)
+            )
+        if epsilon_lower < (height % 1) < epsilon_higher:
+            raise AssertionError(
+                'height {0!r} is not within an acceptable range of '
+                'an integer'.format(height)
+            )
+
+        width = int(round(width))
+        height = int(round(height))
 
         if left == top == 0 and \
            width == self.RasterXSize and \
