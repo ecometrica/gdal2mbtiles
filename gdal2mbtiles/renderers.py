@@ -90,9 +90,10 @@ class JpegRenderer(Renderer):
             # Strip out alpha channel, otherwise transparent pixels turn white.
             image = image.extract_bands(band=0, nbands=3)
         with NamedTemporaryFile(suffix=self.suffix,
-                                dir=self.tempdir) as tempfile:
-            image.vips2jpeg(tempfile.name + self._vips_options)
-            return tempfile.read()
+                                dir=self.tempdir) as rendered:
+            fname = rendered.name.encode('utf-8') + self._vips_options
+            image.vips2jpeg(fname)
+            return rendered.read()
 
 
 class PngRenderer(Renderer):
@@ -168,7 +169,8 @@ class PngRenderer(Renderer):
         """Returns the rendered VIPS `image`."""
         with NamedTemporaryFile(suffix=self.suffix,
                                 dir=self.tempdir) as rendered:
-            image.vips2png(rendered.name + self._vips_options)
+            fname = rendered.name.encode('utf-8') + self._vips_options
+            image.vips2png(fname)
             filename = rendered.name
 
             if self.png8 is not False:
