@@ -102,7 +102,7 @@ class TestWarp(unittest.TestCase):
 
     def test_spatial_ref(self):
         root = warp(self.inputfile).get_root()
-        self.assertTrue('"EPSG","3785"' in root.find('.//TargetSRS').text)
+        self.assertTrue('"EPSG","3857"' in root.find('.//TargetSRS').text)
 
         root = warp(self.inputfile,
                     spatial_ref=SpatialReference.FromEPSG(4326)).get_root()
@@ -924,7 +924,7 @@ class TestSpatialReference(TestCase):
         self.assertEqual(SpatialReference.FromEPSG(4326), self.wgs84)
 
         # Web Mercator is not the same as WGS 84.
-        self.assertNotEqual(SpatialReference.FromEPSG(3785), self.wgs84)
+        self.assertNotEqual(SpatialReference.FromEPSG(3857), self.wgs84)
 
     def test_get_epsg_code(self):
         self.assertEqual(self.wgs84.GetEPSGCode(), 4326)

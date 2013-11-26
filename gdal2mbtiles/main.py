@@ -138,9 +138,9 @@ def parse_args(args):
                        help='Tile image format. Defaults to "png"')
 
     group = parser.add_argument_group(title='GDAL warp arguments')
-    group.add_argument('--spatial-reference', type=int, default=3785,
+    group.add_argument('--spatial-reference', type=int, default=3857,
                        help=('Destination EPSG spatial reference. '
-                             'Defaults to 3785'))
+                             'Defaults to 3857'))
     group.add_argument('--resampling',
                        default='near',
                        choices=RESAMPLING_METHODS.values(),
