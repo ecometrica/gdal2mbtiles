@@ -22,7 +22,7 @@ from __future__ import (absolute_import, division, print_function,
 
 
 # EPSG constants
-EPSG_WEB_MERCATOR = 3785
+EPSG_WEB_MERCATOR = 3857
 
 # Output constants
 TILE_SIDE = 256                 # in pixels

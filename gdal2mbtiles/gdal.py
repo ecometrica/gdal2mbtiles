@@ -178,9 +178,6 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
     ]
 
     # Warping to Mercator.
-    #
-    # Note that EPSG:3857 replaces this EPSG:3785 but GDAL doesn't know about
-    # it yet.
     if spatial_ref is None:
         spatial_ref = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
     warp_cmd.extend(['-t_srs', spatial_ref.GetEPSGString()])
@@ -804,7 +801,14 @@ class SpatialReference(osr.SpatialReference):
     def GetMinorCircumference(self):
         if self.IsProjected() == 0:
             return 2 * pi / self.GetAngularUnits()
-        return self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
+
+        semi_minor = self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
+        if self.GetEPSGCode() == 3857:
+            # Cancel the flattening of the spheroid.
+            # This is to account for the web mercator projection of points on
+            # a spheroid but interpretation of said points on a sphere.
+            return semi_minor / (1 - 1 / self.GetInvFlattening())
+        return semi_minor
 
     def GetWorldExtents(self):
         major = self.GetMajorCircumference() / 2
