@@ -790,6 +790,16 @@ class VipsDataset(Dataset):
             )
 
         logger.debug(
+            'Tile aligned at ({longitude}, {latitude})'.format(
+                longitude=tile_extents.lower_left.x,
+                latitude=tile_extents.upper_right.y,
+                x=((tile_extents.lower_left.x / pixel_sizes.x) + \
+                   (256 << (resolution))),
+                y=((256 << (resolution)) + \
+                   tile_extents.upper_right.y / pixel_sizes.y)
+            )
+        )
+        logger.debug(
             'Aligning within {width} × {height} at ({left}, {top})'.format(
                 width=width, height=height, left=left, top=top
             )
