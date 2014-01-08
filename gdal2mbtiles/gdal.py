@@ -673,16 +673,14 @@ class Dataset(gdal.Dataset):
 
         # Correct for origin, because you can't do modular arithmetic on
         # half-tiles.
-        extents = self.GetTiledExtents(transform=transform,
-                                       resolution=resolution)
         left, bottom = spatial_ref.OffsetPoint(*extents.lower_left)
         right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Divide by number of tiles
-        return Extents(lower_left=XY(int(left / tile_width),
-                                     int(bottom / tile_height)),
-                       upper_right=XY(int(right / tile_width),
-                                      int(top / tile_height)))
+        return Extents(lower_left=XY(int(round(left / tile_width)),
+                                     int(round(bottom / tile_height))),
+                       upper_right=XY(int(round(right / tile_width)),
+                                      int(round(top / tile_height))))
 
     def GetWorldScalingRatios(self, resolution=None, places=None):
         """
