@@ -41,8 +41,8 @@ gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
 
 
-from .constants import (EPSG_WEB_MERCATOR, GDALTRANSLATE,
-                        GDALWARP, TILE_SIDE)
+from .constants import (EPSG_WEB_MERCATOR, ESRI_102100_PROJ, ESRI_102113_PROJ,
+                        GDALTRANSLATE, GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
 from .types import Extents, GdalFormat, XY
@@ -779,6 +779,18 @@ class SpatialReference(osr.SpatialReference):
         epsg_string = self.GetEPSGString()
         if epsg_string:
             return int(epsg_string.split(':')[1])
+        else:
+            # HACK: The following is to cope with the fact that the Wkt
+            #       representation of the Web Mercator is different for
+            #       ESRI's WKID 102100 and EPSG's 3857 while both are
+            #       equivalent. Yet, Proj4 does not understand ESRI's
+            #       'mercator_auxiliary_sphere' projection name.
+            projcs_name = self.GetAttrValue(str('PROJCS'))
+            # Returning equivalent EPSG code
+            if projcs_name == ESRI_102100_PROJ:
+                return 3857
+            elif projcs_name == ESRI_102113_PROJ:
+                return 3785
 
     def GetEPSGString(self):
         if self.IsLocal() == 1:
@@ -788,8 +800,14 @@ class SpatialReference(osr.SpatialReference):
             cstype = b'GEOGCS'
         else:
             cstype = b'PROJCS'
-        return '{0}:{1}'.format(self.GetAuthorityName(cstype),
-                                self.GetAuthorityCode(cstype))
+
+        authority_name = self.GetAuthorityName(cstype)
+        authority_code = self.GetAuthorityCode(cstype)
+
+        if authority_name and authority_code:
+            return '{0}:{1}'.format(authority_name, authority_code)
+        else:
+            return None
 
     def GetMajorCircumference(self):
         if self.IsProjected() == 0:

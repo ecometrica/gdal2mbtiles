@@ -24,6 +24,10 @@ from __future__ import (absolute_import, division, print_function,
 # EPSG constants
 EPSG_WEB_MERCATOR = 3857
 
+# ESRI constants with their EPSG code equivalent
+ESRI_102113_PROJ = 'WGS_1984_Web_Mercator'                   # EPSG:3785
+ESRI_102100_PROJ = 'WGS_1984_Web_Mercator_Auxiliary_Sphere'  # EPSG:3857
+
 # Output constants
 TILE_SIDE = 256                 # in pixels
 
