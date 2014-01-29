@@ -434,7 +434,19 @@ class Dataset(gdal.Dataset):
                     dataset=self)
 
     def GetSpatialReference(self):
-        return SpatialReference(self.GetProjection())
+        try:
+            sr = SpatialReference(self.GetProjection())
+            sr.AutoIdentifyEPSG()
+            return sr
+        except RuntimeError as re:
+            if 'Unsupported SRS' in re.message:
+                projcs_name = sr.GetAttrValue(str('PROJCS'))
+                # Returning equivalent EPSG code
+                if projcs_name == ESRI_102100_PROJ:
+                    return SpatialReference.FromEPSG(3857)
+                elif projcs_name == ESRI_102113_PROJ:
+                    return SpatialReference.FromEPSG(3785)
+            raise GdalError(re.message)
 
     def GetCoordinateTransformation(self, dst_ref):
         return CoordinateTransformation(src_ref=self.GetSpatialReference(),
