@@ -4,3 +4,9 @@ syntax: glob
 
 build/
 dist/
+
+# virtualenv stuff
+bin/
+include/
+lib/
+local/

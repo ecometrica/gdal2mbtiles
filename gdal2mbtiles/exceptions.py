@@ -32,7 +32,7 @@ class CalledGdalError(CalledProcessError, GdalError):
     """Error when calling a GDAL command-line utility."""
     def __init__(self, returncode, cmd, output=None, error=None):
         super(CalledGdalError, self).__init__(returncode=returncode, cmd=cmd,
-                                            output=output)
+                                              output=output)
         self.error = error
 
     def __str__(self):

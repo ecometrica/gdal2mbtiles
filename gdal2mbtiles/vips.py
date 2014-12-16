@@ -673,7 +673,6 @@ class VipsDataset(Dataset):
             nodata = self.GetRasterBand(1).GetNoDataValue()
             self._image = colors.colorize(image=self.image, nodata=nodata)
 
-
     def _upsample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
@@ -793,9 +792,9 @@ class VipsDataset(Dataset):
             'Tile aligned at ({longitude}, {latitude})'.format(
                 longitude=tile_extents.lower_left.x,
                 latitude=tile_extents.upper_right.y,
-                x=((tile_extents.lower_left.x / pixel_sizes.x) + \
+                x=((tile_extents.lower_left.x / pixel_sizes.x) +
                    (256 << (resolution))),
-                y=((256 << (resolution)) + \
+                y=((256 << (resolution)) +
                    tile_extents.upper_right.y / pixel_sizes.y)
             )
         )

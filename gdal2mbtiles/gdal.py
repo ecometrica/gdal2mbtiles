@@ -92,7 +92,8 @@ def preprocess(inputfile, outputfile, band=None, spatial_ref=None,
         )
 
     # Warp
-    if spatial_ref is not None and dataset.GetSpatialReference() != spatial_ref:
+    if spatial_ref is not None and \
+            dataset.GetSpatialReference() != spatial_ref:
         functions.append(
             ('Reprojecting to EPSG:{0}'.format(spatial_ref.GetEPSGCode()),
              partial(warp,
@@ -914,7 +915,7 @@ class VRT(object):
                     cmd,
                     '-q',                   # Quiet - FIXME: Use logging
                     '-of', 'GTiff',         # Output to GeoTIFF
-                    '-co', 'BIGTIFF=IF_NEEDED',  # Use BigTIFF if needed
+                    '-co', 'BIGTIFF=IF_SAFER',  # Use BigTIFF when necessary
                     # gdal_translate does not support the following
                     # '-multi',               # Use multiple processes
                     # '-overwrite',           # Overwrite outputfile

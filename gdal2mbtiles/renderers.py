@@ -124,7 +124,9 @@ class PngRenderer(Renderer):
         _compression = int(compression)
         if not 0 <= _compression <= 9:
             raise ValueError(
-                'compression must be between 0 and 9: {0!r}'.format(compression)
+                'compression must be between 0 and 9: {0!r}'.format(
+                    compression
+                )
             )
         self.compression = _compression
 
