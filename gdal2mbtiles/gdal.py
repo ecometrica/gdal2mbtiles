@@ -915,7 +915,7 @@ class VRT(object):
                     cmd,
                     '-q',                   # Quiet - FIXME: Use logging
                     '-of', 'GTiff',         # Output to GeoTIFF
-                    '-co', 'BIGTIFF=IF_SAFER',  # Use BigTIFF when necessary
+                    '-co', 'BIGTIFF=IF_SAFER',  # Use BigTIFF if >2GB
                     # gdal_translate does not support the following
                     # '-multi',               # Use multiple processes
                     # '-overwrite',           # Overwrite outputfile
