@@ -41,8 +41,7 @@ gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
 
 
-from .constants import (EPSG_WEB_MERCATOR, ESRI_102100_PROJ, ESRI_102113_PROJ,
-                        GDALTRANSLATE, GDALWARP, TILE_SIDE)
+from .constants import EPSG_WEB_MERCATOR, GDALTRANSLATE, GDALWARP, TILE_SIDE
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
 from .types import Extents, GdalFormat, XY
@@ -442,11 +441,10 @@ class Dataset(gdal.Dataset):
         except RuntimeError as re:
             if 'Unsupported SRS' in re.message:
                 projcs_name = sr.GetAttrValue(str('PROJCS'))
-                # Returning equivalent EPSG code
-                if projcs_name == ESRI_102100_PROJ:
-                    return SpatialReference.FromEPSG(3857)
-                elif projcs_name == ESRI_102113_PROJ:
-                    return SpatialReference.FromEPSG(3785)
+                # Equivalent to EPSG:3857
+                web_mercator = SpatialReference(EPSG_WEB_MERCATOR)
+                if sr.IsSame(web_mercator):
+                    return web_mercator
             raise GdalError(re.message)
 
     def GetCoordinateTransformation(self, dst_ref):
