@@ -59,12 +59,14 @@ COLORING_METHODS = {
     'palette': 'ColorPalette',
 }
 
+
 def coloring_arg(s):
     """Validates --coloring"""
     from gdal2mbtiles import vips
     if s is None:
         return None
     return getattr(vips, COLORING_METHODS[s])
+
 
 def color_arg(s):
     """Validates --color"""
@@ -91,6 +93,7 @@ def color_arg(s):
 
     return band_value, color
 
+
 def colorize_band_arg(s):
     """Validates --colorize-band"""
     try:
@@ -98,7 +101,9 @@ def colorize_band_arg(s):
     except ValueError:
         raise argparse.ArgumentTypeError("invalid int value: '{0}'".format(s))
     if result <= 0:
-        raise argparse.ArgumentTypeError("'{0}' must be 1 or greater".format(s))
+        raise argparse.ArgumentTypeError(
+            "'{0}' must be 1 or greater".format(s)
+        )
     return result
 
 
@@ -285,10 +290,10 @@ def configure_logging(args):
 
     if args.verbose == 1:
         level = logging.INFO
-        fmt='%(message)s'
+        fmt = '%(message)s'
     else:
         level = logging.DEBUG
-        fmt='%(asctime)s %(module)s: %(message)s'
+        fmt = '%(asctime)s %(module)s: %(message)s'
 
     logging.basicConfig(level=level, format=fmt,
                         datefmt='%Y-%m-%d %H:%M:%S')
