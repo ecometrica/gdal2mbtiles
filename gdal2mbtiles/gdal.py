@@ -41,7 +41,8 @@ gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
 
 
-from .constants import EPSG_WEB_MERCATOR, GDALTRANSLATE, GDALWARP, TILE_SIDE
+from .constants import (EPSG_WEB_MERCATOR, ESRI_102113_PROJ, ESRI_102100_PROJ,
+                        GDALTRANSLATE, GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
 from .types import Extents, GdalFormat, XY
@@ -440,10 +441,10 @@ class Dataset(gdal.Dataset):
             return sr
         except RuntimeError as re:
             if 'Unsupported SRS' in re.message:
-                projcs_name = sr.GetAttrValue(str('PROJCS'))
                 # Equivalent to EPSG:3857
-                web_mercator = SpatialReference(EPSG_WEB_MERCATOR)
-                if sr.IsSame(web_mercator):
+                web_mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
+                sr = sr.FromEPSG(sr.GetEPSGCode())
+                if web_mercator.IsSame(sr):
                     return web_mercator
             raise GdalError(re.message)
 
@@ -457,10 +458,9 @@ class Dataset(gdal.Dataset):
         return super(Dataset, self).GetGeoTransform()
 
     def SetGeoTransform(self, geotransform, local=False):
-        if local is True:
-            # Write to the local shadow, so we don't overwrite the file.
-            self._geotransform = geotransform
-        else:
+        self._geotransform = geotransform
+        if local is False:
+            # Write to the file only if we want/can.
             super(Dataset, self).SetGeoTransform(geotransform)
 
     def GetNativeResolution(self, transform=None, maximum=None):
