@@ -148,7 +148,7 @@ class PngRenderer(Renderer):
         _optimize = optimize
         if _optimize is None:
             _optimize = False
-        if optimize is not False:
+        if _optimize is not False:
             _optimize = int(_optimize)
             if not 0 <= _optimize <= 7:
                 raise ValueError(
