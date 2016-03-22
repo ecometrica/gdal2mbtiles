@@ -18,16 +18,17 @@ tile server. MapBox provides one called TileStream_.
 Installation
 ============
 
-You can get a copy of the source by using::
+Using pip::
+
+    $ pip install gdal2mbtiles
+
+From source::
 
     $ git clone https://github.com/ecometrica/gdal2mbtiles.git
-
-Note that this program requires Python 2.7 or higher.
-
-Installation::
-
     $ cd gdal2mbtiles
     $ python setup.py install
+
+Note that this program requires Python 2.7 or higher.
 
 
 External Dependencies
