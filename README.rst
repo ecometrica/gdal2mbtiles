@@ -21,6 +21,8 @@ Installation
 Using pip::
 
     $ pip install gdal2mbtiles
+    
+ PyPi package page https://pypi.python.org/pypi/gdal2mbtiles/
 
 From source::
 
