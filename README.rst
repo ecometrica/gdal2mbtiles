@@ -18,9 +18,17 @@ tile server. MapBox provides one called TileStream_.
 Installation
 ============
 
-You can get a copy of the source by using::
+Using pip::
+
+    $ pip install gdal2mbtiles
+    
+ PyPi package page https://pypi.python.org/pypi/gdal2mbtiles/
+
+From source::
 
     $ git clone https://github.com/ecometrica/gdal2mbtiles.git
+    $ cd gdal2mbtiles
+    $ python setup.py install
 
 Note that this program requires Python 2.7 or higher.
 
@@ -56,6 +64,72 @@ to optimize the resulting PNG tiles.
 Under Debian or Ubuntu, run the following to install them::
 
     $ sudo apt-get install libtiff5 optipng pngquant
+
+
+Command Line Interface
+======================
+
+.. code-block:: console
+
+    $ gdal2mbtiles --help
+    usage: gdal2mbtiles [-h] [-v] [--name NAME] [--description DESCRIPTION]
+                        [--layer-type {baselayer,overlay}] [--version VERSION]
+                        [--format {jpg,png}]
+                        [--spatial-reference SPATIAL_REFERENCE]
+                        [--resampling {near,bilinear,cubic,cubicspline,lanczos}]
+                        [--min-resolution MIN_RESOLUTION]
+                        [--max-resolution MAX_RESOLUTION] [--fill-borders]
+                        [--no-fill-borders] [--zoom-offset N]
+                        [--coloring {gradient,palette,exact}]
+                        [--color BAND-VALUE:HTML-COLOR]
+                        [--colorize-band COLORIZE-BAND]
+                        [INPUT] [OUTPUT]
+
+    Converts a GDAL-readable into an MBTiles file
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -v, --verbose         explain what is being done
+
+    Positional arguments:
+      INPUT                 GDAL-readable file.
+      OUTPUT                Output filename. Defaults to INPUT.mbtiles
+
+    MBTiles metadata arguments:
+      --name NAME           Human-readable name of the tileset. Defaults to INPUT
+      --description DESCRIPTION
+                            Description of the layer. Defaults to ""
+      --layer-type {baselayer,overlay}
+                            Type of layer. Defaults to "overlay"
+      --version VERSION     Version of the tileset. Defaults to "1.0.0"
+      --format {jpg,png}    Tile image format. Defaults to "png"
+
+    GDAL warp arguments:
+      --spatial-reference SPATIAL_REFERENCE
+                            Destination EPSG spatial reference. Defaults to 3857
+      --resampling {near,bilinear,cubic,cubicspline,lanczos}
+                            Resampling algorithm for warping. Defaults to "near"
+                            (nearest-neighbour)
+
+    Rendering arguments:
+      --min-resolution MIN_RESOLUTION
+                            Minimum resolution to render and slice. Defaults to
+                            None (do not downsample)
+      --max-resolution MAX_RESOLUTION
+                            Maximum resolution to render and slice. Defaults to
+                            None (do not upsample)
+      --fill-borders        Fill image to whole world with empty tiles. Default.
+      --no-fill-borders     Do not add borders to fill image.
+      --zoom-offset N       Offset zoom level by N to fit unprojected images to
+                            square maps. Defaults to 0.
+
+    Coloring arguments:
+      --coloring {gradient,palette,exact}
+                            Coloring algorithm.
+      --color BAND-VALUE:HTML-COLOR
+                            Examples: --color="0:#ff00ff" --color=255:red
+      --colorize-band COLORIZE-BAND
+                            Raster band to colorize. Defaults to 1
 
 
 Reporting bugs and submitting patches
