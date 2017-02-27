@@ -455,8 +455,8 @@ class TestDataset(TestCase):
         # bluemarble.tif is a 1024 × 1024 whole-world map
         dataset = Dataset(inputfile=self.inputfile)
         self.assertEqual(dataset.GetPixelDimensions(),
-                         XY(x=39135.758476562499709,
-                            y=-39135.758476562499709))
+                         XY(x=39135.758476562485157,
+                            y=-39135.758476562485157))
 
         # upsampling.tif is a 256 × 256 whole-world map
         dataset = Dataset(inputfile=self.upsamplingfile)
