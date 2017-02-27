@@ -184,10 +184,10 @@ class TestVipsDataset(GdalTestCase):
 
         self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
 
-    def test_upsample(self):
+    def test_resample(self):
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
         dataset = VipsDataset(inputfile=self.foreignfile)
-        dataset.upsample(resolution=None)
+        dataset.resample(resolution=None)
         self.assertEqual(dataset.RasterXSize, dataset.image.Xsize())
         self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
         self.assertEqual(dataset.RasterXSize, 512)

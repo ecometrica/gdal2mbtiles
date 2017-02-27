@@ -673,7 +673,7 @@ class VipsDataset(Dataset):
             nodata = self.GetRasterBand(1).GetNoDataValue()
             self._image = colors.colorize(image=self.image, nodata=nodata)
 
-    def _upsample(self, ratios):
+    def _resample(self, ratios):
         if ratios == XY(x=1.0, y=1.0):
             # No upsampling needed
             return
@@ -707,20 +707,20 @@ class VipsDataset(Dataset):
             self.SetLocalSizes(xsize=self._image.Xsize(),
                                ysize=self._image.Ysize())
 
-    def upsample(self, resolution=None):
-        """Upsamples the image to `resolution`."""
-        return self._upsample(
+    def resample(self, resolution=None):
+        """Resamples the image to `resolution`."""
+        return self._resample(
             ratios=self.GetScalingRatios(resolution=resolution, places=5)
         )
 
-    def upsample_to_world(self):
-        """Upsamples the image to native TMS resolution for the whole world."""
+    def resample_to_world(self):
+        """Resamples the image to native TMS resolution for the whole world."""
         ratios = self.GetWorldScalingRatios()
         if ratios == XY(x=1.0, y=1.0):
-            # No upsampling needed
+            # No resampling needed
             return
 
-        result = self._upsample(ratios=ratios)
+        result = self._resample(ratios=ratios)
 
         # Force world to be full width by changing pixel width
         world = self.GetSpatialReference().GetWorldExtents()
