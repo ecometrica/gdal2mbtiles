@@ -692,8 +692,13 @@ class VipsDataset(Dataset):
         )
 
         with LibVips.disable_warnings():
-            self._image = self.image.stretch(xscale=ratios.x,
-                                             yscale=ratios.y)
+            if ratios > XY(x=1.0, y=1.0):
+                self._image = self.image.stretch(xscale=ratios.x,
+                                                 yscale=ratios.y)
+            else:
+                self._image = self.image.shrink(xscale=ratios.x,
+                                                yscale=ratios.y)
+
             # Fix the dataset's metadata
             geotransform = list(self.GetGeoTransform())
             geotransform[1] = width / self._image.Xsize()    # pixel width
