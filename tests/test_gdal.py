@@ -454,21 +454,21 @@ class TestDataset(TestCase):
     def test_get_pixel_dimensions(self):
         # bluemarble.tif is a 1024 × 1024 whole-world map
         dataset = Dataset(inputfile=self.inputfile)
-        self.assertEqual(dataset.GetPixelDimensions(),
-                         XY(x=39135.758476562485157,
-                            y=-39135.758476562485157))
+        pixel_size = dataset.GetPixelDimensions()
+        self.assertAlmostEqual(pixel_size.x, 39135.7584766)
+        self.assertAlmostEqual(pixel_size.y, -39135.7584766)
 
         # upsampling.tif is a 256 × 256 whole-world map
         dataset = Dataset(inputfile=self.upsamplingfile)
-        self.assertEqual(dataset.GetPixelDimensions(),
-                         XY(x=156543.033906249998836,
-                            y=-156543.033906249998836))
+        pixel_size = dataset.GetPixelDimensions()
+        self.assertAlmostEqual(pixel_size.x, 156543.0339062)
+        self.assertAlmostEqual(pixel_size.y, -156543.0339062)
 
         # bluemarble-spanning-foreign.tif is a 154 × 154 partial map
         dataset = Dataset(inputfile=self.foreignfile)
-        self.assertEqual(dataset.GetPixelDimensions(),
-                         XY(x=104362.022604166661040,
-                            y=-104362.022604166661040))
+        pixel_size = dataset.GetPixelDimensions()
+        self.assertAlmostEqual(pixel_size.x, 104362.0226042)
+        self.assertAlmostEqual(pixel_size.y, -104362.0226042)
 
     def test_pixel_coordinates(self):
         dataset = Dataset(inputfile=self.inputfile)
