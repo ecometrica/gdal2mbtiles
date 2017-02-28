@@ -25,7 +25,7 @@ from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
 from itertools import groupby
 import logging
-from math import ceil
+from math import ceil, floor
 from multiprocessing import cpu_count
 from operator import itemgetter
 from tempfile import NamedTemporaryFile
@@ -424,8 +424,14 @@ class VImage(vipsCC.VImage.VImage):
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
 
-        output_width = int(ceil(self.Xsize() * xscale))
-        output_height = int(ceil(self.Ysize() * yscale))
+        if xscale >= 1:
+            output_width = int(ceil(self.Xsize() * xscale))
+        else:
+            output_width = int(floor(self.Xsize() * xscale))
+        if yscale >= 1:
+            output_height = int(ceil(self.Ysize() * yscale))
+        else:
+            output_height = int(floor(self.Xsize() * yscale))
 
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
@@ -681,13 +687,19 @@ class VipsDataset(Dataset):
         extents = self.GetExtents()
         width, height = extents.dimensions
 
+        if ratios > XY(x=1.0, y=1.0):
+            dst_width = int(ceil(self.RasterXSize * ratios.x))
+            dst_height = int(ceil(self.RasterYSize * ratios.y))
+        else:
+            dst_width = int(floor(self.RasterXSize * ratios.x))
+            dst_height = int(floor(self.RasterYSize * ratios.y))
         logger.debug(
             'Resizing from {src_width} × {src_height} '
             'to {dst_width} × {dst_height}'.format(
                 src_width=self.RasterXSize,
                 src_height=self.RasterYSize,
-                dst_width=int(ceil(self.RasterXSize * ratios.x)),
-                dst_height=int(ceil(self.RasterYSize * ratios.y))
+                dst_width=dst_width,
+                dst_height=dst_height
             )
         )
 
