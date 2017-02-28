@@ -177,6 +177,9 @@ class TestVipsDataset(GdalTestCase):
 
         self.foreignfile = os.path.join(__dir__,
                                         'bluemarble-foreign.tif')
+        self.slightlytoobigfile = os.path.join(
+            __dir__, 'bluemarble-slightly-too-big.tif'
+        )
 
         self.spanningforeignfile = os.path.join(
             __dir__, 'bluemarble-spanning-foreign.tif'
@@ -184,7 +187,7 @@ class TestVipsDataset(GdalTestCase):
 
         self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
 
-    def test_resample(self):
+    def test_upsample(self):
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
         dataset = VipsDataset(inputfile=self.foreignfile)
         dataset.resample(resolution=None)
@@ -192,6 +195,20 @@ class TestVipsDataset(GdalTestCase):
         self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
         self.assertEqual(dataset.RasterXSize, 512)
         self.assertEqual(dataset.RasterYSize, 512)
+
+    def test_downsample(self):
+        """
+        Test that a 258x258 file will get downsampled to
+        256x256 instead of upsampled to the next resolution.
+        Because the pixel size is within error tolerance
+        of the lower resolution's pixel size
+        """
+        dataset = VipsDataset(inputfile=self.slightlytoobigfile)
+        dataset.resample(resolution=None)
+        self.assertEqual(dataset.RasterXSize, dataset.image.Xsize())
+        self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
+        self.assertEqual(dataset.RasterXSize, 256)
+        self.assertEqual(dataset.RasterYSize, 256)
 
     def test_align_to_grid(self):
         with LibVips.disable_warnings():
