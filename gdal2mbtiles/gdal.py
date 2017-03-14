@@ -465,8 +465,10 @@ class Dataset(gdal.Dataset):
 
     def GetNativeResolution(self, transform=None, maximum=None):
         """
-        Get a native destination resolution that does not reduce the precision
-        of the source data.
+        of the source data; this usually means upsampling the data, but if the
+        pixel dimensions are slightly smaller than a given resolution, and
+        equal within error tolerance, that resolution will get chosen as the
+        native one.
         """
         # Get the source projection's units for a 1x1 pixel, assuming square
         # pixels.

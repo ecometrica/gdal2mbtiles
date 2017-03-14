@@ -187,7 +187,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
         warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
                             band=band, spatial_ref=spatial_ref,
                             resampling=resampling, compress='LZW')
-        preprocessor = partial(upsample_after_warp,
+        preprocessor = partial(resample_after_warp,
                                whole_world=dataset.IsWholeWorld())
         return image_mbtiles(inputfile=warped, outputfile=outputfile,
                              metadata=metadata,
@@ -243,7 +243,7 @@ def warp_pyramid(inputfile, outputdir, colors=None, band=None,
         warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
                             band=band, spatial_ref=spatial_ref,
                             resampling=resampling, compress='LZW')
-        preprocessor = partial(upsample_after_warp,
+        preprocessor = partial(resample_after_warp,
                                whole_world=dataset.IsWholeWorld())
         return image_pyramid(inputfile=warped, outputdir=outputdir,
                              min_resolution=min_resolution,
@@ -289,7 +289,7 @@ def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
         warped = preprocess(inputfile=inputfile, outputfile=tempfile.name,
                             band=band, spatial_ref=spatial_ref,
                             resampling=resampling, compress='LZW')
-        preprocessor = partial(upsample_after_warp,
+        preprocessor = partial(resample_after_warp,
                                whole_world=dataset.IsWholeWorld())
         return image_slice(inputfile=warped, outputdir=outputdir,
                            colors=colors, renderer=renderer,
@@ -299,17 +299,17 @@ def warp_slice(inputfile, outputdir, fill_borders=None, colors=None, band=None,
 
 # Preprocessors
 
-def upsample_after_warp(pyramid, colors, whole_world, **kwargs):
+def resample_after_warp(pyramid, colors, whole_world, **kwargs):
     resolution = pyramid.dataset.GetNativeResolution()
     if whole_world:
-        # We must upsample the image to fit whole tiles, even if this makes the
+        # We must resample the image to fit whole tiles, even if this makes the
         # extents of the image go PAST the full world.
         #
         # This is because GDAL sometimes reprojects from a whole world image
         # into a partial world image, due to rounding errors.
-        pyramid.dataset.upsample_to_world()
+        pyramid.dataset.resample_to_world()
     else:
-        pyramid.dataset.upsample(resolution=resolution)
+        pyramid.dataset.resample(resolution=resolution)
     colorize(pyramid=pyramid, colors=colors)
     pyramid.dataset.align_to_grid(resolution=resolution)
     return pyramid
