@@ -424,14 +424,8 @@ class VImage(vipsCC.VImage.VImage):
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
 
-        if xscale >= 1:
-            output_width = int(ceil(self.Xsize() * xscale))
-        else:
-            output_width = int(floor(self.Xsize() * xscale))
-        if yscale >= 1:
-            output_height = int(ceil(self.Ysize() * yscale))
-        else:
-            output_height = int(floor(self.Xsize() * yscale))
+        output_width = int(ceil(self.Xsize() * xscale))
+        output_height = int(ceil(self.Ysize() * yscale))
 
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
