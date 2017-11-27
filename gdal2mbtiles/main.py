@@ -148,7 +148,7 @@ def parse_args(args):
                              'Defaults to 3857'))
     group.add_argument('--resampling',
                        default='near',
-                       choices=RESAMPLING_METHODS.values(),
+                       choices=list(RESAMPLING_METHODS.values()),
                        help=('Resampling algorithm for warping. '
                              'Defaults to "near" (nearest-neighbour)'))
 

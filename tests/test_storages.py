@@ -51,7 +51,7 @@ class TestSimpleFileStorage(unittest.TestCase):
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.assertEqual(self.storage.get_hash(image=image),
-                         long('f1d3ff8443297732862df21dc4e57262', base=16))
+                         int('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
         image = VImage.new_rgba(width=1, height=1,
@@ -289,7 +289,7 @@ class TestMbtilesStorage(unittest.TestCase):
         image = VImage.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.assertEqual(self.storage.get_hash(image=image),
-                         long('f1d3ff8443297732862df21dc4e57262', base=16))
+                         int('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
         # We must create this on disk

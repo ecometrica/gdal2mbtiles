@@ -159,7 +159,7 @@ class LibVips(object):
             im_affinei.restype = c_int
             self.functions['im_affinei'] = im_affinei
 
-        return im_affinei(c_void_p(long(input)), c_void_p(long(output)),
+        return im_affinei(c_void_p(int(input)), c_void_p(int(output)),
                           interpolate,
                           a, b, c, d, dx, dy,
                           ox, oy, ow, oh)
@@ -170,7 +170,7 @@ class LibVips(object):
 
     def set_concurrency(self, processes):
         """Sets the number of threads used for computations."""
-        if not isinstance(processes, (int, long)) or processes < 0:
+        if not isinstance(processes, int) or processes < 0:
             raise ValueError(
                 'Must provide a positive integer for processes: {0}'.format(
                     processes
@@ -214,7 +214,7 @@ class VImage(vipsCC.VImage.VImage):
         if VIPS.get_concurrency() == 0:
             # Override auto-detection from environ and argv.
             VIPS.set_concurrency(processes=cpu_count())
-        args = [a.encode('utf-8') if isinstance(a, unicode) else a
+        args = [a.encode('utf-8') if isinstance(a, str) else a
                 for a in args]
         with TIFF.disable_warnings():
             super(VImage, self).__init__(*args, **kwargs)
@@ -262,7 +262,7 @@ class VImage(vipsCC.VImage.VImage):
             datatype = dataset.GetRasterBand(band).NumPyDataType
             if image2.NumPyType == datatype:
                 return image2
-            types = dict((v, k) for k, v in cls.NUMPY_TYPES.iteritems())
+            types = dict((v, k) for k, v in cls.NUMPY_TYPES.items())
             image3 = VImage.frombuffer(image2.tobuffer(),
                                        width=image2.Xsize(),
                                        height=image2.Ysize(),
@@ -339,7 +339,7 @@ class VImage(vipsCC.VImage.VImage):
 
     def embed(self, fill, left, top, width, height):
         """Returns a new VImage with this VImage embedded within it."""
-        if isinstance(fill, basestring):
+        if isinstance(fill, str):
             if fill not in self.FILL_OPTIONS:
                 raise ValueError('Invalid fill: {0!r}'.format(fill))
             fill = self.FILL_OPTIONS[fill]
@@ -537,17 +537,17 @@ class VImage(vipsCC.VImage.VImage):
         return self.NUMPY_TYPES[self.BandFmt()]
 
     def vips2jpeg(self, out):
-        if isinstance(out, unicode):
+        if isinstance(out, str):
             out = out.encode('utf-8')
         return super(VImage, self).vips2jpeg(out)
 
     def vips2png(self, out):
-        if isinstance(out, unicode):
+        if isinstance(out, str):
             out = out.encode('utf-8')
         return super(VImage, self).vips2png(out)
 
     def write(self, *args):
-        args = [a.encode('utf-8') if isinstance(a, unicode) else a
+        args = [a.encode('utf-8') if isinstance(a, str) else a
                 for a in args]
         return super(VImage, self).write(*args)
 
@@ -888,8 +888,8 @@ class TmsTiles(object):
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
         with LibVips.disable_warnings():
-            for y in xrange(0, self.image_height, self.tile_height):
-                for x in xrange(0, self.image_width, self.tile_width):
+            for y in range(0, self.image_height, self.tile_height):
+                for x in range(0, self.image_width, self.tile_width):
                     out = self.image.extract_area(
                         x, y,                    # left, top offsets
                         self.tile_width, self.tile_height
@@ -943,7 +943,7 @@ class TmsTiles(object):
         parent_resolution = parent.resolution
         parent_size = parent.image.BufferSize()
 
-        for res in reversed(range(self.resolution - levels, self.resolution)):
+        for res in reversed(list(range(self.resolution - levels, self.resolution))):
             offset /= 2.0
             shrunk = image.shrink(xscale=0.5, yscale=0.5)
             image = shrunk.tms_align(tile_width=self.tile_width,
@@ -1101,7 +1101,7 @@ class TmsPyramid(object):
                 levels=(self.resolution - max_resolution),
             )
 
-            for res in reversed(range(min_resolution, max_resolution + 1)):
+            for res in reversed(list(range(min_resolution, max_resolution + 1))):
                 logger.debug(
                     'Slicing at downsampled resolution {resolution}: '
                     '{width} × {height}'.format(
@@ -1298,7 +1298,7 @@ class ColorBase(dict):
     def _colors(self, band):
         """Returns a list of (band_value, color) for `band`"""
         colors = ColorList((band_value, getattr(color, band))
-                           for band_value, color in self.iteritems())
+                           for band_value, color in self.items())
         colors.sort()
         return colors
 

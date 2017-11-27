@@ -161,7 +161,7 @@ class Metadata(object, DictMixin):
     @classmethod
     def detect(cls, mbtiles):
         """Returns the Metadata version detected from `mbtiles`."""
-        return cls._detect(keys=cls(mbtiles=mbtiles).keys())
+        return cls._detect(keys=list(cls(mbtiles=mbtiles).keys()))
 
     @classmethod
     def all(cls):
@@ -180,7 +180,7 @@ class Metadata(object, DictMixin):
     @classmethod
     def latest(cls):
         """Returns the latest Metadata class."""
-        return sorted(cls.all().items(),
+        return sorted(list(cls.all().items()),
                       key=(lambda k: LooseVersion(k[0])),
                       reverse=True)[0][1]
 
@@ -249,7 +249,7 @@ class Metadata_1_1(Metadata_1_0):
         return value
 
     def _clean_bounds(self, value, places=5):
-        if isinstance(value, basestring):
+        if isinstance(value, str):
             left, bottom, right, top = [float(b) for b in value.split(',')]
         else:
             left, bottom, right, top = value
@@ -370,7 +370,7 @@ class MBTiles(object):
         try:
             self._conn.executescript(
                 '\n'.join('PRAGMA {0} = {1};'.format(k, v)
-                          for k, v in options.iteritems())
+                          for k, v in options.items())
             )
         except sqlite3.DatabaseError:
             self.close(remove_journal=False)
@@ -384,7 +384,7 @@ class MBTiles(object):
     def create(cls, filename, metadata, version=None):
         """Create a new MBTiles file. See `Metadata`"""
         if version is None:
-            version = cls.Metadata._detect(keys=metadata.keys())
+            version = cls.Metadata._detect(keys=list(metadata.keys()))
         mbtiles = cls._create(filename=filename, version=version)
         mbtiles.metadata._setup(metadata)
         return mbtiles

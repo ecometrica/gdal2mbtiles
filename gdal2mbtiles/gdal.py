@@ -185,12 +185,12 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
 
     # Resampling method
     if resampling is not None:
-        if not isinstance(resampling, basestring):
+        if not isinstance(resampling, str):
             try:
                 resampling = RESAMPLING_METHODS[resampling]
             except KeyError:
                 raise UnknownResamplingMethodError(resampling)
-        elif resampling not in RESAMPLING_METHODS.values():
+        elif resampling not in list(RESAMPLING_METHODS.values()):
             raise UnknownResamplingMethodError(resampling)
         warp_cmd.extend(['-r', resampling])
 
@@ -343,7 +343,7 @@ class Band(gdal.Band):
         """Returns the next `value` expressible in this band"""
         datatype = self.NumPyDataType
         if issubclass(datatype, numpy.integer):
-            if not isinstance(value, (int, long, numpy.integer)):
+            if not isinstance(value, (int, numpy.integer)):
                 raise TypeError(
                     'value {0!r} must be compatible with {1}'.format(
                         value, datatype.__name__
@@ -362,7 +362,7 @@ class Band(gdal.Band):
             return value + 1
 
         elif issubclass(datatype, numpy.floating):
-            if not isinstance(value, (int, long, numpy.integer,
+            if not isinstance(value, (int, numpy.integer,
                                       float, numpy.floating)):
                 raise TypeError(
                     "value {0!r} must be compatible with {1}".format(
@@ -398,7 +398,7 @@ class Dataset(gdal.Dataset):
         # Open the input file and read some metadata
         open(inputfile, 'r').close()  # HACK: GDAL gives a useless exception
 
-        if isinstance(inputfile, unicode):
+        if isinstance(inputfile, str):
             inputfile = inputfile.encode('utf-8')
         try:
             # Since this is a SWIG object, clone the ``this`` pointer
@@ -555,8 +555,8 @@ class Dataset(gdal.Dataset):
                                            transform=transform)
         lower_right = self.PixelCoordinates(x_size, y_size,
                                             transform=transform)
-        x_values, y_values = zip(upper_left, upper_right,
-                                 lower_left, lower_right)
+        x_values, y_values = list(zip(upper_left, upper_right,
+                                 lower_left, lower_right))
 
         # Return lower-left and upper-right extents
         return Extents(lower_left=XY(min(x_values), min(y_values)),
@@ -748,9 +748,9 @@ class Dataset(gdal.Dataset):
         data_extents = self.GetTmsExtents(resolution=resolution,
                                           transform=transform)
         return (XY(x, y)
-                for x in xrange(world_extents.lower_left.x,
+                for x in range(world_extents.lower_left.x,
                                 world_extents.upper_right.x)
-                for y in xrange(world_extents.lower_left.y,
+                for y in range(world_extents.lower_left.y,
                                 world_extents.upper_right.y)
                 if XY(x, y) not in data_extents)
 

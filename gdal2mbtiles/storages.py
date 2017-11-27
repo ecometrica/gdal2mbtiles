@@ -179,12 +179,12 @@ class NestedFileStorage(SimpleFileStorage):
 
     def filepath(self, x, y, z, hashed):
         """Returns the filepath, relative to self.outputdir."""
-        return (os.path.join(unicode(z), unicode(x), unicode(y)) +
+        return (os.path.join(str(z), str(x), str(y)) +
                 self.renderer.suffix)
 
     def makedirs(self, x, y, z):
         if not self.madedirs[z][x]:
-            makedirs(os.path.join(self.outputdir, unicode(z), unicode(x)),
+            makedirs(os.path.join(self.outputdir, str(z), str(x)),
                      ignore_exists=True)
             self.madedirs[z][x] = True
 
@@ -225,7 +225,7 @@ class MbtilesStorage(Storage):
         self.seen = seen
         self._border_hashed = None
 
-        if isinstance(filename, basestring):
+        if isinstance(filename, str):
             self.filename = filename
             self.mbtiles = MBTiles(filename=filename)
         else:
