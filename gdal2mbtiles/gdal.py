@@ -20,6 +20,9 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+# Make sure we are using the python 3 version of round in both python 2 and 3
+from builtins import round
+
 from functools import partial
 import logging
 from math import ceil, floor, pi
@@ -36,6 +39,12 @@ from osgeo import gdal, gdalconst, osr
 from osgeo.gdalconst import (GA_ReadOnly, GRA_Bilinear, GRA_Cubic,
                              GRA_CubicSpline, GRA_Lanczos,
                              GRA_NearestNeighbour)
+
+try:
+  basestring
+except NameError:
+  basestring = str
+
 
 gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
@@ -184,7 +193,7 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
 
     # Resampling method
     if resampling is not None:
-        if not isinstance(resampling, str):
+        if not isinstance(resampling, basestring):
             try:
                 resampling = RESAMPLING_METHODS[resampling]
             except KeyError:
@@ -286,6 +295,10 @@ class Band(gdal.Band):
 
     def GetMetadataItem(self, name, domain=''):
         """Wrapper around gdal.Band.GetMetadataItem()"""
+        if not isinstance(name, str):
+            name = str(name)
+        if not isinstance(domain, str):
+            domain = str(domain)
         return super(Band, self).GetMetadataItem(name, domain)
 
     def GetNoDataValue(self):
@@ -700,7 +713,6 @@ class Dataset(gdal.Dataset):
                        upper_right=XY(int(ceil(right / tile_width)),
                                       int(ceil(top / tile_height))))
 
-
     def GetWorldScalingRatios(self, resolution=None, places=None):
         """
         Get the scaling ratios required to upsample for the whole world.
@@ -819,6 +831,9 @@ class SpatialReference(osr.SpatialReference):
             cstype = 'GEOGCS'
         else:
             cstype = 'PROJCS'
+
+        if not isinstance(cstype, str):
+            cstype = str(cstype)
 
         authority_name = self.GetAuthorityName(cstype)
         authority_code = self.GetAuthorityCode(cstype)

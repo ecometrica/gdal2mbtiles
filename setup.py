@@ -27,7 +27,7 @@ setup(
 
     packages=['gdal2mbtiles'],
     include_package_data=True,
-    install_requires=['numexpr', 'numpy', 'pyvips', 'webcolors'],
+    install_requires=['future', 'numexpr', 'numpy', 'pyvips', 'webcolors'],
     # You also need certain dependencies that aren't in PyPi:
     # gdal-bin, libgdal-dev, libvips, libvips-dev, libtiff5, optipng, pngquant
 

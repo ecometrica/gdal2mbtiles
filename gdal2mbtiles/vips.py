@@ -42,6 +42,11 @@ from .utils import tempenv
 from pyvips import Image, Interpolate
 from pyvips.enums import BandFormat, Coding
 
+try:
+  basestring
+except NameError:
+  basestring = str
+
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -237,7 +242,7 @@ class VImageAdapter(object):
     @classmethod
     def get_fill_option(cls, fill):
         # TODO get rid of this?  No option to pass the fill colour
-        if isinstance(fill, str):
+        if isinstance(fill, basestring):
             if fill not in cls.FILL_OPTIONS:
                 raise cls('Invalid fill: {0!r}'.format(fill))
             return cls.FILL_OPTIONS[fill]

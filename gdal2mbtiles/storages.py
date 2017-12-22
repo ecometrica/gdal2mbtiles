@@ -20,6 +20,8 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import sys
+
 from collections import defaultdict
 from functools import partial
 import os
@@ -31,6 +33,12 @@ from .pool import Pool
 from .gd_types import rgba
 from .utils import intmd5, makedirs
 from .vips import VImageAdapter
+
+
+try:
+  basestring
+except NameError:
+  basestring = str
 
 
 class Storage(object):
@@ -230,7 +238,7 @@ class MbtilesStorage(Storage):
 
         self.mbtiles = None
 
-        if isinstance(filename, str):
+        if isinstance(filename, basestring):
             self.filename = filename
             self.mbtiles = MBTiles(filename=filename)
         else:
@@ -305,10 +313,18 @@ class MbtilesStorage(Storage):
             # Insert the rendered file into the database
             if not isinstance(contents, bytes):
                 contents = contents.encode('utf-8')
+
+            # memoryview has been backported to python 2.7, but sqlite3 requires
+            # the old buffer object
+            if sys.version_info < (3, 0):
+                data = buffer(contents)
+            else:
+                data = memoryview(contents)
+
             self.mbtiles.insert(x=x, y=y,
                                 z=z + self.zoom_offset,
                                 hashed=hashed,
-                                data=memoryview(contents))
+                                data=data)
         return callback
 
     def save_border(self, x, y, z):

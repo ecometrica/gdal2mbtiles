@@ -31,6 +31,11 @@ try:
 except ImportError:
      from collections import MutableMapping
 
+try:
+  basestring
+except NameError:
+  basestring = str
+
 from .gd_types import enum
 from .utils import rmfile
 
@@ -271,7 +276,7 @@ class Metadata_1_1(Metadata_1_0):
         return value
 
     def _clean_bounds(self, value, places=5):
-        if isinstance(value, str):
+        if isinstance(value, basestring):
             left, bottom, right, top = [float(b) for b in value.split(',')]
         else:
             left, bottom, right, top = value
