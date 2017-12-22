@@ -28,9 +28,9 @@ from .constants import TILE_SIDE
 from .gdal import SpatialReference
 from .mbtiles import MBTiles
 from .pool import Pool
-from .types import rgba
+from .gd_types import rgba
 from .utils import intmd5, makedirs
-from .vips import VImage
+from .vips import VImageAdapter
 
 
 class Storage(object):
@@ -60,7 +60,7 @@ class Storage(object):
 
     def get_hash(self, image):
         """Returns the image content hash."""
-        return self.hasher(image.tobuffer())
+        return self.hasher(image.write_to_memory())
 
     def filepath(self, x, y, z, hashed):
         """Returns the filepath."""
@@ -81,8 +81,11 @@ class Storage(object):
     @classmethod
     def _border_image(cls, width=TILE_SIDE, height=TILE_SIDE):
         """Returns a border image suitable for borders."""
-        return VImage.new_rgba(width=width, height=height,
-                               ink=rgba(r=0, g=0, b=0, a=0))
+        image = VImageAdapter.new_rgba(
+            width, height, ink=rgba(r=0, g=0, b=0, a=0)
+        )
+        image._buf = image
+        return image
 
     def waitall(self):
         """Waits until all saves are finished."""
@@ -136,7 +139,7 @@ class SimpleFileStorage(Storage):
     def _make_callback(self, outputfile):
         """Returns a callback that saves the rendered image."""
         def callback(contents):
-            with open(outputfile, 'wb') as output:
+            with open(outputfile, 'wt') as output:
                 output.write(contents)
         return callback
 
@@ -150,10 +153,10 @@ class SimpleFileStorage(Storage):
 
     def save_border(self, x, y, z):
         """Saves a border image at coordinates `x`, `y`, and `z`."""
-        if self._border_hashed is None:
+        if self._border_hashed is None or self._border_hashed not in self.seen:
             image = self._border_image()
-            self.save(x=x, y=y, z=z, image=image)
             self._border_hashed = self.get_hash(image)
+            self.save(x=x, y=y, z=z, image=image)
         else:
             # self._border_hashed will already be in self.seen
             filepath = self.filepath(x=x, y=y, z=z, hashed=self._border_hashed)
@@ -225,6 +228,8 @@ class MbtilesStorage(Storage):
         self.seen = seen
         self._border_hashed = None
 
+        self.mbtiles = None
+
         if isinstance(filename, str):
             self.filename = filename
             self.mbtiles = MBTiles(filename=filename)
@@ -256,7 +261,6 @@ class MbtilesStorage(Storage):
 
         Metadata is also taken as **kwargs. See `mbtiles.Metadata`.
         """
-
         bounds = metadata.get('bounds', None)
         if bounds is not None:
             metadata['bounds'] = bounds.lower_left + bounds.upper_right
@@ -299,10 +303,12 @@ class MbtilesStorage(Storage):
         """Returns a callback that saves the rendered image."""
         def callback(contents):
             # Insert the rendered file into the database
+            if not isinstance(contents, bytes):
+                contents = contents.encode('utf-8')
             self.mbtiles.insert(x=x, y=y,
                                 z=z + self.zoom_offset,
                                 hashed=hashed,
-                                data=buffer(contents))
+                                data=memoryview(contents))
         return callback
 
     def save_border(self, x, y, z):

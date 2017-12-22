@@ -20,6 +20,8 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import os
+
 from contextlib import contextmanager
 from ctypes import c_double, c_int, c_void_p, cdll
 from ctypes.util import find_library
@@ -28,19 +30,17 @@ import logging
 from math import ceil, floor
 from multiprocessing import cpu_count
 from operator import itemgetter
-from tempfile import NamedTemporaryFile
 
 import numexpr
 import numpy
 
-from vipsCC.VError import VError
-import vipsCC.VImage
-
 from .constants import TILE_SIDE
 from .gdal import Dataset, Band
-from .types import rgba, XY
+from .gd_types import rgba, XY
 from .utils import tempenv
 
+from pyvips import Image, Interpolate
+from pyvips.enums import BandFormat, Coding
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -87,83 +87,6 @@ class LibVips(object):
         """Context manager to disable VIPS warnings."""
         return tempenv('IM_WARNING', '0')
 
-    @property
-    def vips_interpolate_bilinear_static(self):
-        """Returns VIPS's Bilinear interpolator"""
-        function = self.functions.get('vips_interpolate_bilinear_static',
-                                      None)
-
-        if function is None:
-            function = self.libvips.vips_interpolate_bilinear_static
-            function.argtypes = []
-            function.restype = c_void_p
-            self.functions['vips_interpolate_bilinear_static'] = function
-        return function()
-
-    @property
-    def vips_interpolate_nearest_static(self):
-        """Returns VIPS's Nearest Neighbour interpolator"""
-        function = self.functions.get('vips_interpolate_nearest_static', None)
-
-        if function is None:
-            function = self.libvips.vips_interpolate_nearest_static
-            function.argtypes = []
-            function.restype = c_void_p
-            self.functions['vips_interpolate_nearest_static'] = function
-        return function()
-
-    def im_affinei(self, input, output, interpolate, a, b, c, d, dx, dy,
-                   ox, oy, ow, oh):
-        """
-        This operator performs an affine transform on the image `input` using
-        `interpolate`.
-
-        The transform is:
-          X = `a` * x + `b` * y + `dx`
-          Y = `c` * x + `d` * y + `dy`
-
-          x and y are the coordinates in input image.
-          X and Y are the coordinates in output image.
-          (0,0) is the upper left corner.
-
-        The section of the output space defined by `ox`, `oy`, `ow`, `oh` is
-        written to `out`.
-
-        input: input VipsImage
-        output: output VipsImage
-        interpolate: interpolation method
-        a: transformation matrix
-        b: transformation matrix
-        c: transformation matrix
-        d: transformation matrix
-        dx: output offset
-        dy: output offset
-        ox: output region
-        oy: output region
-        ow: output region
-        oh: output region
-        """
-        im_affinei = self.functions.get('im_affinei', None)
-        if im_affinei is None:
-            def errcheck(result, func, args):
-                if result != 0:
-                    raise VError()
-                return result
-
-            im_affinei = self.libvips.im_affinei
-            im_affinei.argtypes = [c_void_p, c_void_p, c_void_p,
-                                   c_double, c_double, c_double, c_double,
-                                   c_double, c_double,
-                                   c_int, c_int, c_int, c_int]
-            im_affinei.errcheck = errcheck
-            im_affinei.restype = c_int
-            self.functions['im_affinei'] = im_affinei
-
-        return im_affinei(c_void_p(int(input)), c_void_p(int(output)),
-                          interpolate,
-                          a, b, c, d, dx, dy,
-                          ox, oy, ow, oh)
-
     def get_concurrency(self):
         """Returns the number of threads used for computations."""
         return c_int.in_dll(self.libvips, 'vips__concurrency').value
@@ -188,7 +111,11 @@ class LibVips(object):
 VIPS = LibVips()
 
 
-class VImage(vipsCC.VImage.VImage):
+class VImageAdapter(object):
+    """
+    Class to prvovide some additional methods to manipulate a pyvips.Image
+    """
+
     FILL_OPTIONS = {
         'black': 0,                 # Fill bands with 0
         'extend': 1,                # Extend bands from image to edge
@@ -198,97 +125,86 @@ class VImage(vipsCC.VImage.VImage):
     }
 
     NUMPY_TYPES = {
-        vipsCC.VImage.VImage.FMTCHAR: numpy.int8,
-        vipsCC.VImage.VImage.FMTUCHAR: numpy.uint8,
-        vipsCC.VImage.VImage.FMTSHORT: numpy.int16,
-        vipsCC.VImage.VImage.FMTUSHORT: numpy.uint16,
-        vipsCC.VImage.VImage.FMTINT: numpy.int32,
-        vipsCC.VImage.VImage.FMTUINT: numpy.uint32,
-        vipsCC.VImage.VImage.FMTFLOAT: numpy.float32,
-        vipsCC.VImage.VImage.FMTDOUBLE: numpy.float64,
-        vipsCC.VImage.VImage.FMTCOMPLEX: numpy.complex64,
-        vipsCC.VImage.VImage.FMTDPCOMPLEX: numpy.complex128,
+        BandFormat.CHAR: numpy.int8,
+        BandFormat.UCHAR: numpy.uint8,
+        BandFormat.SHORT: numpy.int16,
+        BandFormat.USHORT: numpy.uint16,
+        BandFormat.INT: numpy.int32,
+        BandFormat.UINT: numpy.uint32,
+        BandFormat.FLOAT: numpy.float32,
+        BandFormat.DOUBLE: numpy.float64,
+        BandFormat.COMPLEX: numpy.complex64,
+        BandFormat.DPCOMPLEX: numpy.complex128,
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, image, *args, **kwargs):
+        # image: a pyvips.Image object
+        self.image = image
         if VIPS.get_concurrency() == 0:
             # Override auto-detection from environ and argv.
             VIPS.set_concurrency(processes=cpu_count())
         args = [a.encode('utf-8') if isinstance(a, str) else a
                 for a in args]
         with TIFF.disable_warnings():
-            super(VImage, self).__init__(*args, **kwargs)
+            super(VImageAdapter, self).__init__(*args, **kwargs)
 
     @classmethod
     def new_rgba(cls, width, height, ink=None):
         """Creates a new transparent RGBA image sized width × height."""
-        image = cls(b"", b"p")          # Working buffer
-        image.initdesc(width=width, height=height,
-                       bands=4,                 # RGBA
-                       bandfmt=cls.FMTUCHAR,    # 8-bit unsigned
-                       coding=cls.NOCODING,     # No coding and no compression
-                       type=cls.sRGB,
-                       xres=2.835, yres=2.835,  # Arbitrary 600 dpi
-                       xoffset=0, yoffset=0)
-
+        # Creating a placeholder image with new_from_memory (equivalent of the
+        # old vipsCC frombuffer) creates an image
+        # which is a few byes different when written back to memory, which means
+        # we can't store and retrieve it from its hash.  So instead we use a
+        # temporary transparent 256x256 file for the initial image
+        image = Image.new_from_file(
+            os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), 'default_rgba.png'
+            )
+        )
+        image = image.copy(
+            width=width, height=height,
+            coding='none',  # No coding and no compression
+            interpretation='srgb',
+            xres=2.835, yres=2.835,  # Arbitrary 600 dpi
+            xoffset=0, yoffset=0  # Working buffer
+        )
         if ink is not None:
-            image.draw_rect(left=0, top=0, width=width, height=height,
-                            fill=True, ink=ink)
+            image.draw_rect(
+                [ink.r, ink.g, ink.b, ink.a], 0, 0, width, height, fill=True
+            )
         return image
-
-    @classmethod
-    def from_vimage(cls, other):
-        """Creates a new image from another VImage."""
-        new = cls()
-        new.__dict__.update(other.__dict__)
-        return new
 
     @classmethod
     def from_gdal_dataset(cls, dataset, band):
         """
-        Creates a new 1-band VImage from `dataset` at `band`
+        Creates a new 1-band pyvips.Image from `dataset` at `band`
 
         dataset: GDAL Dataset
         band: Number of the band, starting from 1
         """
         with LibVips.disable_warnings():
             filename = dataset.GetFileList()[0]
-            image1 = VImage(filename)
+            image1 = Image.new_from_file(filename)
 
             # Extract the band
-            image2 = image1.extract_bands(band=(band - 1), nbands=1)
+            image2 = image1.extract_band((band - 1), n=1)
 
             # Cast to the right datatype, if necessary
             datatype = dataset.GetRasterBand(band).NumPyDataType
-            if image2.NumPyType == datatype:
+            if VImageAdapter(image2).NumPyType() == datatype:
                 return image2
             types = dict((v, k) for k, v in cls.NUMPY_TYPES.items())
-            image3 = VImage.frombuffer(image2.tobuffer(),
-                                       width=image2.Xsize(),
-                                       height=image2.Ysize(),
-                                       bands=1, format=types[datatype])
+            image3 = Image.new_from_memory(image2.write_to_memory(),
+                                           width=image2.width,
+                                           height=image2.height,
+                                           bands=1, format=types[datatype])
             image3._buf = image2
             return image3
 
     @classmethod
-    def frombuffer(cls, buffer, width, height, bands, format):
-        """
-        Returns a new VImage created from a `buffer` of pixel data.
-
-        buffer: The raw buffer
-        width: Integer dimension
-        height: Integer dimension
-        bands: Number of bands in the buffer
-        format: Band format (all bands must be the same format)
-        """
-        return cls.from_vimage(
-            super(VImage, cls).frombuffer(buffer, width, height, bands, format)
-        )
-
-    @classmethod
     def from_numpy_array(cls, array, width, height, bands, format):
         """
-        Returns a new VImage created from a NumPy `array` of pixel data.
+        Returns a new pyvips.Image created from a NumPy `array` of pixel data.
 
         array: The NumPy array
         width: Integer dimension
@@ -297,10 +213,9 @@ class VImage(vipsCC.VImage.VImage):
         format: Band format (all bands must be the same format)
         """
         array = array.astype(cls.NUMPY_TYPES[format])
-        buf = numpy.getbuffer(array)
-        image = cls.from_vimage(
-            super(VImage, cls).frombuffer(buf, width, height, bands, format)
-        )
+        buf = memoryview(array)
+        image = Image.new_from_memory(buf, width, height, bands, format)
+
         # Hold on to the numpy array to prevent garbage collection
         image._numpy_array = array
         return image
@@ -308,81 +223,38 @@ class VImage(vipsCC.VImage.VImage):
     @classmethod
     def gbandjoin(cls, bands):
         """
-        Returns a new VImage that is a bandwise join of `bands`.
+        Returns a new pyvips.Image that is a bandwise join of `bands`.
 
-        bands: Sequence of VImage objects.
+        bands: Sequence of pyvips.Image objects.
+
+        This previously used the vipsCC gbandjoin method which doesn't
+        exist in pyvips.  pyvips' bandjoin method takes either a single 'other'
+        band or a list of bands, so we can make it join the first image in the
+        list to the remainder
         """
-        image = cls.from_vimage(
-            super(VImage, cls).gbandjoin(bands)
-        )
-        # Hold on to the other band to prevent garbage collection
-        image._buf = bands
-        return image
+        return bands[0].bandjoin(bands[1:])
 
-    def initdesc(self, width, height, bands, bandfmt, coding, type, xres,
-                 yres, xoffset, yoffset):
-        """Initializes the descriptor for this VImage."""
-        super(VImage, self).initdesc(width, height, bands, bandfmt, coding,
-                                     type, xres, yres, xoffset, yoffset)
-
-    def bandjoin(self, other):
-        image = self.from_vimage(
-            super(VImage, self).bandjoin(other)
-        )
-        # Hold on to the other band to prevent garbage collection
-        image._buf = other
-        return image
-
-    def draw_rect(self, left, top, width, height, fill, ink):
-        return super(VImage, self).draw_rect(left, top, width, height,
-                                             int(fill), ink)
-
-    def embed(self, fill, left, top, width, height):
-        """Returns a new VImage with this VImage embedded within it."""
+    @classmethod
+    def get_fill_option(cls, fill):
+        # TODO get rid of this?  No option to pass the fill colour
         if isinstance(fill, str):
-            if fill not in self.FILL_OPTIONS:
-                raise ValueError('Invalid fill: {0!r}'.format(fill))
-            fill = self.FILL_OPTIONS[fill]
-        image = self.from_vimage(
-            super(VImage, self).embed(fill, left, top, width, height)
-        )
-        image._buf = self
-        return image
-
-    def extract_area(self, left, top, width, height):
-        """Returns a new VImage with a region cropped out of this VImage."""
-        return self.from_vimage(
-            super(VImage, self).extract_area(left, top, width, height)
-        )
-
-    def extract_bands(self, band, nbands):
-        """
-        Returns a new VImage with a reduced number of bands.
-
-        band: First band to extract.
-        nbands: Number of bands to extract.
-        """
-        image = self.from_vimage(
-            super(VImage, self).extract_bands(band, nbands)
-        )
-        # Hold on to the other band to prevent garbage collection
-        image._buf = self
-        return image
+            if fill not in cls.FILL_OPTIONS:
+                raise cls('Invalid fill: {0!r}'.format(fill))
+            return cls.FILL_OPTIONS[fill]
 
     def affine(self, a, b, c, d, dx, dy, ox, oy, ow, oh,
-               interpolate=None):
+               interpolate='bilinear'):
         """
-        Returns a new VImage that is affine transformed from this image.
+        Returns a new pyvips.Image that is affine transformed from this image.
         Uses `interpolate` as the interpolation method.
 
         interpolate: interpolation method (near, bilinear). Default: bilinear
-
-        For other parameters, see LibVips.im_affinei()
         """
-        if interpolate is None or interpolate == 'bilinear':
-            interpolate = VIPS.vips_interpolate_bilinear_static
-        elif interpolate == 'near':
-            interpolate = VIPS.vips_interpolate_nearest_static
+        if interpolate == 'near':
+            interpolate = 'nearest'
+
+        if interpolate == 'bilinear' or interpolate == 'nearest':
+            interpolate = Interpolate.new(interpolate)
         else:
             raise ValueError(
                 'interpolate must be near or bilinear, not {0!r}'.format(
@@ -393,20 +265,27 @@ class VImage(vipsCC.VImage.VImage):
         # Link output to self, because its buffer is related to self.image()
         # We don't want self to get destructed in C++ when Python garbage
         # collects self if it falls out of scope.
-        output = VImage()
-        output.__inputref = self
 
-        VIPS.im_affinei(self.image(), output.image(), interpolate,
-                        a, b, c, d, dx, dy, ox, oy, ow, oh)
+        image = self.image.affine(
+            [a, b, c, d],
+            interpolate=interpolate,
+            oarea=[ox, oy, ow, oh],
+            odx=dx, ody=dy,
+            idx=0, idy=0
+        )
+        image.__inputref = self.image
+        # output = VIPS.im_affinei(self.image, self.image.copy(), interpolate,
+        #                 a, b, c, d, dx, dy, ox, oy, ow, oh)
 
-        return output
+        return image
 
-    def _scale(self, xscale, yscale, interpolate):
+    def _scale(self, xscale, yscale, output_size, interpolate):
         """
-        Returns a new VImage that has been scaled by `xscale` and `yscale`.
+        Returns a new pyvips.Image that has been scaled by `xscale` and `yscale`.
 
         xscale: floating point scaling value for image
         yscale: floating point scaling value for image
+        output_size: output width and height in pixels (tuple)
         interpolate: intepolation method (near, bilinear)
         """
         # Shrink by aligning the corners of the input and output images.
@@ -424,8 +303,15 @@ class VImage(vipsCC.VImage.VImage):
         # The corners of output.img are located at:
         #     (-.5,-.5), (-.5,M-.5), (N-.5,-.5) and (N-.5,M-.5).
 
-        output_width = int(ceil(self.Xsize() * xscale))
-        output_height = int(ceil(self.Ysize() * yscale))
+        if output_size is None:
+            if XY(x=xscale, y=yscale) > XY(x=1.0, y=1.0):
+                output_width = int(ceil(self.image.width * xscale))
+                output_height = int(ceil(self.image.height * yscale))
+            else:
+                output_width = int(floor(self.image.width * xscale))
+                output_height = int(floor(self.image.height * yscale))
+        else:
+            output_width, output_height = output_size
 
         # The affine transformation that sends each input corner to the
         # corresponding output corner is:
@@ -457,12 +343,16 @@ class VImage(vipsCC.VImage.VImage):
                            ow=output_width, oh=output_height,
                            interpolate=interpolate)
 
-    def shrink(self, xscale, yscale):
+    def shrink_affine(self, xscale, yscale, output_size=None):
         """
-        Returns a new VImage that has been shrunk by `xscale` and `yscale`.
+        Image.shrink uses lipvips shrink method which use reduce, not affine,
+        for any residual shrink.  This method uses affine.
+
+        Returns a new pyvips.Image that has been shrunk by `xscale` and `yscale`.
 
         xscale: floating point scaling value for image
         yscale: floating point scaling value for image
+        output_size: output width and height in pixels (tuple)
         """
         if not 0.0 < xscale <= 1.0:
             raise ValueError(
@@ -472,15 +362,17 @@ class VImage(vipsCC.VImage.VImage):
             raise ValueError(
                 'yscale {0!r} be between 0.0 and 1.0'.format(yscale)
             )
-        return self._scale(xscale=xscale, yscale=yscale,
-                           interpolate='bilinear')
+        return self._scale(
+            xscale=xscale, yscale=yscale, output_size=output_size, interpolate='bilinear'
+        )
 
-    def stretch(self, xscale, yscale):
+    def stretch(self, xscale, yscale, output_size=None):
         """
-        Returns a new VImage that has been stretched by `xscale` and `yscale`.
+        Returns a new pyvips.Image that has been stretched by `xscale` and `yscale`.
 
         xscale: floating point scaling value for image
         yscale: floating point scaling value for image
+        output_size: output width and height in pixels (tuple)
         """
         if xscale < 1.0:
             raise ValueError(
@@ -490,7 +382,10 @@ class VImage(vipsCC.VImage.VImage):
             raise ValueError(
                 'yscale {0!r} cannot be less than 1.0'.format(yscale)
             )
-        return self._scale(xscale=xscale, yscale=yscale, interpolate='near')
+        return self._scale(
+            xscale=xscale, yscale=yscale, output_size=output_size,
+            interpolate='near'
+        )
 
     def tms_align(self, tile_width, tile_height, offset):
         """
@@ -499,68 +394,48 @@ class VImage(vipsCC.VImage.VImage):
         tile_width: Number of pixels for each tile
         tile_height: Number of pixels for each tile
         offset: TMS offset for the lower-left tile
+
+        returns a new Image object
         """
         # Pixel offset from top-left of the aligned image.
         #
         # The y value needs to be converted from the lower-left corner to the
         # top-left corner.
         x = int(round(offset.x * tile_width)) % tile_width
-        y = int(round(self.Ysize() - offset.y * tile_height)) % tile_height
+        y = int(round(self.image.height - offset.y * tile_height)) % tile_height
 
         # Number of tiles for the aligned image, rounded up to provide
         # right and bottom borders.
-        tiles_x = ceil((self.Xsize() + x / 2) / tile_width)
-        tiles_y = ceil((self.Ysize() + y / 2) / tile_height)
+        tiles_x = ceil((self.image.width + x / 2) / tile_width)
+        tiles_y = ceil((self.image.height + y / 2) / tile_height)
 
         # Pixel width and height for the aligned image.
         width = int(tiles_x * tile_width)
         height = int(tiles_y * tile_height)
 
-        if width == self.Xsize() and height == self.Ysize():
+        if width == self.image.width and height == self.image.height:
             # No change
             assert x == y == 0
-            return self
+            return self.image
 
         # Resize
-        return self.from_vimage(
-            self.embed(fill=0,  # Transparent
-                       left=x, top=y, width=width, height=height)
+        return self.image.embed(
+            x, y, width, height, background=[0]  # Transparent
         )
 
     def BufferSize(self):
         """Return the size of the buffer in bytes if it were rendered."""
-        data_size = self.NumPyType()().itemsize
-        return (self.Xsize() * self.Ysize() * self.Bands() * data_size)
+        data_size = self.NumPyType().itemsize
+        return self.image.width * self.image.height * self.image.bands * data_size
 
     def NumPyType(self):
-        """Return the NumPy data type."""
-        return self.NUMPY_TYPES[self.BandFmt()]
-
-    def vips2jpeg(self, out):
-        if isinstance(out, str):
-            out = out.encode('utf-8')
-        return super(VImage, self).vips2jpeg(out)
-
-    def vips2png(self, out):
-        if isinstance(out, str):
-            out = out.encode('utf-8')
-        return super(VImage, self).vips2png(out)
+        """Return an instance of the NumPy data type."""
+        return self.NUMPY_TYPES[self.image.format]()
 
     def write(self, *args):
         args = [a.encode('utf-8') if isinstance(a, str) else a
                 for a in args]
-        return super(VImage, self).write(*args)
-
-    def write_to_memory(self):
-        image = VImage('', 't')
-        return self.from_vimage(self.write(image))
-
-    def write_to_tempfile(self, prefix='tmp', dir=None, delete=True):
-        vipsfile = NamedTemporaryFile(suffix='.v',
-                                      prefix=prefix, dir=dir, delete=delete)
-        image = self.from_vimage(self.write(vipsfile.name))
-        image._buf = vipsfile
-        return image
+        return self.image.write(*args)
 
 
 class VipsBand(Band):
@@ -597,18 +472,17 @@ class VipsBand(Band):
         image = self._dataset.image
 
         if win_xsize is None:
-            win_xsize = image.Xsize() - xoff
+            win_xsize = image.width - xoff
 
         if win_ysize is None:
-            win_ysize = image.Ysize() - yoff
+            win_ysize = image.height - yoff
 
-        band = image.extract_bands(band=self._band_no, nbands=1)
-        area = band.extract_area(left=xoff, top=yoff,
-                                 width=win_xsize, height=win_ysize)
+        band = image.extract_band(self._band_no, n=1)
+        area = band.extract_area(xoff, yoff, win_xsize, win_ysize)
 
         return numpy.ndarray(shape=(win_xsize, win_ysize),
-                             buffer=bytes(area.tobuffer()),
-                             dtype=band.NumPyType()).copy()
+                             buffer=area.write_to_memory(),
+                             dtype=VImageAdapter(band).NumPyType()).copy()
 
     # The next methods are there to prevent you from shooting yourself in the
     # foot.
@@ -636,7 +510,7 @@ class VipsDataset(Dataset):
     @property
     def image(self):
         if self._image is None:
-            self._image = VImage(self.inputfile)
+            self._image = Image.new_from_file(self.inputfile)
         return self._image
 
     def GetRasterBand(self, i):
@@ -657,14 +531,13 @@ class VipsDataset(Dataset):
         if ysize is None:
             ysize = self.RasterYSize - yoff
 
-        area = self.image.extract_area(left=xoff, top=yoff,
-                                       width=xsize, height=ysize)
+        area = self.image.extract_area(xoff, yoff, xsize, ysize)
 
         # Get the first band's datatype to be consistent with GDAL's behavior
         datatype = self.GetRasterBand(1).NumPyDataType
 
         return numpy.ndarray(shape=(self.RasterCount, ysize, xsize),
-                             buffer=bytes(area.tobuffer()),
+                             buffer=bytes(area.write_to_memory()),
                              dtype=datatype)
 
     def colorize(self, colors):
@@ -699,19 +572,23 @@ class VipsDataset(Dataset):
 
         with LibVips.disable_warnings():
             if ratios > XY(x=1.0, y=1.0):
-                self._image = self.image.stretch(xscale=ratios.x,
-                                                 yscale=ratios.y)
+                self._image = VImageAdapter(self.image).stretch(
+                    xscale=ratios.x, yscale=ratios.y,
+                    output_size=(dst_width, dst_height)
+                )
             else:
-                self._image = self.image.shrink(xscale=ratios.x,
-                                                yscale=ratios.y)
+                self._image = VImageAdapter(self.image).shrink_affine(
+                    xscale=ratios.x, yscale=ratios.y,
+                    output_size=(dst_width, dst_height)
+                )
 
             # Fix the dataset's metadata
             geotransform = list(self.GetGeoTransform())
-            geotransform[1] = width / self._image.Xsize()    # pixel width
-            geotransform[5] = -height / self._image.Ysize()  # pixel height
+            geotransform[1] = width / self._image.width    # pixel width
+            geotransform[5] = -height / self._image.height  # pixel height
             self.SetGeoTransform(geotransform, local=True)
-            self.SetLocalSizes(xsize=self._image.Xsize(),
-                               ysize=self._image.Ysize())
+            self.SetLocalSizes(xsize=self._image.width,
+                               ysize=self._image.height)
 
     def resample(self, resolution=None):
         """Resamples the image to `resolution`."""
@@ -731,7 +608,7 @@ class VipsDataset(Dataset):
         # Force world to be full width by changing pixel width
         world = self.GetSpatialReference().GetWorldExtents()
         geotransform = list(self.GetGeoTransform())
-        geotransform[1] = world.dimensions.x / self._image.Xsize()
+        geotransform[1] = world.dimensions.x / self._image.width
         self.SetGeoTransform(geotransform, local=True)
 
         return result
@@ -816,16 +693,17 @@ class VipsDataset(Dataset):
         )
 
         with LibVips.disable_warnings():
-            self._image = self.image.embed(fill='black',
-                                           left=left, top=top,
-                                           width=width, height=height)
+            self._image = self.image.embed(
+                left, top, width, height,
+                background=[VImageAdapter.FILL_OPTIONS['black']]
+            )
             # Fix the dataset's metadata to match tile_extents exactly
             geotransform = list(self.GetGeoTransform())
             geotransform[0] = tile_extents.lower_left.x   # left
             geotransform[3] = tile_extents.upper_right.y  # top
             # pixel width and height
-            geotransform[1] = tile_extents.dimensions.x / self._image.Xsize()
-            geotransform[5] = -tile_extents.dimensions.y / self._image.Ysize()
+            geotransform[1] = tile_extents.dimensions.x / self._image.width
+            geotransform[5] = -tile_extents.dimensions.y / self._image.height
             self.SetGeoTransform(geotransform, local=True)
             self.SetLocalSizes(xsize=width, ysize=height)
 
@@ -874,12 +752,12 @@ class TmsTiles(object):
     @property
     def image_width(self):
         """Returns the width of self.image in pixels."""
-        return self.image.Xsize()
+        return self.image.width
 
     @property
     def image_height(self):
         """Returns the height of self.image in pixels."""
-        return self.image.Ysize()
+        return self.image.height
 
     def fill_borders(self, borders, resolution):
         for x, y in borders:
@@ -888,6 +766,7 @@ class TmsTiles(object):
     def _slice(self):
         """Helper function that actually slices tiles. See ``slice``."""
         with LibVips.disable_warnings():
+            xys = []
             for y in range(0, self.image_height, self.tile_height):
                 for x in range(0, self.image_width, self.tile_width):
                     out = self.image.extract_area(
@@ -899,6 +778,7 @@ class TmsTiles(object):
                         y=int((self.image_height - y) / self.tile_height +
                               self.offset.y - 1)
                     )
+                    xys.append((x, y))
                     self.storage.save(x=offset.x, y=offset.y,
                                       z=self.resolution,
                                       image=out)
@@ -941,12 +821,12 @@ class TmsTiles(object):
 
         parent = self._parent if self._parent is not None else self
         parent_resolution = parent.resolution
-        parent_size = parent.image.BufferSize()
+        parent_size = VImageAdapter(parent.image).BufferSize()
 
         for res in reversed(list(range(self.resolution - levels, self.resolution))):
             offset /= 2.0
-            shrunk = image.shrink(xscale=0.5, yscale=0.5)
-            image = shrunk.tms_align(tile_width=self.tile_width,
+            shrunk = VImageAdapter(image).shrink_affine(xscale=0.5, yscale=0.5)
+            image = VImageAdapter(shrunk).tms_align(tile_width=self.tile_width,
                                      tile_height=self.tile_height,
                                      offset=offset)
             offset = offset.floor()
@@ -968,7 +848,7 @@ class TmsTiles(object):
 
                 image = self.write_buffer(image=image, resolution=res)
                 parent_resolution = res
-                parent_size = image.BufferSize()
+                parent_size = VImageAdapter(image).BufferSize()
 
         if parent_resolution < parent.resolution:
             # Buffering occurred.
@@ -1000,8 +880,8 @@ class TmsTiles(object):
         assert levels > 0
         scale = 2 ** levels
         offset = self.offset * scale
-        stretched = self.image.stretch(xscale=scale, yscale=scale)
-        aligned = stretched.tms_align(tile_width=self.tile_width,
+        stretched = VImageAdapter(self.image).stretch(xscale=scale, yscale=scale)
+        aligned = VImageAdapter(stretched).tms_align(tile_width=self.tile_width,
                                       tile_height=self.tile_height,
                                       offset=offset)
 
@@ -1017,7 +897,9 @@ class TmsTiles(object):
             logger.debug(
                 'Buffering resolution {0} to disk'.format(resolution)
             )
-            return image.write_to_tempfile()
+            vipsfile = Image.new_temp_file("%s.v")
+            tempfile_image = image.write(vipsfile)
+            return tempfile_image
 
         logger.debug(
             'Buffering resolution {0} to memory'.format(resolution)
@@ -1106,8 +988,8 @@ class TmsPyramid(object):
                     'Slicing at downsampled resolution {resolution}: '
                     '{width} × {height}'.format(
                         resolution=res,
-                        width=tiles.image.Xsize(),
-                        height=tiles.image.Ysize()
+                        width=tiles.image.width,
+                        height=tiles.image.height
                     )
                 )
 
@@ -1127,8 +1009,8 @@ class TmsPyramid(object):
             'Slicing at native resolution {resolution}: '
             '{width} × {height}'.format(
                 resolution=self.resolution,
-                width=self.image.Xsize(),
-                height=self.image.Ysize()
+                width=self.image.width,
+                height=self.image.height
             )
         )
         with LibVips.disable_warnings():
@@ -1157,8 +1039,8 @@ class TmsPyramid(object):
                     'Slicing at upsampled resolution {resolution}: '
                     '{width} × {height}'.format(
                         resolution=res,
-                        width=upsampled.image.Xsize(),
-                        height=upsampled.image.Ysize()
+                        width=upsampled.image.width,
+                        height=upsampled.image.height
                     )
                 )
 
@@ -1320,7 +1202,7 @@ class ColorBase(dict):
 
     def colorize(self, image, nodata=None):
         """Returns a new RGBA VImage that has been colorized"""
-        if image.Bands() != 1:
+        if image.bands != 1:
             raise ValueError(
                 'image {0!r} has more than one band'.format(image)
             )
@@ -1333,19 +1215,19 @@ class ColorBase(dict):
         )
 
         # Convert to a numpy array
-        data = numpy.frombuffer(buffer=image.tobuffer(),
-                                dtype=image.NumPyType())
+        data = numpy.frombuffer(buffer=image.write_to_memory(),
+                                dtype=VImageAdapter(image).NumPyType())
 
         # Use numexpr to color the data as RGBA bands
         bands = self._colorize_bands(data=data, nodata=nodata)
 
         # Merge the bands into a single RGBA VImage
-        width, height = image.Xsize(), image.Ysize()
-        images = [VImage.from_numpy_array(array=band,
-                                          width=width, height=height,
-                                          bands=1, format=VImage.FMTUCHAR)
-                  for band in bands]
-        return VImage.gbandjoin(bands=images)
+        images = [VImageAdapter.from_numpy_array(
+            array=band, width=image.width, height=image.height, bands=1,
+            format='uchar'
+        ) for band in bands]
+
+        return VImageAdapter.gbandjoin(bands=images)
 
     def _expression(self, band, nodata=None):
         clauses = self._clauses(band=band, nodata=nodata)
@@ -1357,7 +1239,7 @@ class ColorBase(dict):
             result = 'where({expression}, {true}, {false})'.format(
                 expression=expression, true=true_value, false=result
             )
-        return bytes(result)
+        return result
 
 
 class ColorExact(ColorBase):

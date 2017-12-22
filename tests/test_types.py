@@ -5,7 +5,7 @@ from __future__ import (absolute_import, division, print_function,
 
 import unittest
 
-from gdal2mbtiles.types import rgba
+from gdal2mbtiles.gd_types import rgba
 
 
 class TestRgba(unittest.TestCase):

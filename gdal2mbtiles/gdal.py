@@ -45,7 +45,7 @@ from .constants import (EPSG_WEB_MERCATOR, ESRI_102113_PROJ, ESRI_102100_PROJ,
                         GDALTRANSLATE, GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
-from .types import Extents, GdalFormat, XY
+from .gd_types import Extents, GdalFormat, XY
 from .utils import rmfile
 
 
@@ -70,7 +70,7 @@ def check_output_gdal(*popenargs, **kwargs):
         if cmd is None:
             cmd = popenargs[0]
         raise CalledGdalError(p.returncode, cmd, output=stdoutdata,
-                              error=stderrdata.rstrip('\n'))
+                              error=stderrdata.decode('utf-8').rstrip('\n'))
     return stdoutdata
 
 
@@ -153,13 +153,12 @@ def extract_color_band(inputfile, band):
         '-of', 'VRT',           # Output to VRT
         '-b', band,             # Single band
         inputfile,
-        '/dev/stdout'
+        '/vsistdout'
     ]
     try:
         return VRT(check_output_gdal([str(e) for e in command]))
     except CalledGdalError as e:
-        if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
-                       "file format."):
+        if e.error == ("ERROR 6: Read or update mode not supported on /vsistdout"):
             # HACK: WTF?!?
             return VRT(e.output)
         raise
@@ -202,8 +201,14 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
         warp_cmd.extend(['-dstnodata', ' '.join(nodata_values)])
 
     # Call gdalwarp
-    warp_cmd.extend([inputfile, '/dev/stdout'])
-    return VRT(check_output_gdal([str(e) for e in warp_cmd]))
+    warp_cmd.extend([inputfile, '/vsistdout'])
+
+    try:
+        return VRT(check_output_gdal([str(e) for e in warp_cmd]))
+    except CalledGdalError as e:
+        if e.error == ("ERROR 6: Read or update mode not supported on /vsistdout"):
+            return VRT(e.output)
+        raise
 
 
 def supported_formats(cmd=GDALWARP):
@@ -281,7 +286,7 @@ class Band(gdal.Band):
 
     def GetMetadataItem(self, name, domain=''):
         """Wrapper around gdal.Band.GetMetadataItem()"""
-        return super(Band, self).GetMetadataItem(bytes(name), bytes(domain))
+        return super(Band, self).GetMetadataItem(name, domain)
 
     def GetNoDataValue(self):
         """Returns gdal.Band.GetNoDataValue() as a NumPy type"""
@@ -404,7 +409,7 @@ class Dataset(gdal.Dataset):
             # Since this is a SWIG object, clone the ``this`` pointer
             self.this = gdal.Open(inputfile, mode).this
         except RuntimeError as e:
-            raise GdalError(e.message)
+            raise GdalError(str(e))
 
         # Shadow for metadata so we can overwrite it without saving
         # it to the original file.
@@ -695,6 +700,7 @@ class Dataset(gdal.Dataset):
                        upper_right=XY(int(ceil(right / tile_width)),
                                       int(ceil(top / tile_height))))
 
+
     def GetWorldScalingRatios(self, resolution=None, places=None):
         """
         Get the scaling ratios required to upsample for the whole world.
@@ -810,9 +816,9 @@ class SpatialReference(osr.SpatialReference):
             return
 
         if self.IsGeographic() == 1:
-            cstype = b'GEOGCS'
+            cstype = 'GEOGCS'
         else:
-            cstype = b'PROJCS'
+            cstype = 'PROJCS'
 
         authority_name = self.GetAuthorityName(cstype)
         authority_code = self.GetAuthorityCode(cstype)
@@ -886,12 +892,13 @@ class SpatialReference(osr.SpatialReference):
 class VRT(object):
     def __init__(self, content):
         self.content = content
+        logger.info(content)
 
     def __str__(self):
-        return self.content
+        return self.content.decode('utf-8')
 
     def get_root(self):
-        return ElementTree.fromstring(self.content)
+        return ElementTree.fromstring(self.content.decode('utf-8'))
 
     def get_tempfile(self, **kwargs):
         kwargs.setdefault('suffix', '.vrt')

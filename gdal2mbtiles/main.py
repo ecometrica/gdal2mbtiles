@@ -49,8 +49,8 @@ if __name__ == '__main__' and __package__ is None:
     __package__ = gdal2mbtiles.__name__
 
 from .gdal import RESAMPLING_METHODS, SpatialReference
+from .gd_types import rgba
 from .mbtiles import Metadata
-from .types import rgba
 
 
 COLORING_METHODS = {

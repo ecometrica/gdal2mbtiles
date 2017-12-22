@@ -42,7 +42,7 @@ class Renderer(object):
     def __str__(self):
         return 'Renderer(suffix={suffix!r})'.format(**self.__dict__)
 
-    def render(self, image, filename):
+    def render(self, image):
         raise NotImplementedError()
 
 
@@ -79,20 +79,19 @@ class JpegRenderer(Renderer):
 
     @property
     def _vips_options(self):
-        return ':{compression:d},{profile}'.format(
-            compression=self.compression,
-            profile=self.profile,
-        )
+        return {
+            'Q': self.compression,
+            'profile': self.profile
+        }
 
     def render(self, image):
         """Returns the rendered VIPS `image`."""
-        if image.Bands() > 3:
+        if image.bands > 3:
             # Strip out alpha channel, otherwise transparent pixels turn white.
-            image = image.extract_bands(band=0, nbands=3)
+            image = image.extract_band(0, n=3)
         with NamedTemporaryFile(suffix=self.suffix,
                                 dir=self.tempdir) as rendered:
-            fname = rendered.name.encode('utf-8') + self._vips_options
-            image.vips2jpeg(fname)
+            image.write_to_file(rendered.name, **self._vips_options)
             return rendered.read()
 
 
@@ -162,21 +161,20 @@ class PngRenderer(Renderer):
 
     @property
     def _vips_options(self):
-        return ':{compression:d},{interlace:d}'.format(
-            compression=self.compression,
-            interlace=self.interlace,
-        )
+        return {
+            'compression': self.compression,
+            'interlace': self.interlace
+        }
 
     def render(self, image):
         """Returns the rendered VIPS `image`."""
         with NamedTemporaryFile(suffix=self.suffix,
                                 dir=self.tempdir) as rendered:
-            fname = rendered.name.encode('utf-8') + self._vips_options
-            image.vips2png(fname)
+            image.write_to_file(rendered.name, **self._vips_options)
             filename = rendered.name
 
             if self.png8 is not False:
-                check_call([self.PNGQUANT, '-force', str(self.png8),
+                check_call([self.PNGQUANT, '--force', str(self.png8),
                             filename])
                 filename = os.path.splitext(filename)[0] + '-fs8.png'
 

@@ -25,9 +25,13 @@ import errno
 import os
 import sqlite3
 from struct import pack, unpack
-from UserDict import DictMixin
 
-from .types import enum
+try:
+     from UserDict import DictMixin
+except ImportError:
+     from collections import MutableMapping
+
+from .gd_types import enum
 from .utils import rmfile
 
 
@@ -55,7 +59,18 @@ class MetadataValueError(MetadataError, ValueError):
     pass
 
 
-class Metadata(object, DictMixin):
+import sys
+if sys.version_info[0] < 3:
+
+    class CompatibleMutableMapping(object, DictMixin):
+        pass
+
+else:
+    class CompatibleMutableMapping(MutableMapping):
+        pass
+
+
+class Metadata(CompatibleMutableMapping):
     """
     Key-value metadata table expressed as a dictionary
     """
@@ -123,6 +138,13 @@ class Metadata(object, DictMixin):
                 {'name': i, 'value': y}
             )
 
+    def __iter__(self):
+        for k in self.keys():
+            yield k
+
+    def __len__(self):
+        return len(self.keys())
+
     def keys(self):
         """Returns a list of keys from the database."""
         try:
@@ -136,7 +158,7 @@ class Metadata(object, DictMixin):
         result = cursor.fetchall()
         if not result:
             return result
-        return zip(*result)[0]
+        return list(zip(*result))[0]
 
     def _setup(self, metadata):
         missing = set(self.MANDATORY) - set(metadata.keys())
@@ -406,7 +428,6 @@ class MBTiles(object):
         #
         # However, we wish to normalize the tile_data, so we store each
         # in the images table.
-
         rmfile(filename, ignore_missing=True)
         try:
             os.remove(filename)
@@ -494,7 +515,6 @@ class MBTiles(object):
         # tile_id must be a 64-bit signed integer, but hashing functions
         # produce unsigned integers.
         hashed = unpack(b'q', pack(b'Q', hashed & 0xffffffffffffffff))[0]
-
         with self._conn:
             if data is not None:
                 # Insert tile data into images
