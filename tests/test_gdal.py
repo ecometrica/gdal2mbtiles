@@ -254,7 +254,9 @@ class TestVrt(TestCase):
                               vrt.render,
                               outputfile=tmpfile.name)
 
+    @pytest.mark.skip_on_shippable
     def test_invalid_output(self):
+        # this will fail if tests are run as root (as on shippable)
         vrt = warp(self.inputfile)
         self.assertRaises(OSError,
                           vrt.render,
@@ -836,7 +838,6 @@ class TestDataset(TestCase):
                     upper_right=XY(2, 1))
         )
 
-    @pytest.mark.fails_on_master
     def test_get_tms_extents_aligned(self):
         dataset = Dataset(self.alignedfile)
         # At native resolution, should only occupy its own tile
