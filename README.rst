@@ -36,26 +36,23 @@ Note that this program requires Python 2.7 or higher.
 External Dependencies
 ---------------------
 
-We rely on GDAL_ to read georeferenced datasets. However, it is not
-available on PyPi.
+We rely on GDAL_ to read georeferenced datasets.
 
 Under Debian or Ubuntu, run the following to install it::
 
-    $ sudo apt-get install python-gdal
+    $ sudo apt-get install gdal-bin libgdal-dev
 
 
-We also rely on VIPS_ to do fast image processing. It's also not
-available on PyPi.
+You will need to install the PyPi GDAL package with the following options::
+
+    $ pip install --global-option=build_ext --global-option=--gdal-config=/usr/bin/gdal-config --global-option=--include-dirs=/usr/include/gdal/ GDAL==$(GDAL_VERSION)
+
+
+We also rely on VIPS_ to do fast image processing.
 
 Under Debian or Ubuntu, run the following to install it::
 
-    $ sudo apt-get install python-vipscc
-
-If you are using a virtualenv, you will need to symlink Python library
-in the right place. Under Debian or Ubuntu, assuming Python 2.7, run the
-following::
-
-    $ ln -s /usr/lib/python2.7/dist-packages/vipsCC $VIRTUAL_ENV/lib/python2.7/site-packages/
+    $ sudo apt-get install libvips libvips-dev
 
 
 You'll also need a few other libraries to deal with large TIFF files and
