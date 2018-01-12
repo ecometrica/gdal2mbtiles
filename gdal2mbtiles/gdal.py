@@ -415,8 +415,7 @@ class Dataset(gdal.Dataset):
         """
         # Open the input file and read some metadata
         open(inputfile, 'r').close()  # HACK: GDAL gives a useless exception
-
-        if isinstance(inputfile, str):
+        if not isinstance(inputfile, bytes):
             inputfile = inputfile.encode('utf-8')
         try:
             # Since this is a SWIG object, clone the ``this`` pointer
@@ -907,13 +906,12 @@ class SpatialReference(osr.SpatialReference):
 class VRT(object):
     def __init__(self, content):
         self.content = content
-        logger.info(content)
 
     def __str__(self):
         return self.content.decode('utf-8')
 
     def get_root(self):
-        return ElementTree.fromstring(self.content.decode('utf-8'))
+        return ElementTree.fromstring(self.content)
 
     def get_tempfile(self, **kwargs):
         kwargs.setdefault('suffix', '.vrt')
