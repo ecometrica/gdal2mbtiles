@@ -457,13 +457,13 @@ class Dataset(gdal.Dataset):
             sr.AutoIdentifyEPSG()
             return sr
         except RuntimeError as re:
-            if 'Unsupported SRS' in re.message:
+            if 'Unsupported SRS' in str(re):
                 # Equivalent to EPSG:3857
                 web_mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
                 sr = sr.FromEPSG(sr.GetEPSGCode())
                 if web_mercator.IsSame(sr):
                     return web_mercator
-            raise GdalError(re.message)
+            raise GdalError(str(re))
 
     def GetCoordinateTransformation(self, dst_ref):
         return CoordinateTransformation(src_ref=self.GetSpatialReference(),
