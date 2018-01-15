@@ -898,7 +898,7 @@ class TmsTiles(object):
                               resolution=self.resolution + levels)
 
     def write_buffer(self, image, resolution):
-        if image.BufferSize() >= self.IMAGE_BUFFER_DISK_THRESHOLD:
+        if VImageAdapter(image).BufferSize() >= self.IMAGE_BUFFER_DISK_THRESHOLD:
             logger.debug(
                 'Buffering resolution {0} to disk'.format(resolution)
             )
@@ -909,7 +909,10 @@ class TmsTiles(object):
         logger.debug(
             'Buffering resolution {0} to memory'.format(resolution)
         )
-        return image.write_to_memory()
+        return Image.new_from_memory(
+            image.write_to_memory(), image.width, image.height, image.bands,
+            'uchar'
+        )
 
 
 class TmsPyramid(object):
