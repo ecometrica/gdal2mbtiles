@@ -32,7 +32,7 @@ from .vips import TmsPyramid, validate_resolutions
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None, fill_borders=None,
                   zoom_offset=None, colors=None, renderer=None,
-                  preprocessor=None,pngdata={}):
+                  preprocessor=None,pngdata=None):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -52,6 +52,10 @@ def image_mbtiles(inputfile, outputfile, metadata,
     If `min_resolution` is None, don't downsample.
     If `max_resolution` is None, don't upsample.
     """
+
+    if pngdata is None:
+      pngdata = dict()
+
     if renderer is None:
       renderer = PngRenderer(**pngdata)
 
@@ -154,7 +158,7 @@ def image_slice(inputfile, outputdir, fill_borders=None,
 def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, fill_borders=None,
-                 zoom_offset=None, renderer=None,pngdata={}):
+                 zoom_offset=None, renderer=None,pngdata=None):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -181,6 +185,10 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     """
     if colors and band is None:
         band = 1
+    
+    if pngdata is None:
+      pngdata = dict()
+
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),

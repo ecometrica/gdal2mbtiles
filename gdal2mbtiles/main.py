@@ -108,12 +108,15 @@ def colorize_band_arg(s):
 
 def png8_arg(s):
     """Validates --png8"""
-    try:
-        result = int(s)
-    except ValueError:
-        raise argparse.ArgumentTypeError("invalid int value: '{0}'".format(s))
-    if not 2 <= result <= 256:
-        raise ValueError(
+    if s is None:
+        result = s
+    else:
+        try:
+            result = int(s)
+        except ValueError:
+            raise argparse.ArgumentTypeError("invalid int value: '{0}'".format(s))
+        if not 2 <= result <= 256:
+            raise ValueError(
                 'png8 must be between 2 and 256: {0!r}'.format(png8)
             )
     return result
@@ -194,7 +197,8 @@ def parse_args(args):
                        type=colorize_band_arg, default=None,
                        help='Raster band to colorize. Defaults to 1')
     group.add_argument('--png8', default=None,
-                        type=png8_arg,help='png8 must be between 2 and 256.')
+                        type=png8_arg,help=('Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs. '
+                            'If an integer, specifies number of colors in palette between 2 and 256. Default to False.'))
 
     args = parser.parse_args(args=args)
 
@@ -295,7 +299,8 @@ def main(args=None, use_logging=True):
                      min_resolution=args.min_resolution,
                      max_resolution=args.max_resolution,
                      fill_borders=args.fill_borders,
-                     zoom_offset=args.zoom_offset,pngdata=pngdata,
+                     zoom_offset=args.zoom_offset,
+                     pngdata=pngdata,
                      # Coloring
                      colors=colors, band=band)
         return 0
