@@ -390,6 +390,7 @@ class MBTiles(object):
             self._conn = sqlite3.connect(self.filename)
         except sqlite3.OperationalError:
             raise InvalidFileError("Invalid MBTiles file.")
+        self._conn.text_factory = lambda x: x.decode('utf-8', 'ignore')
 
         # Pragmas derived from options
         if options is None:
