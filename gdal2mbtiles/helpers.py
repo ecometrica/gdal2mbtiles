@@ -32,7 +32,7 @@ from .vips import TmsPyramid, validate_resolutions
 def image_mbtiles(inputfile, outputfile, metadata,
                   min_resolution=None, max_resolution=None, fill_borders=None,
                   zoom_offset=None, colors=None, renderer=None,
-                  preprocessor=None):
+                  preprocessor=None,pngdata={}):
     """
     Slices a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -53,7 +53,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
     If `max_resolution` is None, don't upsample.
     """
     if renderer is None:
-        renderer = PngRenderer()
+      renderer = PngRenderer(**pngdata)
 
     with MbtilesStorage.create(filename=outputfile,
                                metadata=metadata,
@@ -154,7 +154,7 @@ def image_slice(inputfile, outputdir, fill_borders=None,
 def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                  spatial_ref=None, resampling=None,
                  min_resolution=None, max_resolution=None, fill_borders=None,
-                 zoom_offset=None, renderer=None):
+                 zoom_offset=None, renderer=None,pngdata={}):
     """
     Warps a GDAL-readable inputfile into a pyramid of PNG tiles.
 
@@ -199,7 +199,7 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
                              colors=colors, renderer=renderer,
                              preprocessor=preprocessor,
                              fill_borders=fill_borders,
-                             zoom_offset=zoom_offset)
+                             zoom_offset=zoom_offset,pngdata=pngdata)
 
 
 def warp_pyramid(inputfile, outputdir, colors=None, band=None,
