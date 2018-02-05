@@ -425,7 +425,7 @@ class VImageAdapter(object):
 
         # Resize
         return self.image.embed(
-            x, y, width, height, background=[0]  # Transparent
+            x, y, width, height, background=[0, 0, 0, 0]  # Transparent
         )
 
     def BufferSize(self):
