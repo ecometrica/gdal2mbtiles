@@ -17,6 +17,29 @@ The MBTiles_ file format was developed by MapBox_ to make tile storage
 easier. You can upload the final file to their service, or run your own
 tile server. MapBox provides one called TileStream_.
 
+Later versions of GDAL (>= 2) allow generation of mbtiles files via the
+``gdal_translate`` and ``gdaladdo`` commands.  However, gdal2mbtiles offers some
+advantages:
+
+*  allows you to specify an upper resolution/zoom level.  GDAL always uses the
+   native resolution of the input raster to determine the highest zoom level of
+   the mbtiles output, whereas gdal2mbtiles can also upsample to create zoom levels
+   at a higher resolution than your original file.
+* the ``gdal_translate`` command only converts the geotiff at the native resolution,
+  so the lower resolutions are added to the file via overviews (``gdaladdo``)
+* ``gdaladdo`` can only add overviews down to the zoom level corresponding to
+  the size of the tile/block size (256x256).  gdal2mbtiles can always create images
+  down to zoom level 1.
+* performance: gdal2mbtiles uses pyvips for image processing, which is parallel
+  and quick.  Compared to the equivalent processing with GDAL, gdal2mbtiles is
+  typically 2-4 times quicker.  For example:
+
+  * a resolution 14 file, 13000x11000 pixels, min resolution 0, max resolution
+    14: ~5 minutes with gdal2mbtiles and ~8 minutes with GDAL commands.
+  * a resoluton 11 file, 200,000x200,000, zoom level 11 only: ~30min with
+    gdal2mbtiles and ~133min with GDAL (with ``GDAL_CACHE_MAX`` and
+    ``GDAL_NUM_THREADS`` options)
+
 
 Installation
 ============
@@ -43,6 +66,7 @@ We rely on GDAL_ to read georeferenced datasets.
 
 Under Debian or Ubuntu, run the following to install it::
 
+    $ sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
     $ sudo apt-get install gdal-bin libgdal-dev
 
 
@@ -51,7 +75,7 @@ You will need to install the PyPi GDAL package with the following options::
     $ pip install --global-option=build_ext --global-option=--gdal-config=/usr/bin/gdal-config --global-option=--include-dirs=/usr/include/gdal/ GDAL==$(GDAL_VERSION)
 
 
-We also rely on VIPS_ to do fast image processing.
+We also rely on VIPS_ (version 8.2+) to do fast image processing.
 
 Under Debian or Ubuntu, run the following to install it::
 
