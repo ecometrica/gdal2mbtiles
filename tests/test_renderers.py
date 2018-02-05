@@ -101,7 +101,7 @@ class TestTouchRenderer(unittest.TestCase):
     def test_simple(self):
         renderer = TouchRenderer()
         contents = renderer.render(image=None)
-        self.assertEqual(contents, '')
+        self.assertEqual(contents, b'')
 
     def test_suffix(self):
         # Default

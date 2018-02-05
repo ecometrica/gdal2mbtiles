@@ -194,4 +194,4 @@ class TouchRenderer(Renderer):
 
     def render(self, image):
         """Touches `filename` and returns its value."""
-        return ''
+        return b''

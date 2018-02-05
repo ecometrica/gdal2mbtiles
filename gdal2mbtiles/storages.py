@@ -147,7 +147,7 @@ class SimpleFileStorage(Storage):
     def _make_callback(self, outputfile):
         """Returns a callback that saves the rendered image."""
         def callback(contents):
-            with open(outputfile, 'wt') as output:
+            with open(outputfile, 'wb') as output:
                 output.write(contents)
         return callback
 
