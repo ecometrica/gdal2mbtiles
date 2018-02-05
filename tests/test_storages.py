@@ -58,7 +58,6 @@ class TestSimpleFileStorage(unittest.TestCase):
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
-        self.storage.waitall()
         self.assertEqual(set(os.listdir(self.outputdir)),
                          set([
                              '2-0-1-f1d3ff8443297732862df21dc4e57262.png',
@@ -103,7 +102,6 @@ class TestSimpleFileStorage(unittest.TestCase):
         # Western hemisphere is border
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
-        self.storage.waitall()
         self.assertEqual(set(sorted(os.listdir(self.outputdir))),
                          set(sorted([
                              '1-0-0-ec87a838931d4d5d2e94a04644788a55.png',
@@ -179,7 +177,6 @@ class TestNestedFileStorage(unittest.TestCase):
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
         self.storage.save(x=1, y=0, z=3, image=image)
-        self.storage.waitall()
         self.assertEqual(set(recursive_listdir(self.outputdir)),
                          set(['2/',
                               '2/0/',
@@ -210,7 +207,6 @@ class TestNestedFileStorage(unittest.TestCase):
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
         self.storage.save_border(x=0, y=1, z=2)
-        self.storage.waitall()
         self.assertEqual(set(recursive_listdir(self.outputdir)),
                          set([
                              '1/',
@@ -304,7 +300,6 @@ class TestMbtilesStorage(unittest.TestCase):
         # Save it twice, assuming that MBTiles will deduplicate
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
-        self.storage.waitall()
 
         # Assert that things were saved properly
         self.assertEqual(
@@ -337,7 +332,6 @@ class TestMbtilesStorage(unittest.TestCase):
         # Western hemisphere is border
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
-        self.storage.waitall()
 
         # Assert that things were saved properly
         self.assertEqual(

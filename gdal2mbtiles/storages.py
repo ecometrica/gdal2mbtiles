@@ -29,7 +29,6 @@ import os
 from .constants import TILE_SIDE
 from .gdal import SpatialReference
 from .mbtiles import MBTiles
-from .pool import Pool
 from .gd_types import rgba
 from .utils import intmd5, makedirs
 from .vips import VImageAdapter
@@ -49,14 +48,8 @@ class Storage(object):
         Initialize a storage.
 
         renderer: Used to render images into tiles.
-        pool: Process pool to coordinate subprocesses.
         """
         self.renderer = renderer
-
-        if pool is None:
-            # Create a pool with a maximum processes being equal to CPUs
-            pool = Pool(processes=None)
-        self.pool = pool
 
         self.hasher = intmd5
 
@@ -95,10 +88,6 @@ class Storage(object):
         image._buf = image
         return image
 
-    def waitall(self):
-        """Waits until all saves are finished."""
-        self.pool.join()
-
 
 class SimpleFileStorage(Storage):
     """
@@ -136,20 +125,10 @@ class SimpleFileStorage(Storage):
             self.symlink(src=self.seen[hashed], dst=filepath)
         else:
             self.seen[hashed] = filepath
-            self.pool.apply_async(
-                func=self.renderer.render,
-                kwds=dict(image=image),
-                callback=self._make_callback(
-                    outputfile=os.path.join(self.outputdir, filepath)
-                )
-            )
-
-    def _make_callback(self, outputfile):
-        """Returns a callback that saves the rendered image."""
-        def callback(contents):
+            contents = self.renderer.render(image)
+            outputfile = os.path.join(self.outputdir, filepath)
             with open(outputfile, 'wb') as output:
                 output.write(contents)
-        return callback
 
     def symlink(self, src, dst):
         """Creates a relative symlink from dst to src."""
@@ -301,31 +280,15 @@ class MbtilesStorage(Storage):
                                 hashed=hashed)
         else:
             self.seen.add(hashed)
-            self.pool.apply_async(
-                func=self.renderer.render,
-                kwds=dict(image=image),
-                callback=self._make_callback(x=x, y=y, z=z, hashed=hashed)
-            )
-
-    def _make_callback(self, x, y, z, hashed):
-        """Returns a callback that saves the rendered image."""
-        def callback(contents):
-            # Insert the rendered file into the database
-            if not isinstance(contents, bytes):
-                contents = contents.encode('utf-8')
-
-            # memoryview has been backported to python 2.7, but sqlite3 requires
-            # the old buffer object
+            contents = self.renderer.render(image)
             if sys.version_info < (3, 0):
                 data = buffer(contents)
             else:
                 data = memoryview(contents)
-
             self.mbtiles.insert(x=x, y=y,
                                 z=z + self.zoom_offset,
                                 hashed=hashed,
                                 data=data)
-        return callback
 
     def save_border(self, x, y, z):
         """Saves a border image at coordinates `x`, `y`, and `z`."""

@@ -809,7 +809,6 @@ class TmsTiles(object):
                                  ))
 
         self._slice()
-        self.storage.waitall()
 
     def downsample(self, levels=1):
         """
@@ -1085,7 +1084,6 @@ class TmsPyramid(object):
                                 min_resolution=min_resolution,
                                 max_resolution=max_resolution,
                                 fill_borders=fill_borders)
-        self.storage.waitall()
 
         # Post-import hook needs to be called in case the storage has to
         # update some metadata
