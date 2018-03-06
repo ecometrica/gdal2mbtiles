@@ -49,8 +49,8 @@ if __name__ == '__main__' and __package__ is None:
     __package__ = gdal2mbtiles.__name__
 
 from .gdal import RESAMPLING_METHODS, SpatialReference
+from .gd_types import rgba
 from .mbtiles import Metadata
-from .types import rgba
 
 
 COLORING_METHODS = {
@@ -148,7 +148,7 @@ def parse_args(args):
                              'Defaults to 3857'))
     group.add_argument('--resampling',
                        default='near',
-                       choices=RESAMPLING_METHODS.values(),
+                       choices=list(RESAMPLING_METHODS.values()),
                        help=('Resampling algorithm for warping. '
                              'Defaults to "near" (nearest-neighbour)'))
 

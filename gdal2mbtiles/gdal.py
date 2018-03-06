@@ -20,6 +20,9 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+# Make sure we are using the python 3 version of round in both python 2 and 3
+from builtins import round
+
 from functools import partial
 import logging
 from math import ceil, floor, pi
@@ -37,6 +40,12 @@ from osgeo.gdalconst import (GA_ReadOnly, GRA_Bilinear, GRA_Cubic,
                              GRA_CubicSpline, GRA_Lanczos,
                              GRA_NearestNeighbour)
 
+try:
+  basestring
+except NameError:
+  basestring = str
+
+
 gdal.UseExceptions()            # Make GDAL throw exceptions on error
 osr.UseExceptions()             # And OSR as well.
 
@@ -45,7 +54,7 @@ from .constants import (EPSG_WEB_MERCATOR, ESRI_102113_PROJ, ESRI_102100_PROJ,
                         GDALTRANSLATE, GDALWARP, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
-from .types import Extents, GdalFormat, XY
+from .gd_types import Extents, GdalFormat, XY
 from .utils import rmfile
 
 
@@ -70,7 +79,7 @@ def check_output_gdal(*popenargs, **kwargs):
         if cmd is None:
             cmd = popenargs[0]
         raise CalledGdalError(p.returncode, cmd, output=stdoutdata,
-                              error=stderrdata.rstrip('\n'))
+                              error=stderrdata.decode('utf-8').rstrip('\n'))
     return stdoutdata
 
 
@@ -153,13 +162,12 @@ def extract_color_band(inputfile, band):
         '-of', 'VRT',           # Output to VRT
         '-b', band,             # Single band
         inputfile,
-        '/dev/stdout'
+        '/vsistdout'
     ]
     try:
         return VRT(check_output_gdal([str(e) for e in command]))
     except CalledGdalError as e:
-        if e.error == ("ERROR 4: `/dev/stdout' not recognised as a supported "
-                       "file format."):
+        if e.error == ("ERROR 6: Read or update mode not supported on /vsistdout"):
             # HACK: WTF?!?
             return VRT(e.output)
         raise
@@ -190,7 +198,7 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
                 resampling = RESAMPLING_METHODS[resampling]
             except KeyError:
                 raise UnknownResamplingMethodError(resampling)
-        elif resampling not in RESAMPLING_METHODS.values():
+        elif resampling not in list(RESAMPLING_METHODS.values()):
             raise UnknownResamplingMethodError(resampling)
         warp_cmd.extend(['-r', resampling])
 
@@ -202,8 +210,14 @@ def warp(inputfile, spatial_ref=None, cmd=GDALWARP, resampling=None,
         warp_cmd.extend(['-dstnodata', ' '.join(nodata_values)])
 
     # Call gdalwarp
-    warp_cmd.extend([inputfile, '/dev/stdout'])
-    return VRT(check_output_gdal([str(e) for e in warp_cmd]))
+    warp_cmd.extend([inputfile, '/vsistdout'])
+
+    try:
+        return VRT(check_output_gdal([str(e) for e in warp_cmd]))
+    except CalledGdalError as e:
+        if e.error == ("ERROR 6: Read or update mode not supported on /vsistdout"):
+            return VRT(e.output)
+        raise
 
 
 def supported_formats(cmd=GDALWARP):
@@ -281,7 +295,11 @@ class Band(gdal.Band):
 
     def GetMetadataItem(self, name, domain=''):
         """Wrapper around gdal.Band.GetMetadataItem()"""
-        return super(Band, self).GetMetadataItem(bytes(name), bytes(domain))
+        if not isinstance(name, str):
+            name = str(name)
+        if not isinstance(domain, str):
+            domain = str(domain)
+        return super(Band, self).GetMetadataItem(name, domain)
 
     def GetNoDataValue(self):
         """Returns gdal.Band.GetNoDataValue() as a NumPy type"""
@@ -343,7 +361,7 @@ class Band(gdal.Band):
         """Returns the next `value` expressible in this band"""
         datatype = self.NumPyDataType
         if issubclass(datatype, numpy.integer):
-            if not isinstance(value, (int, long, numpy.integer)):
+            if not isinstance(value, (int, numpy.integer)):
                 raise TypeError(
                     'value {0!r} must be compatible with {1}'.format(
                         value, datatype.__name__
@@ -362,7 +380,7 @@ class Band(gdal.Band):
             return value + 1
 
         elif issubclass(datatype, numpy.floating):
-            if not isinstance(value, (int, long, numpy.integer,
+            if not isinstance(value, (int, numpy.integer,
                                       float, numpy.floating)):
                 raise TypeError(
                     "value {0!r} must be compatible with {1}".format(
@@ -397,14 +415,13 @@ class Dataset(gdal.Dataset):
         """
         # Open the input file and read some metadata
         open(inputfile, 'r').close()  # HACK: GDAL gives a useless exception
-
-        if isinstance(inputfile, unicode):
+        if not isinstance(inputfile, bytes):
             inputfile = inputfile.encode('utf-8')
         try:
             # Since this is a SWIG object, clone the ``this`` pointer
             self.this = gdal.Open(inputfile, mode).this
         except RuntimeError as e:
-            raise GdalError(e.message)
+            raise GdalError(str(e))
 
         # Shadow for metadata so we can overwrite it without saving
         # it to the original file.
@@ -440,13 +457,13 @@ class Dataset(gdal.Dataset):
             sr.AutoIdentifyEPSG()
             return sr
         except RuntimeError as re:
-            if 'Unsupported SRS' in re.message:
+            if 'Unsupported SRS' in str(re):
                 # Equivalent to EPSG:3857
                 web_mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
                 sr = sr.FromEPSG(sr.GetEPSGCode())
                 if web_mercator.IsSame(sr):
                     return web_mercator
-            raise GdalError(re.message)
+            raise GdalError(str(re))
 
     def GetCoordinateTransformation(self, dst_ref):
         return CoordinateTransformation(src_ref=self.GetSpatialReference(),
@@ -555,8 +572,8 @@ class Dataset(gdal.Dataset):
                                            transform=transform)
         lower_right = self.PixelCoordinates(x_size, y_size,
                                             transform=transform)
-        x_values, y_values = zip(upper_left, upper_right,
-                                 lower_left, lower_right)
+        x_values, y_values = list(zip(upper_left, upper_right,
+                                 lower_left, lower_right))
 
         # Return lower-left and upper-right extents
         return Extents(lower_left=XY(min(x_values), min(y_values)),
@@ -748,9 +765,9 @@ class Dataset(gdal.Dataset):
         data_extents = self.GetTmsExtents(resolution=resolution,
                                           transform=transform)
         return (XY(x, y)
-                for x in xrange(world_extents.lower_left.x,
+                for x in range(world_extents.lower_left.x,
                                 world_extents.upper_right.x)
-                for y in xrange(world_extents.lower_left.y,
+                for y in range(world_extents.lower_left.y,
                                 world_extents.upper_right.y)
                 if XY(x, y) not in data_extents)
 
@@ -810,9 +827,12 @@ class SpatialReference(osr.SpatialReference):
             return
 
         if self.IsGeographic() == 1:
-            cstype = b'GEOGCS'
+            cstype = 'GEOGCS'
         else:
-            cstype = b'PROJCS'
+            cstype = 'PROJCS'
+
+        if not isinstance(cstype, str):
+            cstype = str(cstype)
 
         authority_name = self.GetAuthorityName(cstype)
         authority_code = self.GetAuthorityCode(cstype)
@@ -888,7 +908,7 @@ class VRT(object):
         self.content = content
 
     def __str__(self):
-        return self.content
+        return self.content.decode('utf-8')
 
     def get_root(self):
         return ElementTree.fromstring(self.content)

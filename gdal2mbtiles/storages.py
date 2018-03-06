@@ -20,6 +20,8 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import sys
+
 from collections import defaultdict
 from functools import partial
 import os
@@ -27,10 +29,15 @@ import os
 from .constants import TILE_SIDE
 from .gdal import SpatialReference
 from .mbtiles import MBTiles
-from .pool import Pool
-from .types import rgba
+from .gd_types import rgba
 from .utils import intmd5, makedirs
-from .vips import VImage
+from .vips import VImageAdapter
+
+
+try:
+  basestring
+except NameError:
+  basestring = str
 
 
 class Storage(object):
@@ -41,14 +48,8 @@ class Storage(object):
         Initialize a storage.
 
         renderer: Used to render images into tiles.
-        pool: Process pool to coordinate subprocesses.
         """
         self.renderer = renderer
-
-        if pool is None:
-            # Create a pool with a maximum processes being equal to CPUs
-            pool = Pool(processes=None)
-        self.pool = pool
 
         self.hasher = intmd5
 
@@ -60,7 +61,7 @@ class Storage(object):
 
     def get_hash(self, image):
         """Returns the image content hash."""
-        return self.hasher(image.tobuffer())
+        return self.hasher(image.write_to_memory())
 
     def filepath(self, x, y, z, hashed):
         """Returns the filepath."""
@@ -81,12 +82,11 @@ class Storage(object):
     @classmethod
     def _border_image(cls, width=TILE_SIDE, height=TILE_SIDE):
         """Returns a border image suitable for borders."""
-        return VImage.new_rgba(width=width, height=height,
-                               ink=rgba(r=0, g=0, b=0, a=0))
-
-    def waitall(self):
-        """Waits until all saves are finished."""
-        self.pool.join()
+        image = VImageAdapter.new_rgba(
+            width, height, ink=rgba(r=0, g=0, b=0, a=0)
+        )
+        image._buf = image
+        return image
 
 
 class SimpleFileStorage(Storage):
@@ -125,20 +125,10 @@ class SimpleFileStorage(Storage):
             self.symlink(src=self.seen[hashed], dst=filepath)
         else:
             self.seen[hashed] = filepath
-            self.pool.apply_async(
-                func=self.renderer.render,
-                kwds=dict(image=image),
-                callback=self._make_callback(
-                    outputfile=os.path.join(self.outputdir, filepath)
-                )
-            )
-
-    def _make_callback(self, outputfile):
-        """Returns a callback that saves the rendered image."""
-        def callback(contents):
+            contents = self.renderer.render(image)
+            outputfile = os.path.join(self.outputdir, filepath)
             with open(outputfile, 'wb') as output:
                 output.write(contents)
-        return callback
 
     def symlink(self, src, dst):
         """Creates a relative symlink from dst to src."""
@@ -150,10 +140,10 @@ class SimpleFileStorage(Storage):
 
     def save_border(self, x, y, z):
         """Saves a border image at coordinates `x`, `y`, and `z`."""
-        if self._border_hashed is None:
+        if self._border_hashed is None or self._border_hashed not in self.seen:
             image = self._border_image()
-            self.save(x=x, y=y, z=z, image=image)
             self._border_hashed = self.get_hash(image)
+            self.save(x=x, y=y, z=z, image=image)
         else:
             # self._border_hashed will already be in self.seen
             filepath = self.filepath(x=x, y=y, z=z, hashed=self._border_hashed)
@@ -179,12 +169,12 @@ class NestedFileStorage(SimpleFileStorage):
 
     def filepath(self, x, y, z, hashed):
         """Returns the filepath, relative to self.outputdir."""
-        return (os.path.join(unicode(z), unicode(x), unicode(y)) +
+        return (os.path.join(str(z), str(x), str(y)) +
                 self.renderer.suffix)
 
     def makedirs(self, x, y, z):
         if not self.madedirs[z][x]:
-            makedirs(os.path.join(self.outputdir, unicode(z), unicode(x)),
+            makedirs(os.path.join(self.outputdir, str(z), str(x)),
                      ignore_exists=True)
             self.madedirs[z][x] = True
 
@@ -225,6 +215,8 @@ class MbtilesStorage(Storage):
         self.seen = seen
         self._border_hashed = None
 
+        self.mbtiles = None
+
         if isinstance(filename, basestring):
             self.filename = filename
             self.mbtiles = MBTiles(filename=filename)
@@ -256,7 +248,6 @@ class MbtilesStorage(Storage):
 
         Metadata is also taken as **kwargs. See `mbtiles.Metadata`.
         """
-
         bounds = metadata.get('bounds', None)
         if bounds is not None:
             metadata['bounds'] = bounds.lower_left + bounds.upper_right
@@ -289,21 +280,15 @@ class MbtilesStorage(Storage):
                                 hashed=hashed)
         else:
             self.seen.add(hashed)
-            self.pool.apply_async(
-                func=self.renderer.render,
-                kwds=dict(image=image),
-                callback=self._make_callback(x=x, y=y, z=z, hashed=hashed)
-            )
-
-    def _make_callback(self, x, y, z, hashed):
-        """Returns a callback that saves the rendered image."""
-        def callback(contents):
-            # Insert the rendered file into the database
+            contents = self.renderer.render(image)
+            if sys.version_info < (3, 0):
+                data = buffer(contents)
+            else:
+                data = memoryview(contents)
             self.mbtiles.insert(x=x, y=y,
                                 z=z + self.zoom_offset,
                                 hashed=hashed,
-                                data=buffer(contents))
-        return callback
+                                data=data)
 
     def save_border(self, x, y, z):
         """Saves a border image at coordinates `x`, `y`, and `z`."""

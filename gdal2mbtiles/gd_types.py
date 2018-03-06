@@ -33,7 +33,7 @@ GdalFormat = namedtuple(typename='GdalFormat',
 
 def enum(**enums):
     E = namedtuple(typename='enum',
-                   field_names=enums.keys())
+                   field_names=list(enums.keys()))
     return E(**enums)
 
 

@@ -13,9 +13,9 @@ from gdal2mbtiles.mbtiles import Metadata
 from gdal2mbtiles.renderers import PngRenderer, TouchRenderer
 from gdal2mbtiles.storages import (MbtilesStorage,
                                    NestedFileStorage, SimpleFileStorage)
-from gdal2mbtiles.types import rgba
+from gdal2mbtiles.gd_types import rgba
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
-from gdal2mbtiles.vips import VImage
+from gdal2mbtiles.vips import VImageAdapter
 
 
 class TestSimpleFileStorage(unittest.TestCase):
@@ -48,17 +48,16 @@ class TestSimpleFileStorage(unittest.TestCase):
                          '2-0-1-deadbeef' + self.renderer.suffix)
 
     def test_get_hash(self):
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.assertEqual(self.storage.get_hash(image=image),
-                         long('f1d3ff8443297732862df21dc4e57262', base=16))
+                         int('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
-        self.storage.waitall()
         self.assertEqual(set(os.listdir(self.outputdir)),
                          set([
                              '2-0-1-f1d3ff8443297732862df21dc4e57262.png',
@@ -103,12 +102,11 @@ class TestSimpleFileStorage(unittest.TestCase):
         # Western hemisphere is border
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
-        self.storage.waitall()
-        self.assertEqual(set(os.listdir(self.outputdir)),
-                         set([
+        self.assertEqual(set(sorted(os.listdir(self.outputdir))),
+                         set(sorted([
                              '1-0-0-ec87a838931d4d5d2e94a04644788a55.png',
                              '1-0-1-ec87a838931d4d5d2e94a04644788a55.png',
-                         ]))
+                         ])))
 
         # Is this a real file?
         self.assertFalse(
@@ -174,12 +172,11 @@ class TestNestedFileStorage(unittest.TestCase):
         self.assertEqual(os.listdir(self.outputdir), [])
 
     def test_save(self):
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
         self.storage.save(x=1, y=0, z=3, image=image)
-        self.storage.waitall()
         self.assertEqual(set(recursive_listdir(self.outputdir)),
                          set(['2/',
                               '2/0/',
@@ -210,7 +207,6 @@ class TestNestedFileStorage(unittest.TestCase):
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
         self.storage.save_border(x=0, y=1, z=2)
-        self.storage.waitall()
         self.assertEqual(set(recursive_listdir(self.outputdir)),
                          set([
                              '1/',
@@ -286,10 +282,10 @@ class TestMbtilesStorage(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.tempfile.name))
 
     def test_get_hash(self):
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
         self.assertEqual(self.storage.get_hash(image=image),
-                         long('f1d3ff8443297732862df21dc4e57262', base=16))
+                         int('f1d3ff8443297732862df21dc4e57262', base=16))
 
     def test_save(self):
         # We must create this on disk
@@ -298,13 +294,12 @@ class TestMbtilesStorage(unittest.TestCase):
                                              metadata=self.metadata)
 
         # Transparent 1×1 image
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
 
         # Save it twice, assuming that MBTiles will deduplicate
         self.storage.save(x=0, y=1, z=2, image=image)
         self.storage.save(x=1, y=0, z=2, image=image)
-        self.storage.waitall()
 
         # Assert that things were saved properly
         self.assertEqual(
@@ -337,7 +332,6 @@ class TestMbtilesStorage(unittest.TestCase):
         # Western hemisphere is border
         self.storage.save_border(x=0, y=0, z=1)
         self.storage.save_border(x=0, y=1, z=1)
-        self.storage.waitall()
 
         # Assert that things were saved properly
         self.assertEqual(

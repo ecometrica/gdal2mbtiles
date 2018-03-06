@@ -534,8 +534,8 @@ class TestWarpMbtiles(unittest.TestCase):
                          metadata=metadata,
                          min_resolution=0, max_resolution=3, zoom_offset=2,
                          renderer=TouchRenderer(suffix='.png'))
-            with MbtilesStorage(renderer=None,
-                                filename=outputfile.name) as storage:
+
+            with MbtilesStorage(renderer=None, filename=outputfile.name) as storage:
                 self.assertEqual(
                     set((z, x, y) for z, x, y, data in storage.mbtiles.all()),
                     set([(2, 0, 0)] +

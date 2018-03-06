@@ -197,7 +197,7 @@ class TestMetadata(unittest.TestCase):
         self.assertEqual(metadata.pop('test', None), None)
 
         # Update
-        data = dict(self.metadata.items(),
+        data = dict(list(self.metadata.items()),
                     name='Tileset',
                     description='This is a test tileset.')
         metadata.update(data)

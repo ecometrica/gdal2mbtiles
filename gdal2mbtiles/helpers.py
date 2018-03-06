@@ -54,6 +54,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
     """
     if renderer is None:
         renderer = PngRenderer()
+
     with MbtilesStorage.create(filename=outputfile,
                                metadata=metadata,
                                zoom_offset=zoom_offset,
@@ -64,7 +65,9 @@ def image_mbtiles(inputfile, outputfile, metadata,
                              max_resolution=max_resolution)
         if preprocessor is None:
             preprocessor = colorize
+
         pyramid = preprocessor(**locals())
+
         pyramid.slice(fill_borders=fill_borders)
 
         # Add metadata extensions
@@ -74,6 +77,7 @@ def image_mbtiles(inputfile, outputfile, metadata,
             min_resolution = pyramid.resolution
         if max_resolution is None:
             max_resolution = pyramid.resolution
+
         metadata = storage.mbtiles.metadata
         metadata['x-minzoom'] = min_resolution + zoom_offset
         metadata['x-maxzoom'] = max_resolution + zoom_offset
@@ -177,7 +181,6 @@ def warp_mbtiles(inputfile, outputfile, metadata, colors=None, band=None,
     """
     if colors and band is None:
         band = 1
-
     with NamedTemporaryFile(suffix='.tif') as tempfile:
         dataset = Dataset(inputfile)
         validate_resolutions(resolution=dataset.GetNativeResolution(),

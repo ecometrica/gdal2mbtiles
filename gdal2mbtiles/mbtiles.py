@@ -25,9 +25,18 @@ import errno
 import os
 import sqlite3
 from struct import pack, unpack
-from UserDict import DictMixin
 
-from .types import enum
+try:
+     from UserDict import DictMixin
+except ImportError:
+     from collections import MutableMapping
+
+try:
+  basestring
+except NameError:
+  basestring = str
+
+from .gd_types import enum
 from .utils import rmfile
 
 
@@ -55,7 +64,18 @@ class MetadataValueError(MetadataError, ValueError):
     pass
 
 
-class Metadata(object, DictMixin):
+import sys
+if sys.version_info[0] < 3:
+
+    class CompatibleMutableMapping(object, DictMixin):
+        pass
+
+else:
+    class CompatibleMutableMapping(MutableMapping):
+        pass
+
+
+class Metadata(CompatibleMutableMapping):
     """
     Key-value metadata table expressed as a dictionary
     """
@@ -123,6 +143,13 @@ class Metadata(object, DictMixin):
                 {'name': i, 'value': y}
             )
 
+    def __iter__(self):
+        for k in self.keys():
+            yield k
+
+    def __len__(self):
+        return len(self.keys())
+
     def keys(self):
         """Returns a list of keys from the database."""
         try:
@@ -136,7 +163,7 @@ class Metadata(object, DictMixin):
         result = cursor.fetchall()
         if not result:
             return result
-        return zip(*result)[0]
+        return list(zip(*result))[0]
 
     def _setup(self, metadata):
         missing = set(self.MANDATORY) - set(metadata.keys())
@@ -161,7 +188,7 @@ class Metadata(object, DictMixin):
     @classmethod
     def detect(cls, mbtiles):
         """Returns the Metadata version detected from `mbtiles`."""
-        return cls._detect(keys=cls(mbtiles=mbtiles).keys())
+        return cls._detect(keys=list(cls(mbtiles=mbtiles).keys()))
 
     @classmethod
     def all(cls):
@@ -180,7 +207,7 @@ class Metadata(object, DictMixin):
     @classmethod
     def latest(cls):
         """Returns the latest Metadata class."""
-        return sorted(cls.all().items(),
+        return sorted(list(cls.all().items()),
                       key=(lambda k: LooseVersion(k[0])),
                       reverse=True)[0][1]
 
@@ -363,6 +390,7 @@ class MBTiles(object):
             self._conn = sqlite3.connect(self.filename)
         except sqlite3.OperationalError:
             raise InvalidFileError("Invalid MBTiles file.")
+        self._conn.text_factory = lambda x: x.decode('utf-8', 'ignore')
 
         # Pragmas derived from options
         if options is None:
@@ -370,7 +398,7 @@ class MBTiles(object):
         try:
             self._conn.executescript(
                 '\n'.join('PRAGMA {0} = {1};'.format(k, v)
-                          for k, v in options.iteritems())
+                          for k, v in options.items())
             )
         except sqlite3.DatabaseError:
             self.close(remove_journal=False)
@@ -384,7 +412,7 @@ class MBTiles(object):
     def create(cls, filename, metadata, version=None):
         """Create a new MBTiles file. See `Metadata`"""
         if version is None:
-            version = cls.Metadata._detect(keys=metadata.keys())
+            version = cls.Metadata._detect(keys=list(metadata.keys()))
         mbtiles = cls._create(filename=filename, version=version)
         mbtiles.metadata._setup(metadata)
         return mbtiles
@@ -406,7 +434,6 @@ class MBTiles(object):
         #
         # However, we wish to normalize the tile_data, so we store each
         # in the images table.
-
         rmfile(filename, ignore_missing=True)
         try:
             os.remove(filename)
@@ -494,7 +521,6 @@ class MBTiles(object):
         # tile_id must be a 64-bit signed integer, but hashing functions
         # produce unsigned integers.
         hashed = unpack(b'q', pack(b'Q', hashed & 0xffffffffffffffff))[0]
-
         with self._conn:
             if data is not None:
                 # Insert tile data into images

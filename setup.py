@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
+
 
 from setuptools import setup
 
@@ -27,19 +27,16 @@ setup(
 
     packages=['gdal2mbtiles'],
     include_package_data=True,
-    install_requires=['numexpr', 'webcolors'],
+    install_requires=['future', 'numexpr', 'numpy', 'pyvips', 'webcolors'],
     # You also need certain dependencies that aren't in PyPi:
-    # python-gdal, python-vipscc, libtiff5, optipng, pngquant
-
-    # HACK: We cannot use PyPi's GDAL package because it's terribly
-    # broken and doesn't build out of the box.
+    # gdal-bin, libgdal-dev, libvips, libvips-dev, libtiff5, optipng, pngquant
 
     entry_points={
         'console_scripts': [
             'gdal2mbtiles = gdal2mbtiles.main:main',
         ]
     },
-
+    tests_require=['pytest'],
     test_suite='tests',
 
     classifiers=[
@@ -49,6 +46,8 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Multimedia :: Graphics :: Graphics Conversion',
         'Topic :: Scientific/Engineering :: GIS',
     ],

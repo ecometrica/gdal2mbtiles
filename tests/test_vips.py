@@ -2,6 +2,7 @@
 
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
+import pytest
 
 import os
 import unittest
@@ -11,9 +12,9 @@ import numpy
 from gdal2mbtiles.constants import TILE_SIDE
 from gdal2mbtiles.gdal import Dataset
 from gdal2mbtiles.storages import Storage
-from gdal2mbtiles.types import rgba, XY
+from gdal2mbtiles.gd_types import rgba, XY
 from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
-                               LibVips, TmsTiles, VImage, VipsDataset, VIPS)
+                               LibVips, TmsTiles, VImageAdapter, VipsDataset, VIPS)
 
 from tests.test_gdal import TestCase as GdalTestCase
 
@@ -38,22 +39,17 @@ class TestLibVips(unittest.TestCase):
         self.assertEqual(vips.get_concurrency(), concurrency)
 
 
-class TestVImage(unittest.TestCase):
+class TestVImageAdapter(unittest.TestCase):
     def test_new_rgba(self):
-        image = VImage.new_rgba(width=1, height=2)
-        self.assertEqual(image.Xsize(), 1)
-        self.assertEqual(image.Ysize(), 2)
-        self.assertEqual(image.Bands(), 4)
-
-    def test_from_vimage(self):
-        image = VImage.new_rgba(width=1, height=1)
-        self.assertEqual(VImage.from_vimage(image).tostring(),
-                         image.tostring())
+        image = VImageAdapter.new_rgba(width=1, height=2)
+        self.assertEqual(image.width, 1)
+        self.assertEqual(image.height, 2)
+        self.assertEqual(image.bands, 4)
 
     def test_buffer_size(self):
-        image = VImage.new_rgba(width=16, height=16)
+        image = VImageAdapter.new_rgba(width=16, height=16)
         self.assertEqual(
-            image.BufferSize(),
+            VImageAdapter(image).BufferSize(),
             (16 *               # width
              16 *               # height
              4 *                # bands
@@ -61,113 +57,97 @@ class TestVImage(unittest.TestCase):
         )
 
     def test_stretch(self):
-        image = VImage.new_rgba(width=16, height=16)
+        image = VImageAdapter.new_rgba(width=16, height=16)
 
         # No stretch
-        stretched = image.stretch(xscale=1.0, yscale=1.0)
-        self.assertEqual(stretched.Xsize(), image.Xsize())
-        self.assertEqual(stretched.Ysize(), image.Ysize())
+        stretched = VImageAdapter(image).stretch(xscale=1.0, yscale=1.0)
+        self.assertEqual(stretched.width, image.width)
+        self.assertEqual(stretched.height, image.height)
 
         # X direction
-        stretched = image.stretch(xscale=2.0, yscale=1.0)
-        self.assertEqual(stretched.Xsize(), image.Xsize() * 2.0)
-        self.assertEqual(stretched.Ysize(), image.Ysize())
+        stretched = VImageAdapter(image).stretch(xscale=2.0, yscale=1.0)
+        self.assertEqual(stretched.width, image.width * 2.0)
+        self.assertEqual(stretched.height, image.height)
 
         # Y direction
-        stretched = image.stretch(xscale=1.0, yscale=4.0)
-        self.assertEqual(stretched.Xsize(), image.Xsize())
-        self.assertEqual(stretched.Ysize(), image.Ysize() * 4.0)
+        stretched = VImageAdapter(image).stretch(xscale=1.0, yscale=4.0)
+        self.assertEqual(stretched.width, image.width)
+        self.assertEqual(stretched.height, image.height * 4.0)
 
         # Both directions
-        stretched = image.stretch(xscale=2.0, yscale=4.0)
-        self.assertEqual(stretched.Xsize(), image.Xsize() * 2.0)
-        self.assertEqual(stretched.Ysize(), image.Ysize() * 4.0)
+        stretched = VImageAdapter(image).stretch(xscale=2.0, yscale=4.0)
+        self.assertEqual(stretched.width, image.width * 2.0)
+        self.assertEqual(stretched.height, image.height * 4.0)
 
         # Not a power of 2
-        stretched = image.stretch(xscale=3.0, yscale=5.0)
-        self.assertEqual(stretched.Xsize(), image.Xsize() * 3.0)
-        self.assertEqual(stretched.Ysize(), image.Ysize() * 5.0)
+        stretched = VImageAdapter(image).stretch(xscale=3.0, yscale=5.0)
+        self.assertEqual(stretched.width, image.width * 3.0)
+        self.assertEqual(stretched.height, image.height * 5.0)
 
         # Out of bounds
         self.assertRaises(ValueError,
-                          image.stretch, xscale=0.5, yscale=1.0)
+                          VImageAdapter(image).stretch, xscale=0.5, yscale=1.0)
         self.assertRaises(ValueError,
-                          image.stretch, xscale=1.0, yscale=0.5)
+                          VImageAdapter(image).stretch, xscale=1.0, yscale=0.5)
 
-    def test_shrink(self):
-        image = VImage.new_rgba(width=16, height=16)
+    def test_shrink_affine(self):
+        image = VImageAdapter.new_rgba(width=16, height=16)
 
         # No shrink
-        shrunk = image.shrink(xscale=1.0, yscale=1.0)
-        self.assertEqual(shrunk.Xsize(), image.Xsize())
-        self.assertEqual(shrunk.Ysize(), image.Ysize())
+        shrunk = VImageAdapter(image).shrink_affine(xscale=1.0, yscale=1.0)
+        self.assertEqual(shrunk.width, image.width)
+        self.assertEqual(shrunk.height, image.height)
 
         # X direction
-        shrunk = image.shrink(xscale=0.25, yscale=1.0)
-        self.assertEqual(shrunk.Xsize(), image.Xsize() * 0.25)
-        self.assertEqual(shrunk.Ysize(), image.Ysize())
+        shrunk = VImageAdapter(image).shrink_affine(xscale=0.25, yscale=1.0)
+        self.assertEqual(shrunk.width, image.width * 0.25)
+        self.assertEqual(shrunk.height, image.height)
 
         # Y direction
-        shrunk = image.shrink(xscale=1.0, yscale=0.5)
-        self.assertEqual(shrunk.Xsize(), image.Xsize())
-        self.assertEqual(shrunk.Ysize(), image.Ysize() * 0.5)
+        shrunk = VImageAdapter(image).shrink_affine(xscale=1.0, yscale=0.5)
+        self.assertEqual(shrunk.width, image.width)
+        self.assertEqual(shrunk.height, image.height * 0.5)
 
         # Both directions
-        shrunk = image.shrink(xscale=0.25, yscale=0.5)
-        self.assertEqual(shrunk.Xsize(), image.Xsize() * 0.25)
-        self.assertEqual(shrunk.Ysize(), image.Ysize() * 0.5)
+        shrunk = VImageAdapter(image).shrink_affine(xscale=0.25, yscale=0.5)
+        self.assertEqual(shrunk.width, image.width * 0.25)
+        self.assertEqual(shrunk.height, image.height * 0.5)
 
         # Not a power of 2
-        shrunk = image.shrink(xscale=0.0625, yscale=0.125)
-        self.assertEqual(shrunk.Xsize(), int(image.Xsize() * 0.0625))
-        self.assertEqual(shrunk.Ysize(), int(image.Ysize() * 0.125))
+        shrunk = VImageAdapter(image).shrink_affine(xscale=0.0625, yscale=0.125)
+        self.assertEqual(shrunk.width, int(image.width * 0.0625))
+        self.assertEqual(shrunk.height, int(image.height * 0.125))
 
         # Out of bounds
         self.assertRaises(ValueError,
-                          image.shrink, xscale=0.0, yscale=1.0)
+                          VImageAdapter(image).shrink_affine, xscale=0.0, yscale=1.0)
         self.assertRaises(ValueError,
-                          image.shrink, xscale=2.0, yscale=1.0)
+                          VImageAdapter(image).shrink_affine, xscale=2.0, yscale=1.0)
         self.assertRaises(ValueError,
-                          image.shrink, xscale=1.0, yscale=0.0)
+                          VImageAdapter(image).shrink_affine, xscale=1.0, yscale=0.0)
         self.assertRaises(ValueError,
-                          image.shrink, xscale=1.0, yscale=2.0)
+                          VImageAdapter(image).shrink_affine, xscale=1.0, yscale=2.0)
 
     def test_tms_align(self):
-        image = VImage.new_rgba(width=16, height=16)
+        image = VImageAdapter.new_rgba(width=16, height=16)
 
         # Already aligned to integer offsets
-        result = image.tms_align(tile_width=16, tile_height=16,
+        result = VImageAdapter(image).tms_align(tile_width=16, tile_height=16,
                                  offset=XY(1, 1))
-        self.assertEqual(result.Xsize(), image.Xsize())
-        self.assertEqual(result.Ysize(), image.Ysize())
+        self.assertEqual(result.width, image.width)
+        self.assertEqual(result.height, image.height)
 
         # Spanning by half tiles in both X and Y directions
-        result = image.tms_align(tile_width=16, tile_height=16,
+        result = VImageAdapter(image).tms_align(tile_width=16, tile_height=16,
                                  offset=XY(1.5, 1.5))
-        self.assertEqual(result.Xsize(), image.Xsize() * 2)
-        self.assertEqual(result.Ysize(), image.Ysize() * 2)
+        self.assertEqual(result.width, image.width * 2)
+        self.assertEqual(result.height, image.height * 2)
 
         # Image is quarter tile
-        result = image.tms_align(tile_width=32, tile_height=32,
+        result = VImageAdapter(image).tms_align(tile_width=32, tile_height=32,
                                  offset=XY(1, 1))
-        self.assertEqual(result.Xsize(), image.Xsize() * 2)
-        self.assertEqual(result.Ysize(), image.Ysize() * 2)
-
-    def test_write_to_memory(self):
-        image = VImage.new_rgba(width=16, height=16)
-        image2 = image.write_to_memory()
-        self.assertEqual(image.tobuffer(), image2.tobuffer())
-
-    def test_write_to_tempfile(self):
-        image = VImage.new_rgba(width=16, height=16)
-        image2 = image.write_to_tempfile()
-        tempfile = image2._buf
-        self.assertEqual(image.tobuffer(), image2.tobuffer())
-
-        # Does the file delete itself?
-        self.assertTrue(os.path.exists(tempfile.name))
-        tempfile.close()
-        self.assertFalse(os.path.exists(tempfile.name))
+        self.assertEqual(result.width, image.width * 2)
+        self.assertEqual(result.height, image.height * 2)
 
 
 class TestVipsDataset(GdalTestCase):
@@ -191,11 +171,12 @@ class TestVipsDataset(GdalTestCase):
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
         dataset = VipsDataset(inputfile=self.foreignfile)
         dataset.resample(resolution=None)
-        self.assertEqual(dataset.RasterXSize, dataset.image.Xsize())
-        self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
+        self.assertEqual(dataset.RasterXSize, dataset.image.width)
+        self.assertEqual(dataset.RasterYSize, dataset.image.height)
         self.assertEqual(dataset.RasterXSize, 512)
         self.assertEqual(dataset.RasterYSize, 512)
 
+    @pytest.mark.newtest
     def test_downsample(self):
         """
         Test that a 258x258 file will get downsampled to
@@ -205,8 +186,8 @@ class TestVipsDataset(GdalTestCase):
         """
         dataset = VipsDataset(inputfile=self.slightlytoobigfile)
         dataset.resample(resolution=None)
-        self.assertEqual(dataset.RasterXSize, dataset.image.Xsize())
-        self.assertEqual(dataset.RasterYSize, dataset.image.Ysize())
+        self.assertEqual(dataset.RasterXSize, dataset.image.width)
+        self.assertEqual(dataset.RasterYSize, dataset.image.height)
         self.assertEqual(dataset.RasterXSize, 256)
         self.assertEqual(dataset.RasterYSize, 256)
 
@@ -215,8 +196,8 @@ class TestVipsDataset(GdalTestCase):
             # bluemarble.tif is a 1024 × 1024 whole-world map.
             dataset = VipsDataset(inputfile=self.inputfile)
             dataset.align_to_grid()
-            self.assertEqual(dataset.image.Xsize(), 1024)
-            self.assertEqual(dataset.image.Ysize(), 1024)
+            self.assertEqual(dataset.image.width, 1024)
+            self.assertEqual(dataset.image.height, 1024)
             self.assertEqual(dataset.RasterXSize, 1024)
             self.assertEqual(dataset.RasterYSize, 1024)
             self.assertExtentsEqual(dataset.GetExtents(),
@@ -225,8 +206,8 @@ class TestVipsDataset(GdalTestCase):
             # bluemarble-foreign.tif is a 500 × 250 whole-world map.
             dataset = VipsDataset(inputfile=self.foreignfile)
             dataset.align_to_grid()
-            self.assertEqual(dataset.image.Xsize(), 512)
-            self.assertEqual(dataset.image.Ysize(), 512)
+            self.assertEqual(dataset.image.width, 512)
+            self.assertEqual(dataset.image.height, 512)
             self.assertEqual(dataset.RasterXSize, 512)
             self.assertEqual(dataset.RasterYSize, 512)
             self.assertEqual(dataset.GetExtents(),
@@ -235,14 +216,14 @@ class TestVipsDataset(GdalTestCase):
             # bluemarble-spanning-foreign.tif is a 154 × 154 whole-world map.
             dataset = VipsDataset(inputfile=self.spanningforeignfile)
             dataset.align_to_grid()
-            self.assertEqual(dataset.image.Xsize(), 256)
-            self.assertEqual(dataset.image.Ysize(), 256)
+            self.assertEqual(dataset.image.width, 256)
+            self.assertEqual(dataset.image.height, 256)
             self.assertEqual(dataset.RasterXSize, 256)
             self.assertEqual(dataset.RasterYSize, 256)
             self.assertExtentsEqual(dataset.GetExtents(),
                                     dataset.GetTiledExtents())
             # The upper-left corner should be transparent
-            data = numpy.frombuffer(dataset.image.tobuffer(),
+            data = numpy.frombuffer(dataset.image.write_to_memory(),
                                     dtype=numpy.uint8)
             self.assertEqual(tuple(data[0:4]),
                              rgba(0, 0, 0, 0))
@@ -298,7 +279,7 @@ class TestVipsDataset(GdalTestCase):
 class TestTmsTiles(unittest.TestCase):
     def test_dimensions(self):
         # Very small WGS84 map. :-)
-        image = VImage.new_rgba(width=2, height=1)
+        image = VImageAdapter.new_rgba(width=2, height=1)
         tiles = TmsTiles(image=image,
                          storage=Storage(renderer=None),
                          tile_width=1, tile_height=1,
@@ -308,7 +289,7 @@ class TestTmsTiles(unittest.TestCase):
 
     def test_downsample(self):
         resolution = 2
-        image = VImage.new_rgba(width=TILE_SIDE * 2 ** resolution,
+        image = VImageAdapter.new_rgba(width=TILE_SIDE * 2 ** resolution,
                                 height=TILE_SIDE * 2 ** resolution)
         tiles = TmsTiles(image=image,
                          storage=Storage(renderer=None),
@@ -352,8 +333,9 @@ class TestTmsTiles(unittest.TestCase):
 
     def test_upsample(self):
         resolution = 0
-        image = VImage.new_rgba(width=TILE_SIDE * 2 ** resolution,
+        image = VImageAdapter.new_rgba(width=TILE_SIDE * 2 ** resolution,
                                 height=TILE_SIDE * 2 ** resolution)
+
         tiles = TmsTiles(image=image,
                          storage=Storage(renderer=None),
                          tile_width=TILE_SIDE, tile_height=TILE_SIDE,

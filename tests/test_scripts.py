@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import os
+import pytest
 from subprocess import CalledProcessError, check_call
 import sys
 from tempfile import NamedTemporaryFile
@@ -89,7 +90,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                                  })
 
     def test_warp(self):
-        null = open('/dev/null', 'rw')
+        null = open('/dev/null', 'r+')
 
         with NamedTemporaryFile(suffix='.mbtiles') as output:
             # Valid
@@ -116,7 +117,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                               stderr=null)
 
     def test_render(self):
-        null = open('/dev/null', 'rw')
+        null = open('/dev/null', 'r+')
 
         with NamedTemporaryFile(suffix='.mbtiles') as output:
             # Valid
@@ -203,7 +204,7 @@ class TestGdal2mbtilesScript(unittest.TestCase):
                 self.assertTrue(cursor.fetchone(), [4])
 
     def test_colors(self):
-        null = open('/dev/null', 'rw')
+        null = open('/dev/null', 'r+')
 
         with NamedTemporaryFile(suffix='.mbtiles') as output:
             # Valid

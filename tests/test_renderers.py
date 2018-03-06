@@ -6,9 +6,9 @@ from __future__ import (absolute_import, division, print_function,
 import unittest
 
 from gdal2mbtiles.renderers import JpegRenderer, PngRenderer, TouchRenderer
-from gdal2mbtiles.types import rgba
+from gdal2mbtiles.gd_types import rgba
 from gdal2mbtiles.utils import intmd5
-from gdal2mbtiles.vips import VImage
+from gdal2mbtiles.vips import VImageAdapter
 
 
 class TestJpegRenderer(unittest.TestCase):
@@ -16,14 +16,14 @@ class TestJpegRenderer(unittest.TestCase):
         renderer = JpegRenderer()
 
         # Black 1×1 image
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=255))
 
         black = renderer.render(image=image)
         black_md5 = intmd5(black)
 
         # Transparent 1×1 image
-        image = VImage.new_rgba(width=1, height=1,
+        image = VImageAdapter.new_rgba(width=1, height=1,
                                 ink=rgba(r=0, g=0, b=0, a=0))
 
         transparent = renderer.render(image=image)
@@ -42,7 +42,7 @@ class TestJpegRenderer(unittest.TestCase):
 class TestPngRenderer(unittest.TestCase):
     def setUp(self):
         # Transparent 1×1 image
-        self.image = VImage.new_rgba(width=1, height=1,
+        self.image = VImageAdapter.new_rgba(width=1, height=1,
                                      ink=rgba(r=0, g=0, b=0, a=0))
 
     def test_simple(self):
@@ -67,7 +67,7 @@ class TestPngRenderer(unittest.TestCase):
         renderer = PngRenderer(png8=True, optimize=False)
         contents = renderer.render(image=self.image)
         self.assertEqual(intmd5(contents),
-                         151059771043192964835020617733646275057)
+                         106831624867432276165545554861383631224)
 
     def test_optimize(self):
         renderer = PngRenderer(png8=False, optimize=2)
@@ -85,7 +85,7 @@ class TestPngRenderer(unittest.TestCase):
         renderer = PngRenderer(png8=True, optimize=2)
         contents = renderer.render(image=self.image)
         self.assertEqual(intmd5(contents),
-                         151059771043192964835020617733646275057)
+                         106831624867432276165545554861383631224)
 
     def test_suffix(self):
         # Default
@@ -101,7 +101,7 @@ class TestTouchRenderer(unittest.TestCase):
     def test_simple(self):
         renderer = TouchRenderer()
         contents = renderer.render(image=None)
-        self.assertEqual(contents, '')
+        self.assertEqual(contents, b'')
 
     def test_suffix(self):
         # Default
