@@ -106,6 +106,18 @@ def colorize_band_arg(s):
         )
     return result
 
+def png8_arg(s):
+    """Validates --png8"""
+    try:
+        result = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError("invalid int value: '{0}'".format(s))
+    if not 2 <= result <= 256:
+        raise ValueError(
+                'png8 must be between 2 and 256: {0!r}'.format(png8)
+            )
+    return result
+
 
 def parse_args(args):
     """Parses command-line `args`"""
@@ -181,6 +193,8 @@ def parse_args(args):
     group.add_argument('--colorize-band', metavar='COLORIZE-BAND',
                        type=colorize_band_arg, default=None,
                        help='Raster band to colorize. Defaults to 1')
+    group.add_argument('--png8', default=None,
+                        type=png8_arg,help='png8 must be between 2 and 256.')
 
     args = parser.parse_args(args=args)
 
@@ -268,6 +282,9 @@ def main(args=None, use_logging=True):
         else:
             colors = args.coloring(args.colors)
             band = args.colorize_band
+        
+        ##pngrendering
+        pngdata={'png8':args.png8}
 
         warp_mbtiles(inputfile=inputfile.name, outputfile=outputfile.name,
                      # MBTiles
@@ -278,7 +295,7 @@ def main(args=None, use_logging=True):
                      min_resolution=args.min_resolution,
                      max_resolution=args.max_resolution,
                      fill_borders=args.fill_borders,
-                     zoom_offset=args.zoom_offset,
+                     zoom_offset=args.zoom_offset,pngdata=pngdata,
                      # Coloring
                      colors=colors, band=band)
         return 0
