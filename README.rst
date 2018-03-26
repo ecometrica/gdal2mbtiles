@@ -107,6 +107,7 @@ Command Line Interface
                         [--coloring {gradient,palette,exact}]
                         [--color BAND-VALUE:HTML-COLOR]
                         [--colorize-band COLORIZE-BAND]
+                        [--png8 PNG8]
                         [INPUT] [OUTPUT]
 
     Converts a GDAL-readable into an MBTiles file
@@ -146,6 +147,8 @@ Command Line Interface
       --no-fill-borders     Do not add borders to fill image.
       --zoom-offset N       Offset zoom level by N to fit unprojected images to
                             square maps. Defaults to 0.
+      --png8                Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs.  
+                            value range from 2 to 256. Default to False.
 
     Coloring arguments:
       --coloring {gradient,palette,exact}

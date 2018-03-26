@@ -921,7 +921,7 @@ class VRT(object):
         tempfile.seek(0)
         return tempfile
 
-    def render(self, outputfile, cmd=GDALTRANSLATE, working_memory=512,
+    def render(self, outputfile, cmd=GDALTRANSLATE, working_memory=1024,
                compress=None, tempdir=None):
         """Generate a GeoTIFF from a vrt string"""
         tmpfile = NamedTemporaryFile(
@@ -936,6 +936,7 @@ class VRT(object):
                     '-q',                   # Quiet - FIXME: Use logging
                     '-of', 'GTiff',         # Output to GeoTIFF
                     '-co', 'BIGTIFF=IF_SAFER',  # Use BigTIFF if >2GB
+                    '-co', 'NUM_THREADS=ALL_CPUS', # multithreaded compression for GeoTiff
                     # gdal_translate does not support the following
                     # '-multi',               # Use multiple processes
                     # '-overwrite',           # Overwrite outputfile
