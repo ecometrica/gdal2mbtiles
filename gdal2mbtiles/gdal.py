@@ -940,7 +940,6 @@ class VRT(object):
                     # gdal_translate does not support the following
                     # '-multi',               # Use multiple processes
                     # '-overwrite',           # Overwrite outputfile
-                    # '-wo', 'NUM_THREADS=ALL_CPUS',  # Use all CPUs
                 ]
 
                 # Set the working memory so that gdalwarp doesn't stall of disk
