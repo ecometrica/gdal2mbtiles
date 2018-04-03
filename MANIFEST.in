@@ -1,4 +1,4 @@
 include LICENSE
 include NOTICE
 
-include test.py
+include gdal2mbtiles/default_rgba.png
