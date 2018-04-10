@@ -2,6 +2,10 @@
 Release Notes
 =============
 
+2.1.1
+-----
+Revert commit f7fde54, which reintroduced tiling issues fixed by 9231133.
+
 2.1.0
 -----
 
