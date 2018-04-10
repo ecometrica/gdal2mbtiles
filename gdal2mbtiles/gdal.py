@@ -25,7 +25,7 @@ from builtins import round
 
 from functools import partial
 import logging
-from math import ceil, floor, pi
+from math import pi
 from itertools import count
 import os
 import re
@@ -707,10 +707,10 @@ class Dataset(gdal.Dataset):
         right, top = spatial_ref.OffsetPoint(*extents.upper_right)
 
         # Divide by number of tiles
-        return Extents(lower_left=XY(int(floor(left / tile_width)),
-                                     int(floor(bottom / tile_height))),
-                       upper_right=XY(int(ceil(right / tile_width)),
-                                      int(ceil(top / tile_height))))
+        return Extents(lower_left=XY(int(round(left / tile_width)),
+                                     int(round(bottom / tile_height))),
+                       upper_right=XY(int(round(right / tile_width)),
+                                      int(round(top / tile_height))))
 
     def GetWorldScalingRatios(self, resolution=None, places=None):
         """

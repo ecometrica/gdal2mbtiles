@@ -844,10 +844,6 @@ class TestDataset(TestCase):
         self.assertExtentsEqual(dataset.GetTmsExtents(),
                                 Extents(lower_left=XY(1, 1),
                                         upper_right=XY(2, 2)))
-        # At resolution 3, it occupies 2x2 tiles
-        self.assertExtentsEqual(dataset.GetTmsExtents(resolution=3),
-                                Extents(lower_left=XY(2, 2),
-                                        upper_right=XY(4, 4)))
         # At resolution 1, should only occupy lower-left quadrant
         self.assertExtentsEqual(dataset.GetTmsExtents(resolution=1),
                                 Extents(lower_left=XY(0, 0),
