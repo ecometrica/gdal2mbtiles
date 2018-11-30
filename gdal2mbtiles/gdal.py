@@ -851,12 +851,12 @@ class SpatialReference(osr.SpatialReference):
         if self.IsProjected() == 0:
             return 2 * pi / self.GetAngularUnits()
 
-        semi_minor = self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
         if self.GetEPSGCode() == 3857:
-            # Cancel the flattening of the spheroid.
-            # This is to account for the web mercator projection of points on
-            # a spheroid but interpretation of said points on a sphere.
-            return semi_minor / (1 - 1 / self.GetInvFlattening())
+            # Return the Major Circumference since the 3857 is a
+            # projection from a sphere.
+            return self.GetMajorCircumference()
+
+        semi_minor = self.GetSemiMinor() * 2 * pi / self.GetLinearUnits()
         return semi_minor
 
     def GetWorldExtents(self):
