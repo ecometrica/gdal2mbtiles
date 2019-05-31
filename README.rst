@@ -138,11 +138,11 @@ Command Line Interface
 
     Rendering arguments:
       --min-resolution MIN_RESOLUTION
-                            Minimum resolution to render and slice. Defaults to
-                            None (do not downsample)
+                            Minimum resolution/zoom level to render and slice.
+                            Defaults to None (do not downsample)
       --max-resolution MAX_RESOLUTION
-                            Maximum resolution to render and slice. Defaults to
-                            None (do not upsample)
+                            Maximum resolution/zoom level to render and slice.
+                            Defaults to None (do not upsample)
       --fill-borders        Fill image to whole world with empty tiles. Default.
       --no-fill-borders     Do not add borders to fill image.
       --zoom-offset N       Offset zoom level by N to fit unprojected images to
