@@ -1,6 +1,3 @@
-.. image:: https://api.shippable.com/projects/5a533bf2c944eb0600db12c9/badge?branch=master
-    :target: https://app.shippable.com/github/ecometrica/gdal2mbtiles
-
 ======================================================
  Convert GDAL-readable datasets into an MBTiles file.
 ======================================================
