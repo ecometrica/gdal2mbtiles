@@ -170,10 +170,10 @@ def parse_args(args):
 
     group = parser.add_argument_group(title='Rendering arguments')
     group.add_argument('--min-resolution', type=int, default=None,
-                       help=('Minimum resolution to render and slice. '
+                       help=('Minimum resolution/zoom level to render and slice. '
                              'Defaults to None (do not downsample)'))
     group.add_argument('--max-resolution', type=int, default=None,
-                       help=('Maximum resolution to render and slice. '
+                       help=('Maximum resolution/zoom level to render and slice. '
                              'Defaults to None (do not upsample)'))
     group.add_argument('--fill-borders',
                        action='store_const', const=True, default=True,
