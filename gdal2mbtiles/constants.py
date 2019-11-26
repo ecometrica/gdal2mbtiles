@@ -20,6 +20,9 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from math import pi
+from numpy import array
+
 
 # EPSG constants
 EPSG_WEB_MERCATOR = 3857
@@ -35,3 +38,16 @@ TILE_SIDE = 256                 # in pixels
 GDALINFO = 'gdalinfo'
 GDALTRANSLATE = 'gdal_translate'
 GDALWARP = 'gdalwarp'
+
+# SEMI_MAJOR is a constant referring to the WGS84 Semi Major Axis.
+WGS84_SEMI_MAJOR = 6378137.0
+
+# Note: web-Mercator = pseudo-Mercator = EPSG 3857
+# The extents of the web-Mercator are constants.
+# Since the projection is formed from a sphere the extents of the projection
+# form a square.
+# For the values of the extents refer to:
+# OpenLayer lib: http://docs.openlayers.org/library/spherical_mercator.html
+EPSG3857_EXTENT = pi * WGS84_SEMI_MAJOR
+
+EPSG3857_EXTENTS = array([[-EPSG3857_EXTENT]*2, [EPSG3857_EXTENT]*2])
