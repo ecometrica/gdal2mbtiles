@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 
-
 from setuptools import setup
 
 import gdal2mbtiles
@@ -17,7 +16,10 @@ multiprocessing
 setup(
     name='gdal2mbtiles',
     version=gdal2mbtiles.__version__,
-    description='Converts a GDAL-readable dataset into an MBTiles file. This is used to generate web maps.',
+    description=(
+        'Converts a GDAL-readable dataset into an MBTiles file.'
+        'This is used to generate web maps.'
+    ),
     long_description=open('README.rst').read(),
     license='Apache Software License, version 2.0',
 
@@ -27,7 +29,9 @@ setup(
 
     packages=['gdal2mbtiles'],
     include_package_data=True,
-    install_requires=['future', 'numexpr', 'numpy', 'pyvips', 'webcolors'],
+    install_requires=[
+        'future', 'numexpr', 'numpy', 'pyvips<=2.1.8', 'webcolors'
+    ],
     # You also need certain dependencies that aren't in PyPi:
     # gdal-bin, libgdal-dev, libvips, libvips-dev, libtiff5, optipng, pngquant
 
