@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
-import rasterio
 import pytest
 
 from numpy import array
@@ -12,18 +10,14 @@ from gdal2mbtiles.constants import (EPSG_WEB_MERCATOR,
 from gdal2mbtiles.gdal import SpatialReference
 
 
-epsg_3857_raster_path = 'tests/web_mercator_3857.tif'
-
-
 @pytest.fixture
 def epsg_3857_from_proj4():
     """
     Return a gdal spatial reference object with
     3857 crs using the ImportFromProj4 method.
     """
-    ds_3857 = rasterio.open(epsg_3857_raster_path)
     spatial_ref = SpatialReference()
-    spatial_ref.ImportFromProj4(ds_3857.crs.to_string())
+    spatial_ref.ImportFromProj4('+init=epsg:3857')
     return spatial_ref
 
 
