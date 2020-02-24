@@ -9,4 +9,4 @@ build:
     - sudo add-apt-repository -y ppa:ubuntugis/ppa && apt update -y
     - sudo apt-get update && apt-get install -y libgdal-dev gdal-bin libvips libvips-dev libtiff5 optipng pngquant
     - pip install tox
-    - tox "-m not skip_on_shippable"
+    - tox -- "-m not skip_on_ci"
