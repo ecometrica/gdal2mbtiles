@@ -85,7 +85,6 @@ class Storage(object):
         image = VImageAdapter.new_rgba(
             width, height, ink=rgba(r=0, g=0, b=0, a=0)
         )
-        image._buf = image
         return image
 
 

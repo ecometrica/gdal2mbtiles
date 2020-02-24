@@ -203,7 +203,6 @@ class VImageAdapter(object):
                                            width=image2.width,
                                            height=image2.height,
                                            bands=1, format=types[datatype])
-            image3._buf = image2
             return image3
 
     @classmethod
@@ -220,9 +219,6 @@ class VImageAdapter(object):
         array = array.astype(cls.NUMPY_TYPES[format])
         buf = memoryview(array)
         image = Image.new_from_memory(buf, width, height, bands, format)
-
-        # Hold on to the numpy array to prevent garbage collection
-        image._numpy_array = array
         return image
 
     @classmethod
@@ -267,10 +263,6 @@ class VImageAdapter(object):
                 )
             )
 
-        # Link output to self, because its buffer is related to self.image()
-        # We don't want self to get destructed in C++ when Python garbage
-        # collects self if it falls out of scope.
-
         image = self.image.affine(
             [a, b, c, d],
             interpolate=interpolate,
@@ -278,10 +270,8 @@ class VImageAdapter(object):
             odx=dx, ody=dy,
             idx=0, idy=0
         )
-        image.__inputref = self.image
         # output = VIPS.im_affinei(self.image, self.image.copy(), interpolate,
         #                 a, b, c, d, dx, dy, ox, oy, ow, oh)
-
         return image
 
     def _scale(self, xscale, yscale, output_size, interpolate):
