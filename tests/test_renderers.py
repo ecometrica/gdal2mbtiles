@@ -4,11 +4,36 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import unittest
+import platform
+
+import pytest
 
 from gdal2mbtiles.renderers import JpegRenderer, PngRenderer, TouchRenderer
 from gdal2mbtiles.gd_types import rgba
 from gdal2mbtiles.utils import intmd5
 from gdal2mbtiles.vips import VImageAdapter
+
+# https://bugs.python.org/issue1322
+if platform.system() == 'Linux':
+    import distro
+    DISTRIBUTION = distro.linux_distribution()
+else:
+    DISTRIBUTION = platform.system_alias(
+        platform.system(),
+        platform.release(),
+        platform.version()
+    )
+
+PNG8_OS_HASHES = {
+    ('Ubuntu', '16.04', 'xenial'): 106831624867432276165545554861383631224,
+    ('Ubuntu', '18.04', 'bionic'): 93909651943814796643456367818041361877,
+    ('Ubuntu', '20.04', 'focal'): 226470660062402177473163372260043882022,
+}
+
+require_png8_os_hash = pytest.mark.skipif(
+    DISTRIBUTION not in PNG8_OS_HASHES,
+    reason="Result of png8 not specified for OS version"
+)
 
 
 class TestJpegRenderer(unittest.TestCase):
@@ -63,12 +88,6 @@ class TestPngRenderer(unittest.TestCase):
         self.assertEqual(intmd5(contents),
                          197686704564132731296723533976357306757)
 
-    def test_png8(self):
-        renderer = PngRenderer(png8=True, optimize=False)
-        contents = renderer.render(image=self.image)
-        self.assertEqual(intmd5(contents),
-                         106831624867432276165545554861383631224)
-
     def test_optimize(self):
         renderer = PngRenderer(png8=False, optimize=2)
         contents = renderer.render(image=self.image)
@@ -81,11 +100,20 @@ class TestPngRenderer(unittest.TestCase):
         self.assertEqual(intmd5(contents),
                          89446660811628514001822794642426893173)
 
+    @require_png8_os_hash
+    def test_png8(self):
+        content_hash = PNG8_OS_HASHES[DISTRIBUTION]
+        renderer = PngRenderer(png8=True, optimize=False)
+        contents = renderer.render(image=self.image)
+        self.assertEqual(intmd5(contents), content_hash)
+
+    @require_png8_os_hash
     def test_png8_optimize(self):
+        content_hash = PNG8_OS_HASHES[DISTRIBUTION]
         renderer = PngRenderer(png8=True, optimize=2)
         contents = renderer.render(image=self.image)
-        self.assertEqual(intmd5(contents),
-                         106831624867432276165545554861383631224)
+        # same hash as test_png8 since optipng treats it as already optimised
+        self.assertEqual(intmd5(contents), content_hash)
 
     def test_suffix(self):
         # Default
