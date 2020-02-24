@@ -13,12 +13,12 @@ import unittest
 from gdal2mbtiles.mbtiles import MBTiles
 
 
-__dir__ = os.path.dirname(__file__)
+TEST_ASSET_DIR = os.path.dirname(__file__)
 
 
 class TestGdal2mbtilesScript(unittest.TestCase):
     def setUp(self):
-        self.repo_dir = os.path.join(__dir__, os.path.pardir)
+        self.repo_dir = os.path.join(TEST_ASSET_DIR, os.path.pardir)
         self.script = os.path.join(self.repo_dir, 'gdal2mbtiles', 'main.py')
 
         self.environ = os.environ.copy()
@@ -30,9 +30,9 @@ class TestGdal2mbtilesScript(unittest.TestCase):
         pythonpath = os.path.pathsep.join([self.repo_dir] + pythonpath)
         self.environ['PYTHONPATH'] = pythonpath
 
-        self.inputfile = os.path.join(__dir__, 'upsampling.tif')
-        self.rgbfile = os.path.join(__dir__, 'bluemarble.tif')
-        self.spanningfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'upsampling.tif')
+        self.rgbfile = os.path.join(TEST_ASSET_DIR, 'bluemarble.tif')
+        self.spanningfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as output:

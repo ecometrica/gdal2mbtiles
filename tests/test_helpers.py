@@ -15,12 +15,12 @@ from gdal2mbtiles.renderers import TouchRenderer
 from gdal2mbtiles.storages import MbtilesStorage
 from gdal2mbtiles.utils import intmd5, NamedTemporaryDir, recursive_listdir
 
-__dir__ = os.path.dirname(__file__)
+TEST_ASSET_DIR = os.path.dirname(__file__)
 
 
 class TestImageMbtiles(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-aligned-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as outputfile:
@@ -54,10 +54,10 @@ class TestImageMbtiles(unittest.TestCase):
 
 class TestImagePyramid(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble.tif')
-        self.alignedfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
-        self.spanningfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
-        self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble.tif')
+        self.alignedfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-aligned-ll.tif')
+        self.spanningfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
+        self.upsamplingfile = os.path.join(TEST_ASSET_DIR, 'upsampling.tif')
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
@@ -420,9 +420,9 @@ class TestImagePyramid(unittest.TestCase):
 
 class TestImageSlice(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble.tif')
-        self.alignedfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
-        self.spanningfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble.tif')
+        self.alignedfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-aligned-ll.tif')
+        self.spanningfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
@@ -490,7 +490,7 @@ class TestImageSlice(unittest.TestCase):
 
 class TestWarpMbtiles(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryFile(suffix='.mbtiles') as outputfile:
@@ -553,7 +553,7 @@ class TestWarpMbtiles(unittest.TestCase):
 
 class TestWarpPyramid(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:
@@ -674,7 +674,7 @@ class TestWarpPyramid(unittest.TestCase):
 
 class TestWarpSlice(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        self.inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
 
     def test_simple(self):
         with NamedTemporaryDir() as outputdir:

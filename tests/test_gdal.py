@@ -25,7 +25,7 @@ from gdal2mbtiles.gdal import (Dataset, extract_color_band, preprocess,
 from gdal2mbtiles.gd_types import Extents, XY
 
 
-__dir__ = os.path.dirname(__file__)
+TEST_ASSET_DIR = os.path.dirname(__file__)
 
 
 class TestCase(unittest.TestCase):
@@ -43,7 +43,7 @@ class TestCase(unittest.TestCase):
 
 class TestExtractColorBand(unittest.TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__,
+        self.inputfile = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble.tif')
 
     def test_simple(self):
@@ -70,11 +70,11 @@ class TestExtractColorBand(unittest.TestCase):
 class TestWarp(unittest.TestCase):
     def setUp(self):
         # Whole world: (180°W, 85°S), (180°E, 85°N)
-        self.inputfile = os.path.join(__dir__,
+        self.inputfile = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble.tif')
 
         # Aligned partial: (90°W, 42.5°S), (0°E, 0°N)
-        self.alignedfile = os.path.join(__dir__,
+        self.alignedfile = os.path.join(TEST_ASSET_DIR,
                                         'bluemarble-aligned-ll.tif')
 
     def test_simple(self):
@@ -118,10 +118,10 @@ class TestWarp(unittest.TestCase):
 
     def test_missing(self):
         self.assertRaises(IOError,
-                          warp, os.path.join(__dir__, 'missing.tif'))
+                          warp, os.path.join(TEST_ASSET_DIR, 'missing.tif'))
 
     def test_nodata(self):
-        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+        inputfile = os.path.join(TEST_ASSET_DIR, 'srtm.nodata.tif')
 
         vrt = warp(inputfile=inputfile)
         with vrt.get_tempfile(suffix='.vrt') as outputfile:
@@ -135,7 +135,7 @@ class TestWarp(unittest.TestCase):
 
 class TestPreprocess(unittest.TestCase):
     def test_simple(self):
-        inputfile = os.path.join(__dir__, 'srtm.tif')
+        inputfile = os.path.join(TEST_ASSET_DIR, 'srtm.tif')
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
             preprocess(inputfile=inputfile, outputfile=outputfile.name)
@@ -155,7 +155,7 @@ class TestPreprocess(unittest.TestCase):
                                  None)
 
     def test_nodata(self):
-        inputfile = os.path.join(__dir__, 'srtm.nodata.tif')
+        inputfile = os.path.join(TEST_ASSET_DIR, 'srtm.nodata.tif')
         in_data = Dataset(inputfile)
 
         with NamedTemporaryFile(suffix='.tif') as outputfile:
@@ -172,7 +172,7 @@ class TestPreprocess(unittest.TestCase):
 
 class TestVrt(TestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__,
+        self.inputfile = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble.tif')
         self.empty = b'<VRTDataset> </VRTDataset>'
 
@@ -211,7 +211,7 @@ class TestVrt(TestCase):
             self.assertEqual(in_data.RasterYSize, out_data.RasterYSize)
 
     def test_aligned_partial(self):
-        inputfile = os.path.join(__dir__, 'bluemarble-aligned-ll.tif')
+        inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-aligned-ll.tif')
         vrt = warp(inputfile)
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
@@ -231,7 +231,7 @@ class TestVrt(TestCase):
             self.assertEqual(in_data.RasterYSize, out_data.RasterYSize)
 
     def test_spanning_partial(self):
-        inputfile = os.path.join(__dir__, 'bluemarble-spanning-ll.tif')
+        inputfile = os.path.join(TEST_ASSET_DIR, 'bluemarble-spanning-ll.tif')
         vrt = warp(inputfile)
         with NamedTemporaryFile(suffix='.tif') as tmpfile:
             outputfile = tmpfile.name
@@ -266,14 +266,14 @@ class TestVrt(TestCase):
 class TestBand(TestCase):
     def setUp(self):
         # 32-bit floating point
-        self.float32file = os.path.join(__dir__, 'paletted.tif')
-        self.nodatafile = os.path.join(__dir__, 'paletted.nodata.tif')
+        self.float32file = os.path.join(TEST_ASSET_DIR, 'paletted.tif')
+        self.nodatafile = os.path.join(TEST_ASSET_DIR, 'paletted.nodata.tif')
 
         # 16-bit signed integer
-        self.int16file = os.path.join(__dir__, 'srtm.tif')
+        self.int16file = os.path.join(TEST_ASSET_DIR, 'srtm.tif')
 
         # 8-bit unsigned integer
-        self.uint8file = os.path.join(__dir__, 'bluemarble.tif')
+        self.uint8file = os.path.join(TEST_ASSET_DIR, 'bluemarble.tif')
 
     def test_delete_dataset(self):
         dataset = Dataset(self.float32file)
@@ -376,28 +376,28 @@ class TestBand(TestCase):
 class TestDataset(TestCase):
     def setUp(self):
         # Whole world: (180°W, 85°S), (180°E, 85°N)
-        self.inputfile = os.path.join(__dir__,
+        self.inputfile = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble.tif')
 
         # Whole world: (180°W, 90°S), (180°E, 90°N)
-        self.wgs84file = os.path.join(__dir__,
+        self.wgs84file = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble-wgs84.tif')
 
         # Aligned partial: (90°W, 42.5°S), (0°E, 0°N)
-        self.alignedfile = os.path.join(__dir__,
+        self.alignedfile = os.path.join(TEST_ASSET_DIR,
                                         'bluemarble-aligned-ll.tif')
 
         # Unaligned (spanning) partial: (162.4°W, 76.7°S), (17.6°W, 8.3°S)
-        self.spanningfile = os.path.join(__dir__,
+        self.spanningfile = os.path.join(TEST_ASSET_DIR,
                                          'bluemarble-spanning-ll.tif')
 
         # Whole world: (180°W, 85°S), (180°E, 85°N)
-        self.upsamplingfile = os.path.join(__dir__,
+        self.upsamplingfile = os.path.join(TEST_ASSET_DIR,
                                            'upsampling.tif')
 
         # Unaligned (spanning) partial: (162.4°W, 76.7°S), (17.6°W, 8.3°S)
         # that is also not at a native resolution.
-        self.foreignfile = os.path.join(__dir__,
+        self.foreignfile = os.path.join(TEST_ASSET_DIR,
                                         'bluemarble-spanning-foreign.tif')
 
     def test_open(self):

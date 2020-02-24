@@ -18,7 +18,7 @@ from gdal2mbtiles.vips import (ColorExact, ColorGradient, ColorPalette,
 from tests.test_gdal import TestCase as GdalTestCase
 
 
-__dir__ = os.path.dirname(__file__)
+TEST_ASSET_DIR = os.path.dirname(__file__)
 
 
 class TestLibVips(unittest.TestCase):
@@ -151,20 +151,20 @@ class TestVImageAdapter(unittest.TestCase):
 
 class TestVipsDataset(GdalTestCase):
     def setUp(self):
-        self.inputfile = os.path.join(__dir__,
+        self.inputfile = os.path.join(TEST_ASSET_DIR,
                                       'bluemarble.tif')
 
-        self.foreignfile = os.path.join(__dir__,
+        self.foreignfile = os.path.join(TEST_ASSET_DIR,
                                         'bluemarble-foreign.tif')
         self.slightlytoobigfile = os.path.join(
-            __dir__, 'bluemarble-slightly-too-big.tif'
+            TEST_ASSET_DIR, 'bluemarble-slightly-too-big.tif'
         )
 
         self.spanningforeignfile = os.path.join(
-            __dir__, 'bluemarble-spanning-foreign.tif'
+            TEST_ASSET_DIR, 'bluemarble-spanning-foreign.tif'
         )
 
-        self.upsamplingfile = os.path.join(__dir__, 'upsampling.tif')
+        self.upsamplingfile = os.path.join(TEST_ASSET_DIR, 'upsampling.tif')
 
     def test_upsample(self):
         # bluemarble-foreign.tif is a 500 × 250 whole-world map.
