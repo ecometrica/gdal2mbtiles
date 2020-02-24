@@ -36,7 +36,7 @@ setup(
         'future',
         'numexpr',
         'numpy',
-        'pyvips<=2.1.8',
+        'pyvips',
         'webcolors',
     ],
 
