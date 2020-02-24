@@ -2,7 +2,6 @@
 
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-import pytest
 
 import os
 import unittest
@@ -176,7 +175,6 @@ class TestVipsDataset(GdalTestCase):
         self.assertEqual(dataset.RasterXSize, 512)
         self.assertEqual(dataset.RasterYSize, 512)
 
-    @pytest.mark.newtest
     def test_downsample(self):
         """
         Test that a 258x258 file will get downsampled to

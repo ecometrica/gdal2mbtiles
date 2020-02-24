@@ -254,9 +254,9 @@ class TestVrt(TestCase):
                               vrt.render,
                               outputfile=tmpfile.name)
 
-    @pytest.mark.skip_on_shippable
+    @pytest.mark.skip_on_ci
     def test_invalid_output(self):
-        # this will fail if tests are run as root (as on shippable)
+        # this will fail if tests are run as root
         vrt = warp(self.inputfile)
         self.assertRaises(OSError,
                           vrt.render,
