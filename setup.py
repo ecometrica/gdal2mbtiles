@@ -29,19 +29,29 @@ setup(
 
     packages=['gdal2mbtiles'],
     include_package_data=True,
-    install_requires=[
-        'future', 'numexpr', 'numpy', 'pyvips<=2.1.8', 'webcolors'
-    ],
+
     # You also need certain dependencies that aren't in PyPi:
     # gdal-bin, libgdal-dev, libvips, libvips-dev, libtiff5, optipng, pngquant
+    install_requires=[
+        'future',
+        'numexpr',
+        'numpy',
+        'pyvips<=2.1.8',
+        'webcolors',
+    ],
+
+    extras_require={
+        "tests": [
+            "pytest",
+            "pytest-pythonpath",
+        ],
+    },
 
     entry_points={
         'console_scripts': [
             'gdal2mbtiles = gdal2mbtiles.main:main',
         ]
     },
-    tests_require=['pytest'],
-    test_suite='tests',
 
     classifiers=[
         'Development Status :: 5 - Production/Stable',
