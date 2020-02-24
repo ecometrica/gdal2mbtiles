@@ -27,9 +27,11 @@ import sqlite3
 from struct import pack, unpack
 
 try:
-     from UserDict import DictMixin
+    # py3.3+
+    from collections.abc import MutableMapping
 except ImportError:
-     from collections import MutableMapping
+    # py2.7
+    from collections import MutableMapping
 
 try:
   basestring
@@ -64,18 +66,7 @@ class MetadataValueError(MetadataError, ValueError):
     pass
 
 
-import sys
-if sys.version_info[0] < 3:
-
-    class CompatibleMutableMapping(object, DictMixin):
-        pass
-
-else:
-    class CompatibleMutableMapping(MutableMapping):
-        pass
-
-
-class Metadata(CompatibleMutableMapping):
+class Metadata(MutableMapping):
     """
     Key-value metadata table expressed as a dictionary
     """
