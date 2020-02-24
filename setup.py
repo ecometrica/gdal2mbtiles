@@ -24,7 +24,7 @@ setup(
     license='Apache Software License, version 2.0',
 
     author='Ecometrica',
-    author_email='admin@ecometrica.com',
+    author_email='software@ecometrica.com',
     url='https://github.com/ecometrica/gdal2mbtiles',
 
     packages=['gdal2mbtiles'],
