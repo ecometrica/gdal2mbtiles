@@ -44,6 +44,7 @@ setup(
         "tests": [
             "pytest",
             "pytest-pythonpath",
+            "distro; platform_system=='Linux'"
         ],
     },
 
