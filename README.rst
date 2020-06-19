@@ -1,6 +1,9 @@
-======================================================
- Convert GDAL-readable datasets into an MBTiles file.
-======================================================
+============
+gdal2mbtiles
+============
+
+Convert GDAL-readable datasets into an MBTiles file
+===================================================
 
 **gdal2mbtiles** helps you generate web mapping tiles that can be shown
 through a browser-based mapping library on your website.
@@ -41,11 +44,15 @@ advantages:
 Installation
 ============
 
+PyPI package page: https://pypi.python.org/pypi/gdal2mbtiles/
+
+.. warning:: gdal2mbtiles requires Python 2.7 or higher and relies on
+  installing the items from the `External Dependencies`_ section below *before*
+  the python package.
+
 Using pip::
 
     $ pip install gdal2mbtiles
-
-PyPi package page https://pypi.python.org/pypi/gdal2mbtiles/
 
 From source::
 
@@ -53,24 +60,46 @@ From source::
     $ cd gdal2mbtiles
     $ python setup.py install
 
-Note that this program requires Python 2.7 or higher.
-
-
 External Dependencies
 ---------------------
 
 We rely on GDAL_ to read georeferenced datasets.
+Under Debian or Ubuntu, you can install the GDAL library & binary via apt.
 
-Under Debian or Ubuntu, run the following to install it::
+Default GDAL versions in Ubuntu LTS:
 
-    $ sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
-    $ sudo apt-get install gdal-bin libgdal-dev
+* Xenial: 1.11
+* Bionic: 2.2
+* Focal: 3.0
 
+.. warning::
+  GDAL 2 is the current supported version.
+  GDAL 3 support is in progress - `contributions <#contributing>`_ welcome!
 
-You will need to install the PyPi GDAL package with the following options::
+We recommend using the `UbuntuGIS`_ PPA to get more recent versions of GDAL, if
+needed, as is the case for Xenial.
 
-    $ pip install --global-option=build_ext --global-option=--gdal-config=/usr/bin/gdal-config --global-option=--include-dirs=/usr/include/gdal/ GDAL==$(GDAL_VERSION)
+.. code-block:: sh
 
+    sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
+    sudo apt-get install gdal-bin libgdal-dev
+
+The ubuntugis PPA also usually includes ``python-gdal`` or ``python3-gdal``
+that will install the python bindings at the system level. Installing
+that may be enough for you if you aren't planning to use a non-default python
+or a `virtual environment`_.
+
+Otherwise, you will also need to install the GDAL python bindings package from
+`PyPI <GDAL_PyPI>`_. Make sure to install the version that matches the installed
+GDAL library. You can double-check that version with ``gdal-config --version``.
+
+.. code-block:: sh
+
+    pip install \
+      --global-option=build_ext \
+      --global-option=--gdal-config=/usr/bin/gdal-config \
+      --global-option=--include-dirs=/usr/include/gdal/ \
+      GDAL=="$(gdal-config --version)"
 
 We also rely on VIPS_ (version 8.2+) to do fast image processing.
 
@@ -143,7 +172,7 @@ Command Line Interface
       --no-fill-borders     Do not add borders to fill image.
       --zoom-offset N       Offset zoom level by N to fit unprojected images to
                             square maps. Defaults to 0.
-      --png8                Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs.  
+      --png8                Quantizes 32-bit RGBA to 8-bit RGBA paletted PNGs.
                             value range from 2 to 256. Default to False.
 
     Coloring arguments:
@@ -155,13 +184,50 @@ Command Line Interface
                             Raster band to colorize. Defaults to 1
 
 
+Contributing
+============
+
 Reporting bugs and submitting patches
-=====================================
+-------------------------------------
 
 Please check our `issue tracker`_ for known bugs and feature requests.
 
 We accept pull requests for fixes and new features.
 
+Development and Testing
+-----------------------
+
+We use `Tox`_ and `Pytest`_ to test locally and `CircleCI`_ for remote testing.
+
+1. Clone the repo
+2. Install whichever `External Dependencies`_ are suitable for your OS/VM.
+3. Create and activate a `virtual environment`_
+4. Install tox: ``pip install tox``
+5. Set the GDAL_CONFIG env var for tox via the venv activations script.
+
+   If using virtualenv:
+   ``echo 'export GDAL_VERSION=$(gdal-config --version)' >> $VIRTUAL_ENV/bin/postactivate``
+
+   If using venv:
+   ``echo 'export GDAL_VERSION=$(gdal-config --version)' >> $VIRTUAL_ENV/bin/activate``
+
+6. Run tests to confirm all is working: ``tox``
+7. Do some development:
+
+   - Make some changes
+   - Run the tests
+   - Fix any errors
+   - Run the tests again
+   - Update CHANGELOG.rst with a line about the change in the UNRELEASED section
+   - Add yourself to AUTHORS.rst if not already there
+   - Write a nice commit message
+   - Repeat
+
+8. Make a PR
+
+You don't need to worry initially about testing in every combination of GDAL
+and Ubuntu, leave that to the remote CI build matrix when you make a PR and let
+the reviewers figure out if it needs more work from that.
 
 Credits
 =======
@@ -169,13 +235,23 @@ Credits
 Maxime Dupuis and Simon Law wrote this program, with the generous
 support of Ecometrica_.
 
+See AUTHORS.rst for the full list of contributors.
+
 .. _GDAL-readable files: http://www.gdal.org/formats_list.html
 .. _MBTiles: http://mapbox.com/developers/mbtiles/
 .. _MapBox: http://mapbox.com/
 .. _TileStream: https://github.com/mapbox/tilestream
 
 .. _GDAL: http://www.gdal.org/
+.. _UbuntuGIS: https://launchpad.net/~ubuntugis/
 .. _VIPS: http://www.vips.ecs.soton.ac.uk/
+
+.. _GDAL_PyPI: https://https://pypi.org/project/GDAL/
+.. _Tox: https://tox.readthedocs.io/
+.. _Pytest: https://docs.pytest.org/
+.. _virtual environment: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
 
 .. _issue tracker: https://github.com/ecometrica/gdal2mbtiles/issues
 .. _Ecometrica: http://ecometrica.com/
+
+.. _CircleCI: https://circleci.com/

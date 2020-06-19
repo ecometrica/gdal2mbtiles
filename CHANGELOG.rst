@@ -2,9 +2,31 @@
 Release Notes
 =============
 
+The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_
+and this project attempts to adhere to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
+
+Unreleased
+----------
+
+* Unpin pyvips and fix related issue - install pyvips==2.1.8 if any issues
+* Fix renderer tests
+* Fix deprecation warnings
+* Fix python3.7+ pytest errors
+* Update author email
+* Update CI
+* Update README
+
+2.1.2
+-----
+
+* Update docs
+* Pin pyvips
+
 2.1.1
 -----
-Revert commit f7fde54, which reintroduced tiling issues fixed by 9231133.
+
+* Revert commit f7fde54, which reintroduced tiling issues fixed by 9231133.
+
 
 2.1.0
 -----
