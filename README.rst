@@ -74,10 +74,9 @@ You will need to install the PyPi GDAL package with the following options::
 
 We also rely on VIPS_ (version 8.2+) to do fast image processing.
 
-Under Debian or Ubuntu, run the following to install it::
+Under Debian or Ubuntu, run the following to install it without the GUI nip2::
 
-    $ sudo apt-get install libvips libvips-dev
-
+    $ sudo apt-get install --no-install-recommends libvips libvips-dev
 
 You'll also need a few other libraries to deal with large TIFF files and
 to optimize the resulting PNG tiles.

@@ -1,0 +1,180 @@
+version: 2.1
+
+commands:
+  add-ubuntugis-ppa:
+    parameters:
+      archive: &ubuntugis-parameter
+        type: enum
+        enum:
+          - ""  # means don't use the ppa
+          - stable
+          - unstable
+        default: ""
+
+    steps:
+      - run:
+          name: Add ubuntugis PPA
+          command: |
+            apt-get update && apt-get install -y software-properties-common
+            if [[ "<< parameters.archive >>" = "stable" ]]
+            then
+              archive='ppa'
+            else
+              archive='ubuntugis-unstable'
+            fi
+            add-apt-repository -y ppa:ubuntugis/${archive}
+
+  install-system-packages:
+    steps:
+      - run:
+          name: Install most system packages
+          command: |
+            apt-get update && \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              libgdal-dev \
+              gdal-bin \
+              libtiff5 \
+              optipng \
+              pngquant \
+              python3-pip \
+
+      - run:
+          name: Install libvips
+          command: |
+            DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y --no-install-recommends \
+              libvips \
+              libvips-dev \
+
+  run-tox-tests:
+    parameters:
+      tox: &tox-parameter
+        type: enum
+        enum:
+          - py2
+          - py3
+          - pinned-vips
+        default: py3
+
+    steps:
+      - checkout
+      - run:
+          name: Run tox tests
+          command: |
+            python3 -m pip install tox
+            GDAL_VERSION=$(gdal-config --version) tox -e << parameters.tox >> -- "-m not skip_on_ci"
+
+executors:
+  xenial:
+    docker:
+      - image: ubuntu:xenial
+    resource_class: small
+
+  bionic:
+    docker:
+      - image: ubuntu:bionic
+    resource_class: small
+
+  focal:
+    docker:
+      - image: ubuntu:focal
+    resource_class: small
+
+jobs:
+  test:
+    parameters:
+      executor:
+        type: executor
+      ubuntugis:
+        <<: *ubuntugis-parameter
+      tox:
+        <<: *tox-parameter
+
+    executor: << parameters.executor >>
+    steps:
+      - when:
+          condition: << parameters.ubuntugis >>
+          steps:
+            - add-ubuntugis-ppa:
+                archive: << parameters.ubuntugis >>
+      - install-system-packages
+      - run-tox-tests:
+          tox: << parameters.tox >>
+
+workflows:
+  version: 2
+
+  xenial:
+    jobs:
+
+      # pypi has no matching GDAL version for Xenial's default 1.11
+      # - test:
+      #     name: test-xenial
+      #     executor: xenial
+
+      - test:
+          name: test-xenial-stablegis
+          executor: xenial
+          ubuntugis: stable
+
+      - test:
+          name: test-xenial-stablegis-py2
+          executor: xenial
+          ubuntugis: stable
+          tox: py2
+
+      - test:
+          name: test-xenial-stablegis-vips
+          executor: xenial
+          ubuntugis: stable
+          tox: pinned-vips
+
+      - test:
+          name: test-xenial-unstablegis
+          executor: xenial
+          ubuntugis: unstable
+
+      - test:
+          name: test-xenial-unstablegis-vips
+          executor: xenial
+          ubuntugis: unstable
+          tox: pinned-vips
+
+  bionic:
+    jobs:
+      - test:
+          name: test-bionic
+          executor: bionic
+
+      - test:
+          name: test-bionic-vips
+          executor: bionic
+          tox: pinned-vips
+
+      - test:
+          name: test-bionic-stablegis
+          executor: bionic
+          ubuntugis: stable
+
+      - test:
+          name: test-bionic-stablegis-vips
+          executor: bionic
+          ubuntugis: stable
+          tox: pinned-vips
+
+      - test:
+          name: test-bionic-unstablegis
+          executor: bionic
+          ubuntugis: unstable
+
+      - test:
+          name: test-bionic-unstablegis-vips
+          executor: bionic
+          ubuntugis: unstable
+          tox: pinned-vips
+
+  focal:
+    jobs:
+      - test:
+          name: test-focal
+          executor: focal
