@@ -452,18 +452,21 @@ class Dataset(gdal.Dataset):
                     dataset=self)
 
     def GetSpatialReference(self):
+        # Patch broken gdal2mbtiles method calling empty epsg
+        sr = SpatialReference(self.GetProjection())
         try:
-            sr = SpatialReference(self.GetProjection())
             sr.AutoIdentifyEPSG()
             return sr
         except RuntimeError as re:
-            if 'Unsupported SRS' in str(re):
+            epsg = sr.GetEPSGCode()
+            web_mercator = SpatialReference.FromEPSG(3857)
+            re = str(re)
+            if 'Unsupported SRS' in re and epsg:
                 # Equivalent to EPSG:3857
-                web_mercator = SpatialReference.FromEPSG(EPSG_WEB_MERCATOR)
-                sr = sr.FromEPSG(sr.GetEPSGCode())
+                sr = sr.FromEPSG(epsg)
                 if web_mercator.IsSame(sr):
                     return web_mercator
-            raise GdalError(str(re))
+            raise GdalError(re)
 
     def GetCoordinateTransformation(self, dst_ref):
         return CoordinateTransformation(src_ref=self.GetSpatialReference(),
