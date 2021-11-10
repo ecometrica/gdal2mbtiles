@@ -943,6 +943,9 @@ class VRT(object):
                     # gdal_translate does not support the following
                     # '-multi',               # Use multiple processes
                     # '-overwrite',           # Overwrite outputfile
+                    '-co', 'TILED=YES',
+                    # '-co', f'BLOCKXSIZE={tile_size}',
+                    # '-co', f'BLOCKYSIZE={tile_size}'
                 ]
 
                 # Set the working memory so that gdalwarp doesn't stall of disk
