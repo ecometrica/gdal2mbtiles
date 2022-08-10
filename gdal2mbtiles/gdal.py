@@ -887,8 +887,8 @@ class SpatialReference(osr.SpatialReference):
 
     def GetTileDimensions(self, resolution):
         # Assume square tiles.
-        width = self.GetMajorCircumference() / 2 ** resolution
-        height = self.GetMinorCircumference() / 2 ** resolution
+        width = int(self.GetMajorCircumference()) / 2 ** resolution
+        height = int(self.GetMinorCircumference()) / 2 ** resolution
         result = XY(width, height)
         if self.IsProjected() == 0:
             # Resolution 0 only covers a longitudinal hemisphere
