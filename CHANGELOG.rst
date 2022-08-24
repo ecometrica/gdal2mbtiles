@@ -5,9 +5,10 @@ Release Notes
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_
 and this project attempts to adhere to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-Unreleased
+2.1.3
 ----------
 
+* Fix float overflow bug
 * Unpin pyvips and fix related issue - install pyvips==2.1.8 if any issues
 * Fix renderer tests
 * Fix deprecation warnings
