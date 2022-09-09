@@ -792,6 +792,8 @@ class SpatialReference(osr.SpatialReference):
     def __init__(self, *args, **kwargs):
         super(SpatialReference, self).__init__(*args, **kwargs)
         self._angular_transform = None
+        # GDAL 3 changes axis order: https://github.com/OSGeo/gdal/issues/1546
+        self.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
     @classmethod
     def FromEPSG(cls, code):

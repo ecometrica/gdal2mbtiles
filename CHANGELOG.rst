@@ -5,6 +5,10 @@ Release Notes
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_
 and this project attempts to adhere to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+Unreleased
+------------
+* Fixing GDAL 3 backwards incompatible change which switches axis in coordinate transformation - see: https://github.com/OSGeo/gdal/issues/1546
+
 2.1.3
 ----------
 
