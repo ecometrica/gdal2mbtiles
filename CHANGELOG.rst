@@ -7,10 +7,13 @@ and this project attempts to adhere to `Semantic Versioning <https://semver.org/
 
 Unreleased
 ------------
+
+2.1.4
+------
 * Fixing GDAL 3 backwards incompatible change which switches axis in coordinate transformation - see: https://github.com/OSGeo/gdal/issues/1546
 
 2.1.3
-----------
+------
 
 * Fix float overflow bug
 * Unpin pyvips and fix related issue - install pyvips==2.1.8 if any issues
