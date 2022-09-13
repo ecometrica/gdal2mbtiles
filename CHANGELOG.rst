@@ -8,6 +8,10 @@ and this project attempts to adhere to `Semantic Versioning <https://semver.org/
 Unreleased
 ------------
 
+2.1.5
+------
+* Fix SpatialReference.GetEPSGCode failling to recognise QGIS style PROJCS name.
+
 2.1.4
 ------
 * Fixing GDAL 3 backwards incompatible change which switches axis in coordinate transformation - see: https://github.com/OSGeo/gdal/issues/1546
