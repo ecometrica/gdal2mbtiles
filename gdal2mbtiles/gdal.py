@@ -51,7 +51,7 @@ osr.UseExceptions()             # And OSR as well.
 
 
 from .constants import (EPSG_WEB_MERCATOR, ESRI_102113_PROJ, ESRI_102100_PROJ,
-                        GDALTRANSLATE, GDALWARP, TILE_SIDE)
+                        GDALTRANSLATE, GDALWARP, QGIS_3857_PROJ, TILE_SIDE)
 from .exceptions import (GdalError, CalledGdalError, UnalignedInputError,
                          UnknownResamplingMethodError)
 from .gd_types import Extents, GdalFormat, XY
@@ -819,7 +819,7 @@ class SpatialReference(osr.SpatialReference):
             #       'mercator_auxiliary_sphere' projection name.
             projcs_name = self.GetAttrValue(str('PROJCS'))
             # Returning equivalent EPSG code
-            if projcs_name == ESRI_102100_PROJ:
+            if projcs_name in (ESRI_102100_PROJ, QGIS_3857_PROJ):
                 return 3857
             elif projcs_name == ESRI_102113_PROJ:
                 return 3785
