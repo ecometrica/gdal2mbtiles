@@ -34,14 +34,18 @@ jobs:
         sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils
         sudo apt-get install -y --force-yes tzdata
         sudo apt-get install -y --force-yes build-essential wget git locales locales-all > /dev/null
+        
+        python -m pip install --upgrade pip
+        python -m pip install numpy flake8 pytest
+
         sudo apt-get install -y --force-yes libpq-dev
-        sudo apt-get install libgdal-dev
+        # sudo apt-get install libgdal-dev
+        sudo apt-get install libgdal1-dev
         sudo apt-get install gdal-bin
         export CPLUS_INCLUDE_PATH=/usr/include/gdal
         export C_INCLUDE_PATH=/usr/include/gdal
         pip install GDAL
-        python -m pip install --upgrade pip
-        python -m pip install flake8 pytest
+
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         
     # - name: Lint with flake8
