@@ -10,50 +10,74 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  linting:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.11"]
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      env:
-        LC_ALL : en_US.UTF-8
-        ENV LANG : en_US.UTF-8
-        ENV LANGUAGE : en_US.UTF-8
-        TZ: America/New_York
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        sudo apt-add-repository ppa:ubuntugis/ubuntugis-unstable
-        sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils
-        sudo apt-get install -y --force-yes tzdata
-        sudo apt-get install -y --force-yes build-essential wget git locales locales-all > /dev/null
-        
-        python -m pip install --upgrade pip
-        python -m pip install numpy flake8 pytest
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+            python-version: 3.9
+      - name: Code Linting
+        shell: bash
+        run: |
+          python -m pip install pre-commit
+          #pre-commit run --show-diff-on-failure --all-files
 
-        sudo apt-get install -y --force-yes libpq-dev
-        # sudo apt-get install libgdal-dev
-        sudo apt-get install libgdal1-dev
-        sudo apt-get install gdal-bin
-        export CPLUS_INCLUDE_PATH=/usr/include/gdal
-        export C_INCLUDE_PATH=/usr/include/gdal
-        pip install GDAL
+  conda_test:
+    needs: linting
+    name: Conda | ${{ matrix.os }} | python=${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [macos-latest]
+        python-version: ['3.9', '3.10', '3.11']
+        include:
+          - os: ubuntu-latest
+            python-version: '3.10'
+          - os: ubuntu-latest
+            python-version: '3.11'
+    steps:
+      - uses: actions/checkout@v4
 
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        
-    # - name: Lint with flake8
-    #   run: |
-    #     # stop the build if there are Python syntax errors or undefined names
-    #     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-    #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-    #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        pytest -v
+      - name: Conda Setup
+        uses: s-weigand/setup-conda@v1
+        with:
+          conda-channels: conda-forge
+
+      - name: Install Env
+        shell: bash
+        run: |
+          conda config --prepend channels conda-forge
+          conda config --set channel_priority strict
+    
+          conda create -n test python=${{ matrix.python-version }} libgdal geos=3.11 cython=3 numpy
+          source activate test
+          conda install -c conda-forge gdal
+          conda install --channel conda-forge pyvips
+          conda install -c conda-forge libvips
+          conda install -c conda-forge distro
+          python -m pip install -e . --no-use-pep517 || python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+
+
+      - name: Check and Log Environment
+        shell: bash
+        run: |
+          source activate test
+          python -V
+          conda info
+
+      - name: Test with Coverage (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          source activate test
+          python -m pytest -v
+
+      - name: Test with Coverage (OSX)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          source activate test
+          python -m pytest -v
