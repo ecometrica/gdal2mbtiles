@@ -1,0 +1,83 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Python package
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+            python-version: 3.9
+      - name: Code Linting
+        shell: bash
+        run: |
+          python -m pip install pre-commit
+          #pre-commit run --show-diff-on-failure --all-files
+
+  conda_test:
+    needs: linting
+    name: Conda | ${{ matrix.os }} | python=${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [macos-latest]
+        python-version: ['3.9', '3.10', '3.11']
+        include:
+          - os: ubuntu-latest
+            python-version: '3.10'
+          - os: ubuntu-latest
+            python-version: '3.11'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conda Setup
+        uses: s-weigand/setup-conda@v1
+        with:
+          conda-channels: conda-forge
+
+      - name: Install Env
+        shell: bash
+        run: |
+          conda config --prepend channels conda-forge
+          conda config --set channel_priority strict
+    
+          conda create -n test python=${{ matrix.python-version }} libgdal geos=3.11 cython=3 numpy
+          source activate test
+          conda install -c conda-forge gdal
+          conda install --channel conda-forge pyvips
+          conda install -c conda-forge libvips
+          conda install -c conda-forge distro
+          python -m pip install -e . --no-use-pep517 || python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+
+
+      - name: Check and Log Environment
+        shell: bash
+        run: |
+          source activate test
+          python -V
+          conda info
+
+      - name: Test with Coverage (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          source activate test
+          python -m pytest -v
+
+      - name: Test with Coverage (OSX)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          source activate test
+          python -m pytest -v

@@ -11,7 +11,7 @@ import unittest
 
 import numpy
 
-from osgeo import osr
+from osgeo import osr, gdal
 from osgeo.gdalconst import GRA_Cubic
 
 import pytest
@@ -428,12 +428,12 @@ class TestDataset(TestCase):
 
     def test_get_coordinate_transformation(self):
         dataset = Dataset(inputfile=self.inputfile)
-        wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
+        wgs84 = osr.SpatialReference()
+        wgs84.ImportFromEPSG(4326)
         transform = dataset.GetCoordinateTransformation(dst_ref=wgs84)
-        self.assertEqual(transform.src_ref,
-                         dataset.GetSpatialReference())
-        self.assertEqual(transform.dst_ref,
-                         wgs84)
+        self.assertEqual(transform.src_ref, dataset.GetSpatialRef())
+        self.assertEqual(transform.dst_ref, wgs84)
+
 
     def test_get_native_resolution(self):
         dataset = Dataset(inputfile=self.inputfile)
@@ -551,9 +551,9 @@ class TestDataset(TestCase):
 
     def test_get_extents_wgs84(self):
         dataset = Dataset(inputfile=self.inputfile)
-        transform = dataset.GetCoordinateTransformation(
-            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-        )
+        wgs84_srs = osr.SpatialReference()
+        wgs84_srs.ImportFromEPSG(4326)
+        transform = dataset.GetCoordinateTransformation(dst_ref=wgs84_srs)
         ll, ur = dataset.GetExtents(transform=transform)
         self.assertAlmostEqual(ll.x, -180.0, places=0)
         self.assertAlmostEqual(ll.y, -85.0, places=0)
@@ -612,9 +612,10 @@ class TestDataset(TestCase):
 
     def test_get_extents_partial_wgs84(self):
         dataset = Dataset(inputfile=self.alignedfile)
-        transform = dataset.GetCoordinateTransformation(
-            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-        )
+        wgs84_srs = osr.SpatialReference()
+        wgs84_srs.ImportFromEPSG(4326)
+        transform = dataset.GetCoordinateTransformation(dst_ref=wgs84_srs)
+
         ll, ur = dataset.GetExtents(transform=transform)
         # 66.5°S is due to the fact that the original file is in Mercator and
         # the southern latitudes take up more pixels in Mercator than in
@@ -660,12 +661,11 @@ class TestDataset(TestCase):
         self.assertAlmostEqual(ur.x, major_half_circumference, places=0)
         self.assertAlmostEqual(ur.y, minor_half_circumference, places=0)
 
-        # Native resolution, WGS 84 projection, already aligned
-        ll, ur = dataset.GetTiledExtents(
-            transform=dataset.GetCoordinateTransformation(
-                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-            )
-        )
+        wgs84_srs = osr.SpatialReference()
+        wgs84_srs.ImportFromEPSG(4326)
+        transform = dataset.GetCoordinateTransformation(dst_ref=wgs84_srs)
+        ll, ur = dataset.GetTiledExtents(transform=transform)
+
         self.assertAlmostEqual(ll.x, -180.0, places=0)
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 180.0, places=0)
@@ -673,12 +673,7 @@ class TestDataset(TestCase):
 
         # Resolution 0, WGS 84 projection, already aligned. This is the
         # same as above, because the dataset covers the whole world.
-        ll, ur = dataset.GetTiledExtents(
-            transform=dataset.GetCoordinateTransformation(
-                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-            ),
-            resolution=0
-        )
+        ll, ur = dataset.GetTiledExtents(transform=transform, resolution=0)
         self.assertAlmostEqual(ll.x, -180.0, places=0)
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 180.0, places=0)
@@ -709,11 +704,7 @@ class TestDataset(TestCase):
         self.assertAlmostEqual(ur.y, 0.0, places=0)
 
         # Native resolution, WGS 84 projection, already aligned
-        ll, ur = dataset.GetTiledExtents(
-            transform=dataset.GetCoordinateTransformation(
-                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-            )
-        )
+        ll, ur = dataset.GetTiledExtents(transform=transform)
         self.assertAlmostEqual(ll.x, -90.0, places=0)
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)
@@ -721,12 +712,7 @@ class TestDataset(TestCase):
 
         # Resolution 0, WGS 84 projection, already aligned. This should be
         # the western hemisphere.
-        ll, ur = dataset.GetTiledExtents(
-            transform=dataset.GetCoordinateTransformation(
-                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-            ),
-            resolution=0
-        )
+        ll, ur = dataset.GetTiledExtents(transform=transform, resolution=0)
         self.assertAlmostEqual(ll.x, -180.0, places=0)
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)
@@ -778,12 +764,7 @@ class TestDataset(TestCase):
 
         # Resolution 0, WGS 84 projection, spanning tiles. This should be
         # the western hemisphere.
-        ll, ur = dataset.GetTiledExtents(
-            transform=dataset.GetCoordinateTransformation(
-                dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-            ),
-            resolution=0
-        )
+        ll, ur = dataset.GetTiledExtents(transform=transform, resolution=0)
         self.assertAlmostEqual(ll.x, -180.0, places=0)
         self.assertAlmostEqual(ll.y, -90.0, places=0)
         self.assertAlmostEqual(ur.x, 0.0, places=0)
@@ -870,9 +851,9 @@ class TestDataset(TestCase):
         dataset = Dataset(self.wgs84file)
         # Resolution 0, WGS 84 projection, there are two tiles, one for
         # longitudinal hemisphere
-        transform = dataset.GetCoordinateTransformation(
-            dst_ref=SpatialReference(osr.SRS_WKT_WGS84)
-        )
+        wgs84_srs = osr.SpatialReference()
+        wgs84_srs.ImportFromEPSG(4326)
+        transform = dataset.GetCoordinateTransformation(dst_ref=wgs84_srs)
         self.assertExtentsEqual(
             dataset.GetWorldTmsExtents(transform=transform),
             dataset.GetTmsExtents(transform=transform)
@@ -921,7 +902,8 @@ class TestDataset(TestCase):
 
 class TestSpatialReference(TestCase):
     def setUp(self):
-        self.wgs84 = SpatialReference(osr.SRS_WKT_WGS84)
+        self.wgs84 = osr.SpatialReference()
+        self.wgs84.ImportFromEPSG(4326)
 
     def test_from_epsg(self):
         self.assertEqual(SpatialReference.FromEPSG(4326), self.wgs84)
