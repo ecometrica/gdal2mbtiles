@@ -11,7 +11,7 @@ import unittest
 
 import numpy
 
-from osgeo import osr
+from osgeo import osr, gdal
 from osgeo.gdalconst import GRA_Cubic
 
 import pytest
